@@ -8,7 +8,44 @@ endif()
 
 project ("PathTracing")
 
-add_executable (PathTracing "Main.cpp" )
+set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs")
+
+# GLFW
+set(GLFW_DIR "${LIB_DIR}/glfw")
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory("${GLFW_DIR}" binary_dir EXCLUDE_FROM_ALL)
+include_directories(${GLFW_DIR}/include)
+
+# ImGUI
+set(IMGUI_DIR "${LIB_DIR}/imgui")
+include_directories(${IMGUI_DIR} ${IMGUI_DIR}/backends ..)
+
+# OpenGL
+find_package(OpenGL REQUIRED)
+set(LIBRARIES "glfw;OpenGL::GL")
+
+include_directories(${GLFW_DIR}/deps)
+
+# Source Files
+set(SOURCES
+	"${SRC_DIR}/Main.cpp"
+	"${IMGUI_DIR}/backends/imgui_impl_glfw.cpp"
+	"${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp"
+	"${IMGUI_DIR}/imgui.cpp"
+	"${IMGUI_DIR}/imgui_draw.cpp"
+	"${IMGUI_DIR}/imgui_demo.cpp"
+	"${IMGUI_DIR}/imgui_tables.cpp"
+	"${IMGUI_DIR}/imgui_widgets.cpp"
+	"${IMGUI_DIR}/imgui.cpp"
+)
+
+add_executable (${PROJECT_NAME} ${SOURCES})
+
+target_link_libraries(${PROJECT_NAME} ${LIBRARIES})
+target_compile_definitions(${PROJECT_NAME} PUBLIC -DImTextureID=ImU64)
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET PathTracing PROPERTY CXX_STANDARD 20)
