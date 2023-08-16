@@ -28,3 +28,5 @@ bld/
 # Add this line
 out/
 .vs/
+.idea/
+cmake-build-debug/
