@@ -40,7 +40,7 @@ set(SOURCES
 	"${IMGUI_DIR}/imgui_tables.cpp"
 	"${IMGUI_DIR}/imgui_widgets.cpp"
 	"${IMGUI_DIR}/imgui.cpp"
-)
+ "src/Application.h" "src/Application.cpp")
 
 add_executable (${PROJECT_NAME} ${SOURCES})
 
