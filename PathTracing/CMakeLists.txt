@@ -10,7 +10,7 @@ project ("PathTracing")
 
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY )
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # GLFW
 set(GLFW_DIR "${LIB_DIR}/glfw")
@@ -57,6 +57,8 @@ set(SOURCES
  "src/Application.h" "src/Application.cpp" "src/Image.h" "src/Image.cpp"   "src/stb_image.h")
 
 add_executable (${PROJECT_NAME} ${SOURCES})
+
+file(COPY ${CMAKE_SOURCE_DIR}/assets DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
 target_link_libraries(${PROJECT_NAME} ${LIBRARIES})
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DImTextureID=ImU64)

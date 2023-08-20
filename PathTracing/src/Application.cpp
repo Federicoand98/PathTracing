@@ -5,6 +5,9 @@
 const GLint WIDTH = 800;
 const GLint HEIGHT = 600;
 
+int img_w = 0;
+int img_h = 0;
+
 GLuint VAO;
 GLuint VBO;
 GLuint FBO;
@@ -14,36 +17,21 @@ GLuint shader;
 
 GLuint image = 0;
 
-const char* vertex_shader_code = R"*(
-#version 330
-
-layout (location = 0) in vec3 pos;
-
-void main()
-{
-	gl_Position = vec4(0.9*pos.x, 0.9*pos.y, 0.5*pos.z, 1.0);
-}
-)*";
-
-const char* fragment_shader_code = R"*(
-#version 330
-
-out vec4 color;
-
-void main()
-{
-	color = vec4(0.0, 1.0, 0.0, 1.0);
-}
-)*";
-
-bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height)
-{
+bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height) {
 	// Load from file
-	int image_width = 0;
-	int image_height = 0;
-	unsigned char* image_data = stbi_load(filename, &image_width, &image_height, NULL, 4);
-	if (image_data == NULL)
-		return false;
+	int image_width = 1200;
+	int image_height = 600;
+
+	unsigned char* pixels = new unsigned char[image_width * image_height * 4];
+
+	for (int y = 0; y < image_height; y++) {
+		for (int x = 0; x < image_width; x++) {
+			pixels[(x + y * image_width) * 4] = 255;
+			pixels[(x + y * image_width) * 4 + 1] = 0;
+			pixels[(x + y * image_width) * 4 + 2] = 0;
+			pixels[(x + y * image_width) * 4 + 3] = 255;
+		}
+	}
 
 	// Create a OpenGL texture identifier
 	GLuint image_texture;
@@ -60,131 +48,16 @@ bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_wid
 #if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
 #endif
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
-	stbi_image_free(image_data);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+	//stbi_image_free(image_data);
+	delete[] pixels;
 
 	*out_texture = image_texture;
 	*out_width = image_width;
 	*out_height = image_height;
 
 	return true;
-}
-
-void create_triangle()
-{
-	GLfloat vertices[] = {
-		-1.0f, -1.0f, 0.0f, // 1. vertex x, y, z
-		1.0f, -1.0f, 0.0f, // 2. vertex ...
-		0.0f, 1.0f, 0.0f // etc... 
-	};
-
-	glGenVertexArrays(1, &VAO);
-	glBindVertexArray(VAO);
-
-	glGenBuffers(1, &VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-	glEnableVertexAttribArray(0);
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
-}
-
-void add_shader(GLuint program, const char* shader_code, GLenum type)
-{
-	GLuint current_shader = glCreateShader(type);
-
-	const GLchar* code[1];
-	code[0] = shader_code;
-
-	GLint code_length[1];
-	code_length[0] = strlen(shader_code);
-
-	glShaderSource(current_shader, 1, code, code_length);
-	glCompileShader(current_shader);
-
-	GLint result = 0;
-	GLchar log[1024] = { 0 };
-
-	glGetShaderiv(current_shader, GL_COMPILE_STATUS, &result);
-	if (!result) {
-		glGetShaderInfoLog(current_shader, sizeof(log), NULL, log);
-		std::cout << "Error compiling " << type << " shader: " << log << "\n";
-		return;
-	}
-
-	glAttachShader(program, current_shader);
-}
-
-void create_shaders()
-{
-	shader = glCreateProgram();
-	if (!shader) {
-		std::cout << "Error creating shader program!\n";
-		exit(1);
-	}
-
-	add_shader(shader, vertex_shader_code, GL_VERTEX_SHADER);
-	add_shader(shader, fragment_shader_code, GL_FRAGMENT_SHADER);
-
-	GLint result = 0;
-	GLchar log[1024] = { 0 };
-
-	glLinkProgram(shader);
-	glGetProgramiv(shader, GL_LINK_STATUS, &result);
-	if (!result) {
-		glGetProgramInfoLog(shader, sizeof(log), NULL, log);
-		std::cout << "Error linking program:\n" << log << '\n';
-		return;
-	}
-
-	glValidateProgram(shader);
-	glGetProgramiv(shader, GL_VALIDATE_STATUS, &result);
-	if (!result) {
-		glGetProgramInfoLog(shader, sizeof(log), NULL, log);
-		std::cout << "Error validating program:\n" << log << '\n';
-		return;
-	}
-}
-
-void create_framebuffer()
-{
-	glGenFramebuffers(1, &FBO);
-	glBindFramebuffer(GL_FRAMEBUFFER, FBO);
-
-	glGenTextures(1, &texture_id);
-	glBindTexture(GL_TEXTURE_2D, texture_id);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, WIDTH, HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture_id, 0);
-
-	glGenRenderbuffers(1, &RBO);
-	glBindRenderbuffer(GL_RENDERBUFFER, RBO);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, WIDTH, HEIGHT);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RBO);
-
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!\n";
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-}
-
-void rescale_framebuffer(float width, float height)
-{
-	glBindTexture(GL_TEXTURE_2D, texture_id);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture_id, 0);
-
-	glBindRenderbuffer(GL_RENDERBUFFER, RBO);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RBO);
 }
 
 Application::Application() : m_Window(nullptr), m_LastFrame(0), m_Height(600), m_Width(600), m_IsRunning(true) {
@@ -237,16 +110,10 @@ bool Application::Initialize(int width, int height) {
 		return false;
 	}
 
-	int img_w = 0;
-	int img_h = 0;
-	bool ret = LoadTextureFromFile("assets/.jpg", &image, &img_w, &img_h);
+	img_w = 0;
+	img_h = 0;
+	bool ret = LoadTextureFromFile("assets/gatto.jpg", &image, &img_w, &img_h);
 	IM_ASSERT(ret);
-
-	/*
-	create_triangle();
-	create_shaders();
-	create_framebuffer();
-	*/
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -333,13 +200,7 @@ void Application::RunLoop() {
 
 		// Rendering
 		ImGui::Render();
-		/*
-		int display_w, display_h;
-		glfwGetFramebufferSize(m_Window, &display_w, &display_h);
-		glViewport(0, 0, display_w, display_h);
-		glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
-		glClear(GL_COLOR_BUFFER_BIT);
-		*/
+
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -365,7 +226,7 @@ void Application::Shutdown() {
 
 void Application::RenderUI(float deltaTime) {
 	ImGui::Begin("Settings");
-	ImGui::Text("Last Render: %.3fms", m_LastFrame);
+	ImGui::Text("Last Render: %.3fms", deltaTime);
 
 	if (ImGui::Button("Render"))
 		Render();
@@ -376,15 +237,10 @@ void Application::RenderUI(float deltaTime) {
 	const float window_width = ImGui::GetContentRegionAvail().x;
 	const float window_height = ImGui::GetContentRegionAvail().y;
 
+	ImGui::Image(image, ImVec2(img_w, img_h));
 
 	ImGui::End();
 }
 
 void Application::Render() {
-	/*
-	glBindFramebuffer(GL_FRAMEBUFFER, FBO);
-	glUseProgram(shader);
-	glBindVertexArray(VAO);
-	glDrawArrays(GL_TRIANGLES, 0, 3);
-	*/
 }
