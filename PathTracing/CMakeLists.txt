@@ -10,6 +10,7 @@ project ("PathTracing")
 
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY )
 
 # GLFW
 set(GLFW_DIR "${LIB_DIR}/glfw")
@@ -24,9 +25,22 @@ set(IMGUI_DIR "${LIB_DIR}/imgui")
 include_directories(${IMGUI_DIR} ${IMGUI_DIR}/backends ..)
 
 # OpenGL
-find_package(OpenGL REQUIRED)
-set(LIBRARIES "glfw;OpenGL::GL")
+set(GLEW_DIR "${LIB_DIR}/glew")
+list(APPEND CMAKE_PREFIX_PATH "${GLEW_DIR}")
 
+find_package(OpenGL REQUIRED)
+find_package(GLEW REQUIRED)
+if(NOT GLEW_FOUND)
+	message(WARNING "NOT FOUD GLEW")
+	return()
+endif()
+if(NOT GLEW_LIBRARIES)
+	message(WARNING "LIB")
+endif()
+
+set(LIBRARIES "glfw;OpenGL::GL;GLEW::GLEW")
+
+include_directories(${GLEW_INCLUDE_DIRS})
 include_directories(${GLFW_DIR}/deps)
 
 # Source Files
@@ -40,7 +54,7 @@ set(SOURCES
 	"${IMGUI_DIR}/imgui_tables.cpp"
 	"${IMGUI_DIR}/imgui_widgets.cpp"
 	"${IMGUI_DIR}/imgui.cpp"
- "src/Application.h" "src/Application.cpp")
+ "src/Application.h" "src/Application.cpp" "src/Image.h" "src/Image.cpp"   "src/stb_image.h")
 
 add_executable (${PROJECT_NAME} ${SOURCES})
 

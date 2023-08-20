@@ -4,6 +4,7 @@
 #define Application_h__
 
 #include <iostream>
+#include <GL/glew.h>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
@@ -22,14 +23,14 @@ public:
 	void RunLoop();
 	void Shutdown();
 private:
-	void Render(float deltaTime);
+	void RenderUI(float deltaTime);
+	void Render();
 private:
 	bool m_IsRunning;
 	float m_LastFrame;
 	int m_Width;
 	int m_Height;
 	GLFWwindow* m_Window;
-	ImGuiIO io;
 };
 
 #endif // Application_h__
