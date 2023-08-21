@@ -22,13 +22,12 @@ private:
     };
 
     glm::vec4 PerPixel(uint32_t x, uint32_t y);
-    Color TraceRay(const Ray& ray);
-    Color ClosestHit(const Ray& ray, float hitDistance);
-    Color NoHit(const Ray& ray);
+    glm::vec4 TraceRay(const Ray& ray);
+    glm::vec4 ClosestHit(const Ray& ray, float hitDistance);
+    glm::vec4 NoHit(const Ray& ray);
 private:
     std::shared_ptr<Image> m_RenderedImage;
     unsigned char* m_ImageData;
 };
-
 
 #endif //PATHTRACING_RENDERER_H
