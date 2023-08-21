@@ -8,7 +8,10 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "Image.h"
 #include <stdio.h>
+#include <algorithm>
+#include <memory>
 #define GL_SILENCE_DEPRECATION
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
@@ -30,7 +33,12 @@ private:
 	float m_LastFrame;
 	int m_Width;
 	int m_Height;
+    uint32_t m_ViewportWidth = 0;
+    uint32_t m_ViewportHeight = 0;
 	GLFWwindow* m_Window;
+
+    std::shared_ptr<Image> m_FinalImage;
+    unsigned char* m_ImageData = nullptr;
 };
 
 #endif // Application_h__

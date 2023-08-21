@@ -2,63 +2,48 @@
 #include "stb_image.h"
 #include "Application.h"
 
-const GLint WIDTH = 800;
-const GLint HEIGHT = 600;
-
-int img_w = 0;
-int img_h = 0;
-
-GLuint VAO;
-GLuint VBO;
-GLuint FBO;
-GLuint RBO;
-GLuint texture_id;
-GLuint shader;
-
-GLuint image = 0;
-
-bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height) {
-	// Load from file
-	int image_width = 1200;
-	int image_height = 600;
-
-	unsigned char* pixels = new unsigned char[image_width * image_height * 4];
-
-	for (int y = 0; y < image_height; y++) {
-		for (int x = 0; x < image_width; x++) {
-			pixels[(x + y * image_width) * 4] = 255;
-			pixels[(x + y * image_width) * 4 + 1] = 0;
-			pixels[(x + y * image_width) * 4 + 2] = 0;
-			pixels[(x + y * image_width) * 4 + 3] = 255;
-		}
-	}
-
-	// Create a OpenGL texture identifier
-	GLuint image_texture;
-	glGenTextures(1, &image_texture);
-	glBindTexture(GL_TEXTURE_2D, image_texture);
-
-	// Setup filtering parameters for display
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
-
-	// Upload pixels into texture
-#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
-	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-#endif
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
-	//stbi_image_free(image_data);
-	delete[] pixels;
-
-	*out_texture = image_texture;
-	*out_width = image_width;
-	*out_height = image_height;
-
-	return true;
-}
+//bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height) {
+//	// Load from file
+//	int image_width = 1200;
+//	int image_height = 600;
+//
+//	unsigned char* pixels = new unsigned char[image_width * image_height * 4];
+//
+//	for (int y = 0; y < image_height; y++) {
+//		for (int x = 0; x < image_width; x++) {
+//			pixels[(x + y * image_width) * 4] = 255;
+//			pixels[(x + y * image_width) * 4 + 1] = 0;
+//			pixels[(x + y * image_width) * 4 + 2] = 0;
+//			pixels[(x + y * image_width) * 4 + 3] = 255;
+//		}
+//	}
+//
+//	// Create a OpenGL texture identifier
+//	GLuint image_texture;
+//	glGenTextures(1, &image_texture);
+//	glBindTexture(GL_TEXTURE_2D, image_texture);
+//
+//	// Setup filtering parameters for display
+//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
+//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
+//
+//	// Upload pixels into texture
+//#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+//	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+//#endif
+//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+//
+//	//stbi_image_free(image_data);
+//	delete[] pixels;
+//
+//	*out_texture = image_texture;
+//	*out_width = image_width;
+//	*out_height = image_height;
+//
+//	return true;
+//}
 
 Application::Application() : m_Window(nullptr), m_LastFrame(0), m_Height(600), m_Width(600), m_IsRunning(true) {
 }
@@ -109,11 +94,6 @@ bool Application::Initialize(int width, int height) {
 		Shutdown();
 		return false;
 	}
-
-	img_w = 0;
-	img_h = 0;
-	bool ret = LoadTextureFromFile("assets/gatto.jpg", &image, &img_w, &img_h);
-	IM_ASSERT(ret);
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -178,9 +158,7 @@ void Application::RunLoop() {
 			if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
 				window_flags |= ImGuiWindowFlags_NoBackground;
 
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 			ImGui::Begin("DockSpace Demo", nullptr, window_flags);
-			ImGui::PopStyleVar();
 
 			ImGui::PopStyleVar(2);
 
@@ -233,14 +211,39 @@ void Application::RenderUI(float deltaTime) {
 
 	ImGui::End();
 
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 	ImGui::Begin("Viewport");
-	const float window_width = ImGui::GetContentRegionAvail().x;
-	const float window_height = ImGui::GetContentRegionAvail().y;
+	m_ViewportWidth = (uint32_t)ImGui::GetContentRegionAvail().x;
+	m_ViewportHeight = (uint32_t)ImGui::GetContentRegionAvail().y;
 
-	ImGui::Image(image, ImVec2(img_w, img_h));
+    if(m_FinalImage)
+        ImGui::Image(m_FinalImage->GetTexture(), {(float)m_FinalImage->GetWidth(), (float)m_FinalImage->GetHeight()}, ImVec2(0, 1), ImVec2(1, 0));
 
 	ImGui::End();
+    ImGui::PopStyleVar();
 }
 
 void Application::Render() {
+    if(m_FinalImage) {
+        if(m_FinalImage->GetWidth() == m_ViewportWidth && m_FinalImage->GetHeight() == m_ViewportHeight)
+            return;
+
+        m_FinalImage->Resize(m_ViewportWidth, m_ViewportHeight);
+    } else {
+        m_FinalImage = std::make_shared<Image>(m_ViewportWidth, m_ViewportHeight);
+    }
+
+    delete[] m_ImageData;
+    m_ImageData = new unsigned char[m_ViewportWidth * m_ViewportHeight * 4];
+
+    for (int y = 0; y < m_ViewportHeight; y++) {
+        for (int x = 0; x < m_ViewportWidth; x++) {
+            m_ImageData[(x + y * m_ViewportWidth) * 4] = x;  // R
+            m_ImageData[(x + y * m_ViewportWidth) * 4 + 1] = y;  // G
+            m_ImageData[(x + y * m_ViewportWidth) * 4 + 2] = 0;   // B
+            m_ImageData[(x + y * m_ViewportWidth) * 4 + 3] = 255; // Alpha
+        }
+    }
+
+    m_FinalImage->SetData(m_ImageData);
 }

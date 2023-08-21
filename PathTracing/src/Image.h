@@ -12,12 +12,14 @@ public:
 	Image(uint32_t width, uint32_t height, const void* data = nullptr);
 	~Image();
 
-	void Draw();
 	void SetData(const void* data);
-	void Resize(uint32_t width, uint32_t height);
+	void Resize(uint32_t width, uint32_t height, const void* data = nullptr);
 
 	uint32_t GetWidth() const { return m_Width; }
 	uint32_t GetHeight() const { return m_Height; }
+    GLuint GetTexture() const { return m_Texture; }
+private:
+    void Release();
 private:
 	uint32_t m_Width = 0, m_Height = 0;
 	std::string m_FilePath;
