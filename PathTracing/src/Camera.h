@@ -5,7 +5,11 @@
 #ifndef PATHTRACING_CAMERA_H
 #define PATHTRACING_CAMERA_H
 
+#include "Input.h"
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <vector>
 
 class Camera {
@@ -19,12 +23,9 @@ public:
     const glm::mat4& GetInverseProjection() const { return m_InverseProjection; }
     const glm::mat4& GetView() const { return m_View; }
     const glm::mat4& GetInverseView() const { return m_InverseView; }
-
     const glm::vec3& GetPosition() const { return m_Position; }
     const glm::vec3& GetDirection() const { return m_ForwardDirection; }
-
     const std::vector<glm::vec3>& GetRayDirections() const { return m_RayDirections; }
-
     float GetRotationSpeed();
 private:
     void RecalculateProjection();
