@@ -3,6 +3,10 @@
 //
 
 #include "Camera.h"
+#include "Input.h"
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 Camera::Camera(float verticalFOV, float nearClip, float farClip) : m_VerticalFOV(verticalFOV), m_NearClip(nearClip), m_FarClip(farClip) {
     m_ForwardDirection = glm::vec3(0, 0, -1);

@@ -4,7 +4,8 @@
 
 static Application* s_Instance = nullptr;
 
-Application::Application() : m_Window(nullptr), m_LastFrame(0), m_Height(600), m_Width(600), m_IsRunning(true) {
+Application::Application() : m_Window(nullptr), m_LastFrame(0), m_Height(600), m_Width(600), m_IsRunning(true),
+                             m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 }
 
@@ -141,7 +142,7 @@ void Application::RunLoop() {
 		}
 
 		RenderUI(deltaTime);
-		Render();
+		Render(deltaTime);
 
 		// Rendering
 		ImGui::Render();
@@ -172,9 +173,6 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Begin("Settings");
 	ImGui::Text("Last Render: %.3fms", deltaTime);
 
-	if (ImGui::Button("Render"))
-		Render();
-
 	ImGui::End();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -190,7 +188,8 @@ void Application::RenderUI(float deltaTime) {
     ImGui::PopStyleVar();
 }
 
-void Application::Render() {
+void Application::Render(float deltaTime) {
+    m_Camera.OnResize(m_ViewportWidth, m_ViewportHeight);
     m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
-    m_Renderer.Render();
+    m_Renderer.Render(m_Camera);
 }
