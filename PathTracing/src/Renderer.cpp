@@ -6,7 +6,7 @@
 
 namespace Utils {
     static unsigned char ConvertToRGBA(float value) {
-        return value * 255.0f;
+        return (unsigned char)(value * 255.0f);
     }
 }
 
@@ -32,9 +32,9 @@ void Renderer::Render(const Camera& camera) {
             glm::vec2 coord = {(float)x / (float)m_RenderedImage->GetWidth(), (float)y / (float)m_RenderedImage->GetHeight()};
             glm::vec4 color = PerPixel(x, y);
 
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = (unsigned char)(color.x * 255.0f);  // R
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 1] = (unsigned char)(color.y * 255.0f);  // G
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 2] = (unsigned char)(color.z * 255.0f);   // B
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = Utils::ConvertToRGBA(color.x);  // R
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 1] = Utils::ConvertToRGBA(color.y);  // G
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 2] = Utils::ConvertToRGBA(color.z);   // B
             m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 3] = 255; // Alpha
         }
     }
