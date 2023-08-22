@@ -9,6 +9,7 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include "Image.h"
+#include "Renderer.h"
 #include <stdio.h>
 #include <algorithm>
 #include <memory>
@@ -21,14 +22,20 @@
 class Application {
 public:
 	Application();
+    ~Application();
+
+    static Application& Get();
 
 	bool Initialize(int width, int height);
 	void RunLoop();
 	void Shutdown();
+
+    GLFWwindow* GetWindow() const { return m_Window; }
 private:
 	void RenderUI(float deltaTime);
 	void Render();
 private:
+    Renderer m_Renderer;
 	bool m_IsRunning;
 	float m_LastFrame;
 	int m_Width;
@@ -37,8 +44,8 @@ private:
     uint32_t m_ViewportHeight = 0;
 	GLFWwindow* m_Window;
 
-    std::shared_ptr<Image> m_FinalImage;
-    unsigned char* m_ImageData = nullptr;
+//    std::shared_ptr<Image> m_FinalImage;
+//    unsigned char* m_ImageData = nullptr;
 };
 
 #endif // Application_h__

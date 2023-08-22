@@ -4,6 +4,12 @@
 
 #include "Renderer.h"
 
+namespace Utils {
+    static unsigned char ConvertToRGBA(float value) {
+        return value * 255.0f;
+    }
+}
+
 void Renderer::OnResize(uint32_t width, uint32_t height) {
     if(m_RenderedImage) {
         if (m_RenderedImage->GetWidth() == width && m_RenderedImage->GetHeight() == height)
@@ -15,20 +21,28 @@ void Renderer::OnResize(uint32_t width, uint32_t height) {
     }
 
     delete[] m_ImageData;
-    m_ImageData = new unsigned char[width * height];
+    m_ImageData = new unsigned char[width * height * 4];
 }
 
 void Renderer::Render() {
     for(uint32_t y = 0; y < m_RenderedImage->GetHeight(); y++) {
         for(uint32_t x = 0; x < m_RenderedImage->GetWidth(); x++) {
-            glm::vec4 color = PerPixel(x, y);
+            glm::vec2 coord = {(float)x / (float)m_RenderedImage->GetWidth(), (float)y / (float)m_RenderedImage->GetHeight()};
+            glm::vec4 color = PerPixel(coord);
+
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = (unsigned char)(color.x * 255.0f);  // R
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 1] = (unsigned char)(color.y * 255.0f);  // G
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 2] = (unsigned char)(color.z * 255.0f);   // B
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 3] = 255; // Alpha
         }
     }
+
+    m_RenderedImage->SetData(m_ImageData);
 }
 
-glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
-    glm::vec3 rayOrigin(0.0f);
-    glm::vec3 rayDirection(x, y, -1.0f);
+glm::vec4 Renderer::PerPixel(glm::vec2 coord) {
+    glm::vec3 rayOrigin(0.0f, 0.0f, 2.0f);
+    glm::vec3 rayDirection(coord.x, coord.y, -1.0f);
     float radius = 0.5f;
 
     float a = glm::dot(rayDirection, rayDirection);

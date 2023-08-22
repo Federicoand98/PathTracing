@@ -8,6 +8,7 @@
 #include "Image.h"
 #include "Ray.h"
 #include <memory>
+#include <iostream>
 
 class Renderer {
 public:
@@ -21,7 +22,7 @@ private:
         float R, G, B, A;
     };
 
-    glm::vec4 PerPixel(uint32_t x, uint32_t y);
+    glm::vec4 PerPixel(glm::vec2 coord);
     glm::vec4 TraceRay(const Ray& ray);
     glm::vec4 ClosestHit(const Ray& ray, float hitDistance);
     glm::vec4 NoHit(const Ray& ray);

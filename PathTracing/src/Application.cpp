@@ -2,50 +2,19 @@
 #include "stb_image.h"
 #include "Application.h"
 
-//bool LoadTextureFromFile(const char* filename, GLuint* out_texture, int* out_width, int* out_height) {
-//	// Load from file
-//	int image_width = 1200;
-//	int image_height = 600;
-//
-//	unsigned char* pixels = new unsigned char[image_width * image_height * 4];
-//
-//	for (int y = 0; y < image_height; y++) {
-//		for (int x = 0; x < image_width; x++) {
-//			pixels[(x + y * image_width) * 4] = 255;
-//			pixels[(x + y * image_width) * 4 + 1] = 0;
-//			pixels[(x + y * image_width) * 4 + 2] = 0;
-//			pixels[(x + y * image_width) * 4 + 3] = 255;
-//		}
-//	}
-//
-//	// Create a OpenGL texture identifier
-//	GLuint image_texture;
-//	glGenTextures(1, &image_texture);
-//	glBindTexture(GL_TEXTURE_2D, image_texture);
-//
-//	// Setup filtering parameters for display
-//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // This is required on WebGL for non power-of-two textures
-//	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // Same
-//
-//	// Upload pixels into texture
-//#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
-//	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
-//#endif
-//	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-//
-//	//stbi_image_free(image_data);
-//	delete[] pixels;
-//
-//	*out_texture = image_texture;
-//	*out_width = image_width;
-//	*out_height = image_height;
-//
-//	return true;
-//}
+static Application* s_Instance = nullptr;
 
 Application::Application() : m_Window(nullptr), m_LastFrame(0), m_Height(600), m_Width(600), m_IsRunning(true) {
+    s_Instance = this;
+}
+
+Application::~Application() {
+    Shutdown();
+    s_Instance = nullptr;
+}
+
+Application &Application::Get() {
+    return *s_Instance;
 }
 
 bool Application::Initialize(int width, int height) {
@@ -79,7 +48,7 @@ bool Application::Initialize(int width, int height) {
 #endif
 
 	// Create window with graphics context
-	m_Window = glfwCreateWindow(width, height, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+	m_Window = glfwCreateWindow(width, height, "PathTracer", nullptr, nullptr);
 
 	if (m_Window == nullptr)
 		return false;
@@ -111,8 +80,7 @@ bool Application::Initialize(int width, int height) {
 
 	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
 	ImGuiStyle& style = ImGui::GetStyle();
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-	{
+	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
 		style.WindowRounding = 0.0f;
 		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 	}
@@ -164,9 +132,8 @@ void Application::RunLoop() {
 
 			// Submit the DockSpace
 			ImGuiIO& io = ImGui::GetIO();
-			if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
-			{
-				ImGuiID dockspace_id = ImGui::GetID("VulkanAppDockspace");
+			if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
+				ImGuiID dockspace_id = ImGui::GetID("OpenGL Dockspace");
 				ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 			}
 
@@ -181,8 +148,7 @@ void Application::RunLoop() {
 
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-		{
+		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
 			GLFWwindow* backup_current_context = glfwGetCurrentContext();
 			ImGui::UpdatePlatformWindows();
 			ImGui::RenderPlatformWindowsDefault();
@@ -216,34 +182,15 @@ void Application::RenderUI(float deltaTime) {
 	m_ViewportWidth = (uint32_t)ImGui::GetContentRegionAvail().x;
 	m_ViewportHeight = (uint32_t)ImGui::GetContentRegionAvail().y;
 
-    if(m_FinalImage)
-        ImGui::Image(m_FinalImage->GetTexture(), {(float)m_FinalImage->GetWidth(), (float)m_FinalImage->GetHeight()}, ImVec2(0, 1), ImVec2(1, 0));
+    auto image = m_Renderer.GetRenderedImage();
+    if(image)
+        ImGui::Image(image->GetTexture(), {(float)image->GetWidth(), (float)image->GetHeight()}, ImVec2(0, 1), ImVec2(1, 0));
 
 	ImGui::End();
     ImGui::PopStyleVar();
 }
 
 void Application::Render() {
-    if(m_FinalImage) {
-        if(m_FinalImage->GetWidth() == m_ViewportWidth && m_FinalImage->GetHeight() == m_ViewportHeight)
-            return;
-
-        m_FinalImage->Resize(m_ViewportWidth, m_ViewportHeight);
-    } else {
-        m_FinalImage = std::make_shared<Image>(m_ViewportWidth, m_ViewportHeight);
-    }
-
-    delete[] m_ImageData;
-    m_ImageData = new unsigned char[m_ViewportWidth * m_ViewportHeight * 4];
-
-    for (int y = 0; y < m_ViewportHeight; y++) {
-        for (int x = 0; x < m_ViewportWidth; x++) {
-            m_ImageData[(x + y * m_ViewportWidth) * 4] = x;  // R
-            m_ImageData[(x + y * m_ViewportWidth) * 4 + 1] = y;  // G
-            m_ImageData[(x + y * m_ViewportWidth) * 4 + 2] = 0;   // B
-            m_ImageData[(x + y * m_ViewportWidth) * 4 + 3] = 255; // Alpha
-        }
-    }
-
-    m_FinalImage->SetData(m_ImageData);
+    m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
+    m_Renderer.Render();
 }
