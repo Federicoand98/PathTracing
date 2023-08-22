@@ -43,19 +43,32 @@ void Renderer::Render(const Camera& camera) {
 }
 
 glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
+    // da tradurre con la classe Ray e usare la funzione TraceRay per castare il raggio
+
     glm::vec3 rayOrigin = m_Camera->GetPosition();
     glm::vec3 rayDirection = m_Camera->GetRayDirections()[x + y * m_RenderedImage->GetWidth()];
-    float radius = 0.5f;
+    float radius = 1.0f;
 
     float a = glm::dot(rayDirection, rayDirection);
     float b = 2.0f * glm::dot(rayOrigin, rayDirection);
     float c = glm::dot(rayOrigin, rayOrigin) - radius * radius;
     float discriminant = b * b - 4.0f * a * c;
 
-    if(discriminant >= 0.0f)
-        return glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+    if(discriminant < 0.0f)
+        return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+    float closestHit = (-b - glm::sqrt(discriminant)) / (2.0f * a);
+
+    glm::vec3 hitPoint = rayOrigin + rayDirection * closestHit;
+    glm::vec3 normal = glm::normalize(hitPoint);
+    glm::vec3 lightDirection = glm::normalize(glm::vec3(-1.0, -1.0, -1.0));
+
+    float d = glm::max(glm::dot(normal, -lightDirection), 0.0f);
+
+    glm::vec3 color(1, 0, 0);
+    color *= d;
+
+    return glm::vec4(color, 1.0f);
 }
 
 glm::vec4 Renderer::TraceRay(const Ray &ray) {
@@ -67,5 +80,5 @@ glm::vec4 Renderer::ClosestHit(const Ray &ray, float hitDistance) {
 }
 
 glm::vec4 Renderer::NoHit(const Ray &ray) {
-    return glm::vec4(0.0f);
+    return glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
 }
