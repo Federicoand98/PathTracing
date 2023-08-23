@@ -40,7 +40,8 @@ private:
     Camera m_Camera;
 	World m_World;
 	bool m_IsRunning;
-	float m_LastFrame;
+	float m_FrameTime = 0.0f;
+	float m_LastFrameTime = 0.0f;
 	int m_Width;
 	int m_Height;
     uint32_t m_ViewportWidth = 0;

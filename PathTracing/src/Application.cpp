@@ -5,7 +5,7 @@
 
 static Application* s_Instance = nullptr;
 
-Application::Application() : m_Window(nullptr), m_LastFrame(0), m_Height(600), m_Width(600), m_IsRunning(true),
+Application::Application() : m_Window(nullptr), m_Height(600), m_Width(600), m_IsRunning(true),
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 
@@ -20,7 +20,7 @@ Application::Application() : m_Window(nullptr), m_LastFrame(0), m_Height(600), m
 }
 
 Application::~Application() {
-    Shutdown();
+    //Shutdown();
     s_Instance = nullptr;
 }
 
@@ -107,11 +107,9 @@ void Application::RunLoop() {
 	ImGuiIO& io = ImGui::GetIO();
 
 	while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
-		float currentFrame = glfwGetTime();
-		float deltaTime = currentFrame - m_LastFrame;
-		m_LastFrame = currentFrame;
-
 		glfwPollEvents();
+
+		m_Camera.OnUpdate(m_FrameTime);
 
 		ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -151,8 +149,8 @@ void Application::RunLoop() {
 			ImGui::End();
 		}
 
-		RenderUI(deltaTime);
-		Render(deltaTime);
+		RenderUI(m_FrameTime);
+		Render(m_FrameTime);
 
 		// Rendering
 		ImGui::Render();
@@ -166,6 +164,10 @@ void Application::RunLoop() {
 			glfwMakeContextCurrent(backup_current_context);
 		}
 
+		float time = glfwGetTime();
+		m_FrameTime = time - m_LastFrameTime;
+		m_LastFrameTime = time;
+
 		glfwSwapBuffers(m_Window);
 	}
 }
@@ -177,6 +179,8 @@ void Application::Shutdown() {
 
 	glfwDestroyWindow(m_Window);
 	glfwTerminate();
+
+	m_IsRunning = false;
 }
 
 void Application::RenderUI(float deltaTime) {
