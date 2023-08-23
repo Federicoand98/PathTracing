@@ -18,6 +18,7 @@
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 #include "Image.h"
 #include "Renderer.h"
+#include "World.h"
 
 class Application {
 public:
@@ -37,6 +38,7 @@ private:
 private:
     Renderer m_Renderer;
     Camera m_Camera;
+	World m_World;
 	bool m_IsRunning;
 	float m_LastFrame;
 	int m_Width;

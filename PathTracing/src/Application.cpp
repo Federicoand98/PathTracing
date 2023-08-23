@@ -1,12 +1,22 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include "Application.h"
+#include <glm/gtc/type_ptr.hpp>
 
 static Application* s_Instance = nullptr;
 
 Application::Application() : m_Window(nullptr), m_LastFrame(0), m_Height(600), m_Width(600), m_IsRunning(true),
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
+
+	// World initialization
+	Sphere sphere;
+	sphere.Position = { 0.0f, 0.0f, 0.0f };
+	sphere.Radius = 1.0f;
+	sphere.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
+
+	m_World.Spheres.push_back(sphere);
+	m_World.BackgroundColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
 Application::~Application() {
@@ -173,6 +183,21 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Begin("Settings");
 	ImGui::Text("Last Render: %.3fms", deltaTime);
 
+	ImGui::Separator();
+	ImGui::ColorEdit4("Background Color", glm::value_ptr(m_World.BackgroundColor));
+	ImGui::Separator();
+
+	for (size_t i = 0; i < m_World.Spheres.size(); i++) {
+		Sphere& sphere = m_World.Spheres.at(i);
+
+		ImGui::PushID(i);
+		ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
+		ImGui::DragFloat("Radius", &sphere.Radius);
+		ImGui::ColorEdit4("Color", glm::value_ptr(sphere.Color));
+		ImGui::Separator();
+		ImGui::PopID();
+	}
+
 	ImGui::End();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
@@ -191,5 +216,5 @@ void Application::RenderUI(float deltaTime) {
 void Application::Render(float deltaTime) {
     m_Camera.OnResize(m_ViewportWidth, m_ViewportHeight);
     m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
-    m_Renderer.Render(m_Camera);
+    m_Renderer.Render(m_Camera, m_World);
 }

@@ -24,8 +24,8 @@ set(IMGUI_DIR "${LIB_DIR}/imgui")
 include_directories(${IMGUI_DIR} ${IMGUI_DIR}/backends ..)
 
 # GLM
-set(GLM_DIR "${LIB_DIR}/glm")
-find_package(GLM REQUIRED)
+set(glm_DIR "${LIB_DIR}/glm/cmake/glm")
+find_package(glm REQUIRED)
 
 # OpenGL
 set(GLEW_DIR "${LIB_DIR}/glew")
@@ -50,7 +50,7 @@ set(SOURCES
 	"${IMGUI_DIR}/imgui_tables.cpp"
 	"${IMGUI_DIR}/imgui_widgets.cpp"
 	"${IMGUI_DIR}/imgui.cpp"
- "src/Application.h" "src/Application.cpp" "src/Image.h" "src/Image.cpp"   "src/stb_image.h" src/Renderer.cpp src/Renderer.h src/Ray.h src/Camera.cpp src/Camera.h src/Input.cpp src/Input.h)
+ "src/Application.h" "src/Application.cpp" "src/Image.h" "src/Image.cpp"   "src/stb_image.h" src/Renderer.cpp src/Renderer.h src/Ray.h src/Camera.cpp src/Camera.h src/Input.cpp src/Input.h "src/World.h")
 
 add_executable (${PROJECT_NAME} ${SOURCES})
 
