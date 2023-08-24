@@ -99,20 +99,21 @@ Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
     if (hitInfo.HitDistance == std::numeric_limits<float>::max())
        return NoHit();
 
-    glm::vec3 origin;
-    if (hitInfo.Type == ObjectType::SPHERE)
-        origin = ray.Origin - m_World->Spheres.at(hitInfo.ObjectIndex).Position;
-    else if(hitInfo.Type == ObjectType::QUAD)
-        origin = ray.Origin - m_World->Quads.at(hitInfo.ObjectIndex).PositionLLC;
-
-    hitInfo.HitPosition = origin + ray.Direction * hitInfo.HitDistance;
-    hitInfo.Normal = glm::normalize(hitInfo.HitPosition);
-
-    return hitInfo;
+    return HandleHit(ray, hitInfo);
 }
 
-Renderer::HitInfo Renderer::ClosestHit(const Ray &ray, float hitDistance) {
-    return {};
+Renderer::HitInfo Renderer::HandleHit(const Ray &ray, HitInfo& hit) {
+    glm::vec3 origin;
+
+    if (hit.Type == ObjectType::SPHERE)
+        origin = ray.Origin - m_World->Spheres.at(hit.ObjectIndex).Position;
+    else if(hit.Type == ObjectType::QUAD)
+        origin = ray.Origin - m_World->Quads.at(hit.ObjectIndex).PositionLLC;
+
+    hit.HitPosition = origin + ray.Direction * hit.HitDistance;
+    hit.Normal = glm::normalize(hit.HitPosition);
+
+    return hit;
 }
 
 Renderer::HitInfo Renderer::NoHit() {
