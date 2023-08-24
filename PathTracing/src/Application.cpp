@@ -12,10 +12,18 @@ Application::Application() : m_Window(nullptr), m_Height(600), m_Width(600), m_I
 	// World initialization
 	Sphere sphere;
 	sphere.Position = { 0.0f, 0.0f, 0.0f };
-	sphere.Radius = 1.0f;
+	sphere.Radius = 0.0f;
 	sphere.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
 
+	Quad quad;
+	quad.PositionLLC = { 0.0f, 0.0f, 0.0f };
+	quad.U = { 1.0f, 0.0f, 0.0f };
+	quad.V = { 0.0f, 1.0f, 0.0f };
+	quad.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
+
+	m_World.Quads.push_back(quad);
 	m_World.Spheres.push_back(sphere);
+
 	m_World.BackgroundColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 }
 
@@ -195,9 +203,23 @@ void Application::RenderUI(float deltaTime) {
 		Sphere& sphere = m_World.Spheres.at(i);
 
 		ImGui::PushID(i);
-		ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
-		ImGui::DragFloat("Radius", &sphere.Radius);
+		ImGui::DragFloat3("SPosition", glm::value_ptr(sphere.Position), 0.1f);
+		ImGui::DragFloat("Radius", &sphere.Radius, 0.1f, 0.0f, 10.0f);
 		ImGui::ColorEdit4("Color", glm::value_ptr(sphere.Color));
+		ImGui::Separator();
+		ImGui::PopID();
+	}
+
+	ImGui::Separator();
+
+	for (size_t i = 0; i < m_World.Spheres.size(); i++) {
+		Quad& quad = m_World.Quads.at(i);
+
+		ImGui::PushID(i);
+		ImGui::DragFloat3("QPosition", glm::value_ptr(quad.PositionLLC), 0.1f);
+		ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f);
+		ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f);
+		ImGui::ColorEdit4("Color", glm::value_ptr(quad.Color));
 		ImGui::Separator();
 		ImGui::PopID();
 	}

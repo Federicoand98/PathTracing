@@ -51,22 +51,15 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 
     HitInfo hit = TraceRay(ray);
 
-    if (hit.ObjectIndex >= 0)
-        pixelColor = m_World->Spheres.at(hit.ObjectIndex).Color;
-    else
-       return m_World->BackgroundColor;
-
-    /*
-    float a = glm::dot(rayDirection, rayDirection);
-    float b = 2.0f * glm::dot(rayOrigin, rayDirection);
-    float c = glm::dot(rayOrigin, rayOrigin) - radius * radius;
-    float discriminant = b * b - 4.0f * a * c;
-
-    if(discriminant < 0.0f)
-        return glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-
-    float closestHit = (-b - glm::sqrt(discriminant)) / (2.0f * a);
-    */
+    if (hit.Type == ObjectType::BACKGROUND)
+        return m_World->BackgroundColor;
+    else {
+        if (hit.Type == ObjectType::SPHERE) {
+			pixelColor = m_World->Spheres.at(hit.ObjectIndex).Color;
+        } else if (hit.Type == ObjectType::QUAD) {
+			pixelColor = m_World->Quads.at(hit.ObjectIndex).Color;
+        }
+    }
 
     glm::vec3 hitPoint = ray.Origin + ray.Direction * hit.HitDistance;
     glm::vec3 normal = glm::normalize(hitPoint);
@@ -80,28 +73,37 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 }
 
 Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
-    int closestIndex = -1;
-    float closestDistance = std::numeric_limits<float>::max();
+    HitInfo hitInfo;
+    hitInfo.Type = ObjectType::BACKGROUND;
+    hitInfo.HitDistance = std::numeric_limits<float>::max();
+    hitInfo.ObjectIndex = -1;
 
-    for (size_t i = 0; i < m_World->Spheres.size(); i++) {
-        const Sphere& sphere = m_World->Spheres.at(i);
+    for (size_t i = 0; m_World->Spheres.size() > 0 && i < m_World->Spheres.size(); i++) {
+		const Sphere& sphere = m_World->Spheres.at(i);
 
         float distance = sphere.Hit(ray);
 
-        if (distance >= 0.0f && distance < closestDistance) {
-            closestDistance = distance;
-            closestIndex = i;
+        if (distance >= 0.0f && distance < hitInfo.HitDistance) {
+            hitInfo.HitDistance = distance;
+            hitInfo.ObjectIndex = i;
+            hitInfo.Type = ObjectType::SPHERE;
         }
     }
 
-    HitInfo hitInfo;
+    for (rsize_t i = 0; m_World->Quads.size() > 0 && i < m_World->Quads.size(); i++) {
+        const Quad& quad = m_World->Quads.at(i);
 
-    if (closestDistance == std::numeric_limits<float>::max())
+        float distance = quad.Hit(ray);
+
+        if (distance >= 0.0f && distance < hitInfo.HitDistance) {
+            hitInfo.HitDistance = distance;
+            hitInfo.ObjectIndex = i;
+            hitInfo.Type = ObjectType::QUAD;
+        }
+    }
+
+    if (hitInfo.HitDistance == std::numeric_limits<float>::max())
        return NoHit();
-        
-
-    hitInfo.HitDistance = closestDistance;
-    hitInfo.ObjectIndex = closestIndex;
 
     return hitInfo;
 }
@@ -111,5 +113,5 @@ Renderer::HitInfo Renderer::ClosestHit(const Ray &ray, float hitDistance) {
 }
 
 Renderer::HitInfo Renderer::NoHit() {
-    return { -1.0f, -1 };
+    return { -1.0f, -1, ObjectType::BACKGROUND };
 }

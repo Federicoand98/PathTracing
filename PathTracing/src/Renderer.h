@@ -27,6 +27,7 @@ private:
     struct HitInfo {
         float HitDistance;
         int ObjectIndex;
+        ObjectType Type;
     };
 
     glm::vec4 PerPixel(uint32_t x, uint32_t y);
