@@ -26,6 +26,8 @@ private:
 
     struct HitInfo {
         float HitDistance;
+        glm::vec3 HitPosition;
+        glm::vec3 Normal;
         int ObjectIndex;
         ObjectType Type;
     };

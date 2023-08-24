@@ -53,21 +53,15 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 
     if (hit.Type == ObjectType::BACKGROUND)
         return m_World->BackgroundColor;
-    else {
-        if (hit.Type == ObjectType::SPHERE) {
-			pixelColor = m_World->Spheres.at(hit.ObjectIndex).Color;
-        } else if (hit.Type == ObjectType::QUAD) {
-			pixelColor = m_World->Quads.at(hit.ObjectIndex).Color;
-        }
-    }
+    else if (hit.Type == ObjectType::SPHERE) 
+		pixelColor = m_World->Spheres.at(hit.ObjectIndex).Color;
+    else if (hit.Type == ObjectType::QUAD) 
+		pixelColor = m_World->Quads.at(hit.ObjectIndex).Color;
 
-    glm::vec3 hitPoint = ray.Origin + ray.Direction * hit.HitDistance;
-    glm::vec3 normal = glm::normalize(hitPoint);
     glm::vec3 lightDirection = glm::normalize(glm::vec3(-1.0, -1.0, -1.0));
+    float lightIntensity = glm::max(glm::dot(hit.Normal, -lightDirection), 0.0f);
 
-    float d = glm::max(glm::dot(normal, -lightDirection), 0.0f);
-
-    pixelColor *= d;
+    pixelColor *= lightIntensity;
 
     return pixelColor;
 }
@@ -105,6 +99,15 @@ Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
     if (hitInfo.HitDistance == std::numeric_limits<float>::max())
        return NoHit();
 
+    glm::vec3 origin;
+    if (hitInfo.Type == ObjectType::SPHERE)
+        origin = ray.Origin - m_World->Spheres.at(hitInfo.ObjectIndex).Position;
+    else if(hitInfo.Type == ObjectType::QUAD)
+        origin = ray.Origin - m_World->Quads.at(hitInfo.ObjectIndex).PositionLLC;
+
+    hitInfo.HitPosition = origin + ray.Direction * hitInfo.HitDistance;
+    hitInfo.Normal = glm::normalize(hitInfo.HitPosition);
+
     return hitInfo;
 }
 
@@ -113,5 +116,5 @@ Renderer::HitInfo Renderer::ClosestHit(const Ray &ray, float hitDistance) {
 }
 
 Renderer::HitInfo Renderer::NoHit() {
-    return { -1.0f, -1, ObjectType::BACKGROUND };
+    return { -1.0f, glm::vec3(0.0f), glm::vec3(0.0f), -1, ObjectType::BACKGROUND};
 }
