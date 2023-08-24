@@ -15,23 +15,83 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		sphere.Position = { 0.0f, 0.0f, 0.0f };
 		sphere.Radius = 1.0f;
 		sphere.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
-		m_World.Spheres.push_back(sphere);
+		//m_World.Spheres.push_back(sphere);
 	}
 	{
 		Sphere sphere;
 		sphere.Position = { 0.0f, -101.0f, 0.0f };
 		sphere.Radius = 100.0f;
 		sphere.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
-		m_World.Spheres.push_back(sphere);
+		
+		//m_World.Spheres.push_back(sphere);
 	}
 
-	Quad quad;
-	quad.PositionLLC = { 0.0f, 0.0f, 0.0f };
-	quad.U = { 1.0f, 0.0f, 0.0f };
-	quad.V = { 0.0f, 1.0f, 0.0f };
-	quad.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
 
-	//m_World.Quads.push_back(quad);
+	// left red
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
+		quad.U = { 0.0f, 0.0f, -1.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
+
+		m_World.Quads.push_back(quad);
+	}
+
+	// back green 
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.Color = { 0.0f, 1.0f, 0.0f, 1.0f };
+
+		m_World.Quads.push_back(quad);
+	}
+
+	// right blue
+	{
+		Quad quad;
+		quad.PositionLLC = { 2.0f, -2.0f, 0.0f };
+		quad.U = { 0.0f, 0.0f, 1.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
+
+		m_World.Quads.push_back(quad);
+	}
+	
+
+	// top orange
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, 2.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, 1.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.Color = { 1.0f, 0.5f, 0.0f, 1.0f };
+
+		m_World.Quads.push_back(quad);
+	}
+
+	// bot teal
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, -1.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.Color = { 0.0f, 1.0f, 1.0f, 1.0f };
+
+		m_World.Quads.push_back(quad);
+	}
 
 	m_World.BackgroundColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 }
@@ -232,7 +292,7 @@ void Application::RenderUI(float deltaTime) {
 		}
 
 		if (ImGui::TreeNode("Quads") && m_World.Quads.size() > 0) {
-			for (size_t i = 0; i < m_World.Spheres.size(); i++) {
+			for (size_t i = 0; i < m_World.Quads.size(); i++) {
 				Quad& quad = m_World.Quads.at(i);
 
 				ImGui::PushID(i);
@@ -240,6 +300,8 @@ void Application::RenderUI(float deltaTime) {
 				ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f);
 				ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f);
 				ImGui::ColorEdit4("Color", glm::value_ptr(quad.Color));
+				ImGui::DragFloat("Width", &quad.Width, 0.1f);
+				ImGui::DragFloat("Height", &quad.Height, 0.1f);
 				ImGui::Separator();
 				ImGui::PopID();
 			}

@@ -42,6 +42,9 @@ struct Quad {
 	glm::vec3 V{0.0f};
 	glm::vec4 Color{0.0f};
 
+	float Width = 1.0f;
+	float Height = 1.0f;
+
 	float Hit(const Ray& ray) const {
 		glm::vec3 normal = glm::normalize(glm::cross(U, V));
 		double d = glm::dot(normal, PositionLLC);
@@ -62,11 +65,11 @@ struct Quad {
 		auto alpha = glm::dot(w, glm::cross(planar_hitpt_vector, V));
 		auto beta = glm::dot(w, glm::cross(U, planar_hitpt_vector));
 
-		// is interior
-		if ((alpha < 0) || (1 < alpha) || (beta < 0) || (1 < beta))
-			return -1.0f;
+		// is not interior
+		if ((alpha < 0) || (Width < alpha) || (beta < 0) || (Height < beta))
+			return -1;
 
-		return glm::length(intersection);
+		return t;
 	}
 
 	/*
