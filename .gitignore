@@ -30,3 +30,4 @@ out/
 .vs/
 .idea/
 cmake-build-debug/
+cmake-build-relwithdebinfo/
