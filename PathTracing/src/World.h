@@ -71,37 +71,14 @@ struct Quad {
 
 		return t;
 	}
-
-	/*
-	float Hit(const Ray& ray) const {
-		glm::vec3 toQuad = PositionLLC - ray.Origin;
-		glm::vec3 normal = glm::normalize(glm::cross(U, V));
-
-		float t = glm::dot(toQuad, normal) / glm::dot(ray.Direction, normal);
-
-		if (t < 0.0f) {
-			return -1.0f;  // Il raggio è dietro il quadrato
-		}
-
-		glm::vec3 hitPoint = ray.Origin + t * ray.Direction;
-
-		glm::vec3 toHit = hitPoint - PositionLLC;
-		float u = glm::dot(toHit, U);
-		float v = glm::dot(toHit, V);
-
-		if (u >= 0 && u <= glm::length(U) && v >= 0 && v <= glm::length(V)) {
-			return t;  // Il raggio colpisce il quadrato
-		}
-
-		return -1.0f;  // Il raggio non colpisce il quadrato
-	}
-	*/
 };
 
 struct World {
 	glm::vec4 BackgroundColor;
 	std::vector<Sphere> Spheres;
 	std::vector<Quad> Quads;
+
+	glm::vec3 LightPosition{0.0f};
 };
 
 #endif // World_h__

@@ -81,7 +81,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
     else if (hit.Type == ObjectType::QUAD) 
 		pixelColor = m_World->Quads.at(hit.ObjectIndex).Color;
 
-    glm::vec3 lightDirection = glm::normalize(glm::vec3(-1.0, -1.0, -1.0));
+    glm::vec3 lightDirection = glm::normalize(m_World->LightPosition);
     float lightIntensity = glm::max(glm::dot(hit.Normal, -lightDirection), 0.0f);
 
     pixelColor *= lightIntensity;

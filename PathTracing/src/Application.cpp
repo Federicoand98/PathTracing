@@ -15,15 +15,14 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		sphere.Position = { 0.0f, 0.0f, 0.0f };
 		sphere.Radius = 1.0f;
 		sphere.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
-		//m_World.Spheres.push_back(sphere);
+		m_World.Spheres.push_back(sphere);
 	}
 	{
 		Sphere sphere;
 		sphere.Position = { 0.0f, -101.0f, 0.0f };
 		sphere.Radius = 100.0f;
 		sphere.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
-		
-		//m_World.Spheres.push_back(sphere);
+		m_World.Spheres.push_back(sphere);
 	}
 
 
@@ -37,7 +36,7 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		quad.Height = 4.0f;
 		quad.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
 
-		m_World.Quads.push_back(quad);
+		//m_World.Quads.push_back(quad);
 	}
 
 	// back green 
@@ -50,7 +49,7 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		quad.Height = 4.0f;
 		quad.Color = { 0.0f, 1.0f, 0.0f, 1.0f };
 
-		m_World.Quads.push_back(quad);
+		//m_World.Quads.push_back(quad);
 	}
 
 	// right blue
@@ -63,7 +62,7 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		quad.Height = 4.0f;
 		quad.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
 
-		m_World.Quads.push_back(quad);
+		//m_World.Quads.push_back(quad);
 	}
 	
 
@@ -77,7 +76,7 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		quad.Height = 4.0f;
 		quad.Color = { 1.0f, 0.5f, 0.0f, 1.0f };
 
-		m_World.Quads.push_back(quad);
+		//m_World.Quads.push_back(quad);
 	}
 
 	// bot teal
@@ -90,10 +89,11 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		quad.Height = 4.0f;
 		quad.Color = { 0.0f, 1.0f, 1.0f, 1.0f };
 
-		m_World.Quads.push_back(quad);
+		//m_World.Quads.push_back(quad);
 	}
 
 	m_World.BackgroundColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	m_World.LightPosition = glm::vec3(-1.0f, -1.0f, -1.0f);
 }
 
 Application::~Application() {
@@ -281,9 +281,14 @@ void Application::RenderUI(float deltaTime) {
 
 	if (ImGui::CollapsingHeader("Scene")) {
 		ImGui::SeparatorText("Scene Configurations");
+
 		ImGui::Spacing();
 		ImGui::Text("Background");
 		ImGui::ColorEdit4("Background Color", glm::value_ptr(m_World.BackgroundColor));
+
+		ImGui::Spacing();
+		ImGui::Text("Light");
+		ImGui::DragFloat3("Light Position", glm::value_ptr(m_World.LightPosition));
 
 		ImGui::Spacing();
 		ImGui::Spacing();
