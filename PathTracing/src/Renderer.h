@@ -9,6 +9,7 @@
 #include "Ray.h"
 #include "Camera.h"
 #include "World.h"
+#include "Material.h"
 #include <memory>
 #include <iostream>
 

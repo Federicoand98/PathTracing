@@ -4,6 +4,7 @@
 #define World_h__
 
 #include "Ray.h"
+#include "Material.h"
 #include <vector>
 #include <glm/glm.hpp>
 #include <cmath>
@@ -17,7 +18,7 @@ enum class ObjectType {
 struct Sphere {
 	glm::vec3 Position{0.0f};
 	float Radius = 1.0f;
-	glm::vec4 Color{0.0f};
+	int MaterialIndex = 0;
 
 	float Hit(const Ray& ray) const {
 		glm::vec3 oc = ray.Origin - Position;
@@ -75,6 +76,7 @@ struct Quad {
 
 struct World {
 	glm::vec4 BackgroundColor;
+	std::vector<Material> Materials;
 	std::vector<Sphere> Spheres;
 	std::vector<Quad> Quads;
 

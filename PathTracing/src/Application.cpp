@@ -9,6 +9,14 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 
+	Material redMaterial, blueMaterial, pinkMaterial;
+	redMaterial.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
+	blueMaterial.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
+	pinkMaterial.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
+	m_World.Materials.push_back(redMaterial);
+	m_World.Materials.push_back(blueMaterial);
+	m_World.Materials.push_back(pinkMaterial);
+
 	m_World.BackgroundColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 	m_World.LightPosition = glm::vec3(2.0f, 4.0f, 5.0f);
 
@@ -17,21 +25,21 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		Sphere sphere;
 		sphere.Position = { 0.0f, 0.0f, 0.0f };
 		sphere.Radius = 1.0f;
-		sphere.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
+		sphere.MaterialIndex = 0;
 		m_World.Spheres.push_back(sphere);
 	}
 	{
 		Sphere sphere;
 		sphere.Position = { 0.0f, -101.0f, 0.0f };
 		sphere.Radius = 100.0f;
-		sphere.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
+		sphere.MaterialIndex = 2;
 		m_World.Spheres.push_back(sphere);
 	}
 	{
 		Sphere sphere;
 		sphere.Position = m_World.LightPosition;
 		sphere.Radius = 0.1f;
-		sphere.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		sphere.MaterialIndex = 1;
 		m_World.Spheres.push_back(sphere);
 	}
 
@@ -310,7 +318,7 @@ void Application::RenderUI(float deltaTime) {
 				ImGui::PushID(i);
 				ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
 				ImGui::DragFloat("Radius", &sphere.Radius, 0.1f, 0.0f, 10.0f);
-				ImGui::ColorEdit4("Color", glm::value_ptr(sphere.Color));
+				ImGui::DragInt("Material", &sphere.MaterialIndex, 1.0f, 0, m_World.Materials.size() - 1);
 				ImGui::Separator();
 				ImGui::PopID();
 			}
@@ -341,7 +349,15 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Spacing();
 
 	if (ImGui::CollapsingHeader("Materials")) {
+		for (size_t i = 0; i < m_World.Materials.size(); i++) {
+			Material& material = m_World.Materials.at(i);
 
+			ImGui::PushID(i);
+			ImGui::Text("Material %d", i);
+			ImGui::ColorEdit4("Color", glm::value_ptr(material.Color));
+			ImGui::Separator();
+			ImGui::PopID();
+		}
 	}
 
 	ImGui::End();

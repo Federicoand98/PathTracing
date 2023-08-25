@@ -70,16 +70,20 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
     Ray ray;
     ray.Origin = m_Camera->GetPosition();
     ray.Direction = m_Camera->GetRayDirections()[x + y * m_RenderedImage->GetWidth()];
-    glm::vec4 pixelColor;
+    glm::vec4 pixelColor(0.0f);
 
     HitInfo hit = TraceRay(ray);
+    Material material;
 
     if (hit.Type == ObjectType::BACKGROUND)
         return m_World->BackgroundColor;
-    else if (hit.Type == ObjectType::SPHERE) 
-		pixelColor = m_World->Spheres.at(hit.ObjectIndex).Color;
-    else if (hit.Type == ObjectType::QUAD) 
+    else if (hit.Type == ObjectType::SPHERE) {
+        material = m_World->Materials.at(m_World->Spheres.at(hit.ObjectIndex).MaterialIndex);
+        pixelColor = material.Color;
+    }
+    else if (hit.Type == ObjectType::QUAD) {
 		pixelColor = m_World->Quads.at(hit.ObjectIndex).Color;
+    }
 
     glm::vec3 lightDirection = glm::normalize(m_World->LightPosition);
     float lightIntensity = glm::max(glm::dot(hit.Normal, lightDirection), 0.0f);
