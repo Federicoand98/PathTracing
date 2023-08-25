@@ -9,6 +9,9 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 
+	m_World.BackgroundColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+	m_World.LightPosition = glm::vec3(2.0f, 4.0f, 5.0f);
+
 	// World initialization
 	{
 		Sphere sphere;
@@ -24,6 +27,13 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		sphere.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
 		m_World.Spheres.push_back(sphere);
 	}
+	{
+		Sphere sphere;
+		sphere.Position = m_World.LightPosition;
+		sphere.Radius = 0.1f;
+		sphere.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		m_World.Spheres.push_back(sphere);
+	}
 
 
 	// left red
@@ -36,7 +46,7 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		quad.Height = 4.0f;
 		quad.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
 
-		//m_World.Quads.push_back(quad);
+		m_World.Quads.push_back(quad);
 	}
 
 	// back green 
@@ -92,8 +102,6 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		//m_World.Quads.push_back(quad);
 	}
 
-	m_World.BackgroundColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-	m_World.LightPosition = glm::vec3(-1.0f, -1.0f, -1.0f);
 }
 
 Application::~Application() {

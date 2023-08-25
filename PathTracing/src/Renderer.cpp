@@ -82,7 +82,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 		pixelColor = m_World->Quads.at(hit.ObjectIndex).Color;
 
     glm::vec3 lightDirection = glm::normalize(m_World->LightPosition);
-    float lightIntensity = glm::max(glm::dot(hit.Normal, -lightDirection), 0.0f);
+    float lightIntensity = glm::max(glm::dot(hit.Normal, lightDirection), 0.0f);
 
     pixelColor *= lightIntensity;
 
