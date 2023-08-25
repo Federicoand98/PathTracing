@@ -3,6 +3,7 @@
 //
 
 #include "Renderer.h"
+#include "PseudoRandom.h"
 #include <algorithm>
 #include <execution>
 
@@ -72,6 +73,38 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
     ray.Direction = m_Camera->GetRayDirections()[x + y * m_RenderedImage->GetWidth()];
     glm::vec4 pixelColor(0.0f);
 
+#define DIFFUSE 1
+#if DIFFUSE
+    int depth = 2;
+    float brigthness = 1.0f;
+
+    for (int i = 0; i < depth; i++) {
+		HitInfo hit = TraceRay(ray);
+		Material material;
+        glm::vec4 objColor;
+
+        if (hit.Type == ObjectType::BACKGROUND) {
+            pixelColor += m_World->BackgroundColor * brigthness;
+            return pixelColor;
+        }
+		else if (hit.Type == ObjectType::SPHERE) {
+			material = m_World->Materials.at(m_World->Spheres.at(hit.ObjectIndex).MaterialIndex);
+			objColor = material.Color;
+		}
+		else if (hit.Type == ObjectType::QUAD) {
+			pixelColor += m_World->Quads.at(hit.ObjectIndex).Color * brigthness;
+            // colore
+		}
+
+		glm::vec3 lightDirection = glm::normalize(m_World->LightPosition);
+		float lightIntensity = glm::max(glm::dot(hit.Normal, lightDirection), 0.0f);
+
+		brigthness -= brigthness / depth;
+		pixelColor += objColor * brigthness;
+
+		ray.Direction = glm::reflect(ray.Direction, hit.Normal + material.Roughness * PseudoRandom::GetVec3(-1.0f, 1.0f));
+    }
+#else
     HitInfo hit = TraceRay(ray);
     Material material;
 
@@ -88,7 +121,9 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
     glm::vec3 lightDirection = glm::normalize(m_World->LightPosition);
     float lightIntensity = glm::max(glm::dot(hit.Normal, lightDirection), 0.0f);
 
+
     pixelColor *= lightIntensity;
+#endif
 
     return pixelColor;
 }

@@ -11,8 +11,14 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 
 	Material redMaterial, blueMaterial, pinkMaterial;
 	redMaterial.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
+	redMaterial.Roughness = 1.0f;
+	redMaterial.Reflective = true;
 	blueMaterial.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
+	blueMaterial.Roughness = 1.0f;
+	blueMaterial.Reflective = false;
 	pinkMaterial.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
+	pinkMaterial.Roughness = 1.0f;
+	pinkMaterial.Reflective = false;
 	m_World.Materials.push_back(redMaterial);
 	m_World.Materials.push_back(blueMaterial);
 	m_World.Materials.push_back(pinkMaterial);
@@ -54,7 +60,7 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 		quad.Height = 4.0f;
 		quad.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
 
-		m_World.Quads.push_back(quad);
+		//m_World.Quads.push_back(quad);
 	}
 
 	// back green 
@@ -355,6 +361,7 @@ void Application::RenderUI(float deltaTime) {
 			ImGui::PushID(i);
 			ImGui::Text("Material %d", i);
 			ImGui::ColorEdit4("Color", glm::value_ptr(material.Color));
+			ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f);
 			ImGui::Separator();
 			ImGui::PopID();
 		}
