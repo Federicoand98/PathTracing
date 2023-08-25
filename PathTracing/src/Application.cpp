@@ -186,7 +186,7 @@ void Application::RunLoop() {
 	while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
 		glfwPollEvents();
 
-		m_Camera.OnUpdate(m_FrameTime);
+		m_Camera.OnUpdate(m_DeltaTime);
 
 		ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -226,8 +226,8 @@ void Application::RunLoop() {
 			ImGui::End();
 		}
 
-		RenderUI(m_FrameTime);
-		Render(m_FrameTime);
+		RenderUI(m_DeltaTime);
+		Render(m_DeltaTime);
 
 		// Rendering
 		ImGui::Render();
@@ -241,12 +241,25 @@ void Application::RunLoop() {
 			glfwMakeContextCurrent(backup_current_context);
 		}
 
-		float time = glfwGetTime();
-		m_FrameTime = time - m_LastFrameTime;
-		m_LastFrameTime = time;
+		CalculateTime();
 
 		glfwSwapBuffers(m_Window);
 	}
+}
+
+void Application::CalculateTime() {
+	float time = glfwGetTime();
+	m_Timer = time - m_ResetTimer;
+	m_DeltaTime = time - m_LastFrameTime;
+	m_NFrames++;
+
+	if (m_Timer >= 1.0) {
+		m_FPS = (double)m_NFrames / m_Timer;
+		m_NFrames = 0;
+		m_ResetTimer = time;
+	}
+	
+	m_LastFrameTime = time;
 }
 
 void Application::Shutdown() {
@@ -262,7 +275,8 @@ void Application::Shutdown() {
 
 void Application::RenderUI(float deltaTime) {
 	ImGui::Begin("Settings");
-	ImGui::Text("Last Render: %.3fms", deltaTime);
+	ImGui::Text("FPS: %f", m_FPS);
+	ImGui::Text("Last Render: %.3fms", deltaTime * 1000);
 	ImGui::Separator();
 
 	if (ImGui::CollapsingHeader("Scene")) {

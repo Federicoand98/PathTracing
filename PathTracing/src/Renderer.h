@@ -41,6 +41,8 @@ private:
     const World* m_World = nullptr;
     std::shared_ptr<Image> m_RenderedImage;
     unsigned char* m_ImageData;
+    std::vector<uint32_t> m_HeightIterator;
+    std::vector<uint32_t> m_WidthIterator;
 };
 
 #endif //PATHTRACING_RENDERER_H

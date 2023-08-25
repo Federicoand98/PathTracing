@@ -33,6 +33,7 @@ public:
 
     GLFWwindow* GetWindow() const { return m_Window; }
 private:
+	void CalculateTime();
 	void RenderUI(float deltaTime);
 	void Render(float deltaTime);
 private:
@@ -40,8 +41,12 @@ private:
     Camera m_Camera;
 	World m_World;
 	bool m_IsRunning;
-	float m_FrameTime = 0.0f;
+	float m_Timer = 0.0f;
+	float m_DeltaTime = 0.0f;
+	float m_ResetTimer = 0.0f;
 	float m_LastFrameTime = 0.0f;
+	int m_NFrames = 0;
+	double m_FPS = 0.0f;
 	int m_Width;
 	int m_Height;
     uint32_t m_ViewportWidth = 0;

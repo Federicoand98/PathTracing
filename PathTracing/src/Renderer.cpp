@@ -3,6 +3,8 @@
 //
 
 #include "Renderer.h"
+#include <algorithm>
+#include <execution>
 
 namespace Utils {
     static unsigned char ConvertToRGBA(float value) {
@@ -22,12 +24,32 @@ void Renderer::OnResize(uint32_t width, uint32_t height) {
 
     //delete[] m_ImageData;
     m_ImageData = new unsigned char[width * height * 4];
+
+    for (uint32_t i = 0; i < m_RenderedImage->GetHeight(); i++)
+        m_HeightIterator.push_back(i);
+
+    for (uint32_t i = 0; i < m_RenderedImage->GetWidth(); i++)
+        m_WidthIterator.push_back(i);
 }
 
 void Renderer::Render(const Camera& camera, const World& world) {
     m_Camera = &camera;
     m_World = &world;
 
+#define MULTITHREADING 1
+#if MULTITHREADING
+    std::for_each(std::execution::par, m_HeightIterator.begin(), m_HeightIterator.end(), [this](uint32_t y) {
+        std::for_each(std::execution::par, m_WidthIterator.begin(), m_WidthIterator.end(), [this, y](uint32_t x) {
+            glm::vec2 coord = {(float)x / (float)m_RenderedImage->GetWidth(), (float)y / (float)m_RenderedImage->GetHeight()};
+            glm::vec4 color = PerPixel(x, y);
+
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = Utils::ConvertToRGBA(color.x);  // R
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 1] = Utils::ConvertToRGBA(color.y);  // G
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 2] = Utils::ConvertToRGBA(color.z);   // B
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 3] = 255; // Alpha
+		});
+    });
+#else
     for(uint32_t y = 0; y < m_RenderedImage->GetHeight(); y++) {
         for(uint32_t x = 0; x < m_RenderedImage->GetWidth(); x++) {
             glm::vec2 coord = {(float)x / (float)m_RenderedImage->GetWidth(), (float)y / (float)m_RenderedImage->GetHeight()};
@@ -39,6 +61,7 @@ void Renderer::Render(const Camera& camera, const World& world) {
             m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 3] = 255; // Alpha
         }
     }
+#endif
 
     m_RenderedImage->SetData(m_ImageData);
 }
@@ -84,7 +107,7 @@ Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
         }
     }
 
-    for (rsize_t i = 0; m_World->Quads.size() > 0 && i < m_World->Quads.size(); i++) {
+    for (size_t i = 0; m_World->Quads.size() > 0 && i < m_World->Quads.size(); i++) {
         const Quad& quad = m_World->Quads.at(i);
 
         float distance = quad.Hit(ray);
