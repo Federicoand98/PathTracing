@@ -11,27 +11,34 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 
 	Material redMaterial, blueMaterial, pinkMaterial;
 	redMaterial.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
-	redMaterial.Roughness = 1.0f;
+	redMaterial.Roughness = 0.5f;
 	redMaterial.Reflective = true;
 	blueMaterial.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
-	blueMaterial.Roughness = 1.0f;
+	blueMaterial.Roughness = 0.0f;
 	blueMaterial.Reflective = false;
-	pinkMaterial.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
-	pinkMaterial.Roughness = 1.0f;
+	pinkMaterial.Color = { 0.2f, 0.3f, 1.0f, 1.0f };
+	pinkMaterial.Roughness = 0.1f;
 	pinkMaterial.Reflective = false;
 	m_World.Materials.push_back(redMaterial);
 	m_World.Materials.push_back(blueMaterial);
 	m_World.Materials.push_back(pinkMaterial);
 
-	m_World.BackgroundColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-	m_World.LightPosition = glm::vec3(2.0f, 4.0f, 5.0f);
+	m_World.BackgroundColor = glm::vec4(0.6f, 0.7f, 0.9f, 1.0f);
+	m_World.LightPosition = glm::vec3(1.0f, 1.0f, 1.0f);
 
 	// World initialization
 	{
 		Sphere sphere;
-		sphere.Position = { 0.0f, 0.0f, 0.0f };
+		sphere.Position = { -0.8f, 0.0f, 0.0f };
 		sphere.Radius = 1.0f;
 		sphere.MaterialIndex = 0;
+		m_World.Spheres.push_back(sphere);
+	}
+	{
+		Sphere sphere;
+		sphere.Position = { 1.0f, -0.2f, 0.0f };
+		sphere.Radius = 0.8f;
+		sphere.MaterialIndex = 1;
 		m_World.Spheres.push_back(sphere);
 	}
 	{
@@ -299,6 +306,16 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Begin("Settings");
 	ImGui::Text("FPS: %f", m_FPS);
 	ImGui::Text("Last Render: %.3fms", deltaTime * 1000);
+	ImGui::Separator();
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("PathTracing Config");
+	ImGui::Checkbox("Enable", &m_Renderer.PathTracing);
+	if (ImGui::Button("Reset"))
+		m_Renderer.ResetPathTracingCounter();
+
+	ImGui::Spacing();
+	ImGui::Spacing();
 	ImGui::Separator();
 
 	if (ImGui::CollapsingHeader("Scene")) {

@@ -19,7 +19,10 @@ public:
 
     void Render(const Camera& camera, const World& world);
     void OnResize(uint32_t width, uint32_t height);
+    void ResetPathTracingCounter() { m_PTCounter = 1; }
     std::shared_ptr<Image> GetRenderedImage() const { return m_RenderedImage; }
+public:
+    bool PathTracing = true;
 private:
     struct Color {
         float R, G, B, A;
@@ -42,8 +45,10 @@ private:
     const World* m_World = nullptr;
     std::shared_ptr<Image> m_RenderedImage;
     unsigned char* m_ImageData;
+    glm::vec4* m_BufferImage;
     std::vector<uint32_t> m_HeightIterator;
     std::vector<uint32_t> m_WidthIterator;
+    int m_PTCounter = 1;
 };
 
 #endif //PATHTRACING_RENDERER_H

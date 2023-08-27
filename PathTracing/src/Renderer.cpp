@@ -23,30 +23,42 @@ void Renderer::OnResize(uint32_t width, uint32_t height) {
         m_RenderedImage = std::make_shared<Image>(width, height);
     }
 
-    //delete[] m_ImageData;
+    //delete[] m_ImageData, m_BufferImage;
     m_ImageData = new unsigned char[width * height * 4];
+    m_BufferImage = new glm::vec4[width * height];
+
+    m_HeightIterator.resize(height);
+    m_WidthIterator.resize(width);
 
     for (uint32_t i = 0; i < m_RenderedImage->GetHeight(); i++)
-        m_HeightIterator.push_back(i);
+        m_HeightIterator.at(i) = i;
 
     for (uint32_t i = 0; i < m_RenderedImage->GetWidth(); i++)
-        m_WidthIterator.push_back(i);
+        m_WidthIterator.at(i) = i;
 }
 
 void Renderer::Render(const Camera& camera, const World& world) {
     m_Camera = &camera;
     m_World = &world;
 
+    if (m_PTCounter == 1) {
+        memset(m_BufferImage, 0, m_RenderedImage->GetWidth() * m_RenderedImage->GetHeight() * sizeof(glm::vec4));
+    }
+
 #define MULTITHREADING 1
 #if MULTITHREADING
     std::for_each(std::execution::par, m_HeightIterator.begin(), m_HeightIterator.end(), [this](uint32_t y) {
         std::for_each(std::execution::par, m_WidthIterator.begin(), m_WidthIterator.end(), [this, y](uint32_t x) {
-            glm::vec2 coord = {(float)x / (float)m_RenderedImage->GetWidth(), (float)y / (float)m_RenderedImage->GetHeight()};
             glm::vec4 color = PerPixel(x, y);
+            m_BufferImage[x + y * m_RenderedImage->GetWidth()] += color;
 
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = Utils::ConvertToRGBA(color.x);  // R
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 1] = Utils::ConvertToRGBA(color.y);  // G
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 2] = Utils::ConvertToRGBA(color.z);   // B
+            glm::vec4 tempColor = m_BufferImage[x + y * m_RenderedImage->GetWidth()];
+            tempColor /= (float)m_PTCounter;
+            tempColor = glm::clamp(tempColor, glm::vec4(0.0f), glm::vec4(1.0f));
+
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = Utils::ConvertToRGBA(tempColor.x);  // R
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 1] = Utils::ConvertToRGBA(tempColor.y);  // G
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 2] = Utils::ConvertToRGBA(tempColor.z);   // B
             m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 3] = 255; // Alpha
 		});
     });
@@ -65,6 +77,11 @@ void Renderer::Render(const Camera& camera, const World& world) {
 #endif
 
     m_RenderedImage->SetData(m_ImageData);
+
+    if (PathTracing)
+        m_PTCounter++;
+    else
+        m_PTCounter = 1;
 }
 
 glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
@@ -75,7 +92,8 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 
 #define DIFFUSE 1
 #if DIFFUSE
-    int depth = 2;
+    bool BackgroundContribution = true;
+    int depth = 5;
     float brigthness = 1.0f;
 
     for (int i = 0; i < depth; i++) {
@@ -84,8 +102,9 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
         glm::vec4 objColor;
 
         if (hit.Type == ObjectType::BACKGROUND) {
-            pixelColor += m_World->BackgroundColor * brigthness;
-            return pixelColor;
+            if(BackgroundContribution || i == 0)
+				pixelColor += m_World->BackgroundColor * brigthness;
+            break;
         }
 		else if (hit.Type == ObjectType::SPHERE) {
 			material = m_World->Materials.at(m_World->Spheres.at(hit.ObjectIndex).MaterialIndex);
@@ -99,9 +118,11 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 		glm::vec3 lightDirection = glm::normalize(m_World->LightPosition);
 		float lightIntensity = glm::max(glm::dot(hit.Normal, lightDirection), 0.0f);
 
-		brigthness -= brigthness / depth;
+        objColor *= lightIntensity;
 		pixelColor += objColor * brigthness;
+        brigthness *= 0.5;
 
+        ray.Origin = hit.HitPosition + hit.Normal * 0.001f; // shadow acne fix
 		ray.Direction = glm::reflect(ray.Direction, hit.Normal + material.Roughness * PseudoRandom::GetVec3(-1.0f, 1.0f));
     }
 #else
@@ -166,14 +187,20 @@ Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
 
 Renderer::HitInfo Renderer::HandleHit(const Ray &ray, HitInfo& hit) {
     glm::vec3 origin;
+    glm::vec3 closestPosition;
 
-    if (hit.Type == ObjectType::SPHERE)
+    if (hit.Type == ObjectType::SPHERE) {
         origin = ray.Origin - m_World->Spheres.at(hit.ObjectIndex).Position;
-    else if(hit.Type == ObjectType::QUAD)
+        closestPosition = m_World->Spheres.at(hit.ObjectIndex).Position;
+    }
+    else if (hit.Type == ObjectType::QUAD) {
         origin = ray.Origin - m_World->Quads.at(hit.ObjectIndex).PositionLLC;
+        closestPosition = m_World->Quads.at(hit.ObjectIndex).PositionLLC;
+    }
 
     hit.HitPosition = origin + ray.Direction * hit.HitDistance;
     hit.Normal = glm::normalize(hit.HitPosition);
+    hit.HitPosition += closestPosition;
 
     return hit;
 }
