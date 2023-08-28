@@ -109,8 +109,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 			material = m_World->Materials.at(m_World->Spheres.at(hit.ObjectIndex).MaterialIndex);
 		}
 		else if (hit.Type == ObjectType::QUAD) {
-			//pixelColor += m_World->Quads.at(hit.ObjectIndex).Color * brigthness;
-            // colore
+			material = m_World->Materials.at(m_World->Quads.at(hit.ObjectIndex).MaterialIndex);
 		}
 
 		contribution *= material.Color;
@@ -120,6 +119,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
         glm::vec3 specular = glm::reflect(ray.Direction, hit.Normal);
 
         ray.Origin = hit.HitPosition + hit.Normal * 0.001f; // shadow acne fix
+        ray.Direction = glm::normalize(glm::lerp(specular, diffuse, material.Roughness));
     }
 #else
     HitInfo hit = TraceRay(ray);

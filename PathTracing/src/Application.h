@@ -36,6 +36,9 @@ private:
 	void CalculateTime();
 	void RenderUI(float deltaTime);
 	void Render(float deltaTime);
+
+	void InitializeMaterials();
+	void InitializeScene();
 private:
     Renderer m_Renderer;
     Camera m_Camera;

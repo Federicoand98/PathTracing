@@ -41,7 +41,7 @@ struct Quad {
 	glm::vec3 PositionLLC{0.0f};
 	glm::vec3 U{0.0f};
 	glm::vec3 V{0.0f};
-	glm::vec4 Color{0.0f};
+	int MaterialIndex = 0;
 
 	float Width = 1.0f;
 	float Height = 1.0f;

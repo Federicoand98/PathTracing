@@ -9,125 +9,8 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 
-	Material redMaterial, blueMaterial, pinkMaterial, lightMaterial;
-	redMaterial.Color = { 1.0f, 0.0f, 0.0f };
-	redMaterial.Roughness = 0.5f;
-	redMaterial.Reflective = true;
-	blueMaterial.Color = { 0.0f, 0.0f, 1.0f };
-	blueMaterial.Roughness = 0.0f;
-	blueMaterial.Reflective = false;
-	pinkMaterial.Color = { 0.2f, 0.3f, 1.0f };
-	pinkMaterial.Roughness = 0.1f;
-	pinkMaterial.Reflective = false;
-	lightMaterial.Color = { 1.0f, 1.0f, 1.0f };
-	lightMaterial.Roughness = 1.0f;
-	lightMaterial.Reflective = false;
-	lightMaterial.EmissiveColor = lightMaterial.Color;
-	lightMaterial.EmissiveStrenght = 10.0f;
-	m_World.Materials.push_back(redMaterial);
-	m_World.Materials.push_back(blueMaterial);
-	m_World.Materials.push_back(pinkMaterial);
-	m_World.Materials.push_back(lightMaterial);
-
-	m_World.BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
-
-	// World initialization
-	{
-		Sphere sphere;
-		sphere.Position = { -0.8f, 0.0f, 0.0f };
-		sphere.Radius = 1.0f;
-		sphere.MaterialIndex = 0;
-		m_World.Spheres.push_back(sphere);
-	}
-	{
-		Sphere sphere;
-		sphere.Position = { 1.0f, -0.2f, 0.0f };
-		sphere.Radius = 0.8f;
-		sphere.MaterialIndex = 1;
-		m_World.Spheres.push_back(sphere);
-	}
-	{
-		Sphere sphere;
-		sphere.Position = { 0.0f, -101.0f, 0.0f };
-		sphere.Radius = 100.0f;
-		sphere.MaterialIndex = 2;
-		m_World.Spheres.push_back(sphere);
-	}
-	{
-		Sphere sphere;
-		sphere.Position = { 1.0f, 1.0f, 1.0f };
-		sphere.Radius = 0.1f;
-		sphere.MaterialIndex = 3;
-		m_World.Spheres.push_back(sphere);
-	}
-
-
-	// left red
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
-		quad.U = { 0.0f, 0.0f, -1.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
-
-		//m_World.Quads.push_back(quad);
-	}
-
-	// back green 
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 0.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.Color = { 0.0f, 1.0f, 0.0f, 1.0f };
-
-		//m_World.Quads.push_back(quad);
-	}
-
-	// right blue
-	{
-		Quad quad;
-		quad.PositionLLC = { 2.0f, -2.0f, 0.0f };
-		quad.U = { 0.0f, 0.0f, 1.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
-
-		//m_World.Quads.push_back(quad);
-	}
-	
-
-	// top orange
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, 2.0f, 0.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 0.0f, 1.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.Color = { 1.0f, 0.5f, 0.0f, 1.0f };
-
-		//m_World.Quads.push_back(quad);
-	}
-
-	// bot teal
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 0.0f, -1.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.Color = { 0.0f, 1.0f, 1.0f, 1.0f };
-
-		//m_World.Quads.push_back(quad);
-	}
-
+	InitializeMaterials();
+	InitializeScene();
 }
 
 Application::~Application() {
@@ -282,6 +165,156 @@ void Application::RunLoop() {
 	}
 }
 
+void Application::InitializeMaterials() {
+	Material redMaterial, blueMaterial, pinkMaterial, lightMaterial, greenMaterial, whiteMaterial;
+	redMaterial.Color = { 1.0f, 0.0f, 0.0f };
+	redMaterial.Roughness = 0.5f;
+	blueMaterial.Color = { 0.0f, 0.0f, 1.0f };
+	blueMaterial.Roughness = 0.0f;
+	pinkMaterial.Color = { 0.2f, 0.3f, 1.0f };
+	pinkMaterial.Roughness = 1.0f;
+	lightMaterial.Color = { 0.88f, 0.83f, 0.3f };
+	lightMaterial.Roughness = 1.0f;
+	lightMaterial.EmissiveColor = lightMaterial.Color;
+	lightMaterial.EmissiveStrenght = 1.0f;
+	greenMaterial.Color = { 0.0f, 1.0f, 0.0f };
+	greenMaterial.Roughness = 1.0f;
+	whiteMaterial.Color = { 1.0f, 1.0f, 1.0f };
+	whiteMaterial.Roughness = 1.0f;
+	m_World.Materials.push_back(redMaterial);
+	m_World.Materials.push_back(blueMaterial);
+	m_World.Materials.push_back(pinkMaterial);
+	m_World.Materials.push_back(lightMaterial);
+	m_World.Materials.push_back(whiteMaterial);
+	m_World.Materials.push_back(greenMaterial);
+
+	m_World.BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
+}
+
+void setupSpheres(World& m_World) {	
+	{
+		Sphere sphere;
+		sphere.Position = { -0.8f, 0.0f, 0.0f };
+		sphere.Radius = 1.0f;
+		sphere.MaterialIndex = 0;
+		m_World.Spheres.push_back(sphere);
+	}
+	{
+		Sphere sphere;
+		sphere.Position = { 1.0f, -0.2f, 0.0f };
+		sphere.Radius = 0.8f;
+		sphere.MaterialIndex = 1;
+		m_World.Spheres.push_back(sphere);
+	}
+	{
+		Sphere sphere;
+		sphere.Position = { 0.0f, -101.0f, 0.0f };
+		sphere.Radius = 100.0f;
+		sphere.MaterialIndex = 2;
+		m_World.Spheres.push_back(sphere);
+	}
+	{
+		Sphere sphere;
+		sphere.Position = { 1.0f, 1.0f, 1.0f };
+		sphere.Radius = 0.1f;
+		sphere.MaterialIndex = 3;
+		m_World.Spheres.push_back(sphere);
+	}
+}
+
+void setupCornellBox(World& m_World) {
+	{
+		Sphere sphere;
+		sphere.Position = { 0.0f, 0.0f, 0.0f };
+		sphere.Radius = 1.0f;
+		sphere.MaterialIndex = 0;
+		m_World.Spheres.push_back(sphere);
+	}
+	// left green
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
+		quad.U = { 0.0f, 0.0f, -1.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 5;
+
+		m_World.Quads.push_back(quad);
+	}
+
+	// back white
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 4;
+
+		m_World.Quads.push_back(quad);
+	}
+
+	// right red
+	{
+		Quad quad;
+		quad.PositionLLC = { 2.0f, -2.0f, 0.0f };
+		quad.U = { 0.0f, 0.0f, 1.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 0;
+
+		m_World.Quads.push_back(quad);
+	}
+	
+
+	// top white
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, 2.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, 1.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 4;
+
+		m_World.Quads.push_back(quad);
+	}
+
+	// bot white
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, -1.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 4;
+
+		m_World.Quads.push_back(quad);
+	}
+
+	// top light
+	{
+		Quad quad;
+		quad.PositionLLC = { -0.25f, 1.95f, 2.00f };
+		quad.U = { 1.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, 1.0f };
+		quad.Width = 0.5f;
+		quad.Height = 0.5f;
+		quad.MaterialIndex = 3;
+
+		m_World.Quads.push_back(quad);
+	}
+}
+
+void Application::InitializeScene() {
+	//setupSpheres(m_World);
+	setupCornellBox(m_World);
+}
+
 void Application::CalculateTime() {
 	float time = glfwGetTime();
 	m_Timer = time - m_ResetTimer;
@@ -360,7 +393,6 @@ void Application::RenderUI(float deltaTime) {
 				ImGui::DragFloat3("Position", glm::value_ptr(quad.PositionLLC), 0.1f);
 				ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f);
 				ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f);
-				ImGui::ColorEdit4("Color", glm::value_ptr(quad.Color));
 				ImGui::DragFloat("Width", &quad.Width, 0.1f);
 				ImGui::DragFloat("Height", &quad.Height, 0.1f);
 				ImGui::Separator();
@@ -409,3 +441,4 @@ void Application::Render(float deltaTime) {
     m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
     m_Renderer.Render(m_Camera, m_World);
 }
+

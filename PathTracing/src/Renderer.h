@@ -12,6 +12,7 @@
 #include "Material.h"
 #include <memory>
 #include <iostream>
+#include <glm/gtx/compatibility.hpp>
 
 class Renderer {
 public:
