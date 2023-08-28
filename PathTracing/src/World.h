@@ -75,12 +75,11 @@ struct Quad {
 };
 
 struct World {
-	glm::vec4 BackgroundColor;
+	glm::vec3 BackgroundColor;
 	std::vector<Material> Materials;
 	std::vector<Sphere> Spheres;
 	std::vector<Quad> Quads;
-
-	glm::vec3 LightPosition{0.0f};
+	float AmbientOcclusionIntensity = 1.0f;
 };
 
 #endif // World_h__

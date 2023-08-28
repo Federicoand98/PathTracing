@@ -6,9 +6,15 @@
 #include <glm/glm.hpp>
 
 struct Material {
-	glm::vec4 Color {0.0f};
+	glm::vec3 Color {0.0f};
 	float Roughness = 1.0f;
-	bool Reflective = false;
+	float SpecularProbability = 1.0f;
+	float EmissiveStrenght = 0.0f;
+	glm::vec3 EmissiveColor{ 0.0f };
+
+	glm::vec3 GetEmission() const {
+		return EmissiveStrenght * EmissiveColor;
+	}
 };
 
 #endif

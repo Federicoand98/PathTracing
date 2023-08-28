@@ -9,22 +9,27 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 
-	Material redMaterial, blueMaterial, pinkMaterial;
-	redMaterial.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
+	Material redMaterial, blueMaterial, pinkMaterial, lightMaterial;
+	redMaterial.Color = { 1.0f, 0.0f, 0.0f };
 	redMaterial.Roughness = 0.5f;
 	redMaterial.Reflective = true;
-	blueMaterial.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
+	blueMaterial.Color = { 0.0f, 0.0f, 1.0f };
 	blueMaterial.Roughness = 0.0f;
 	blueMaterial.Reflective = false;
-	pinkMaterial.Color = { 0.2f, 0.3f, 1.0f, 1.0f };
+	pinkMaterial.Color = { 0.2f, 0.3f, 1.0f };
 	pinkMaterial.Roughness = 0.1f;
 	pinkMaterial.Reflective = false;
+	lightMaterial.Color = { 1.0f, 1.0f, 1.0f };
+	lightMaterial.Roughness = 1.0f;
+	lightMaterial.Reflective = false;
+	lightMaterial.EmissiveColor = lightMaterial.Color;
+	lightMaterial.EmissiveStrenght = 10.0f;
 	m_World.Materials.push_back(redMaterial);
 	m_World.Materials.push_back(blueMaterial);
 	m_World.Materials.push_back(pinkMaterial);
+	m_World.Materials.push_back(lightMaterial);
 
-	m_World.BackgroundColor = glm::vec4(0.6f, 0.7f, 0.9f, 1.0f);
-	m_World.LightPosition = glm::vec3(1.0f, 1.0f, 1.0f);
+	m_World.BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
 
 	// World initialization
 	{
@@ -50,9 +55,9 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
 	}
 	{
 		Sphere sphere;
-		sphere.Position = m_World.LightPosition;
+		sphere.Position = { 1.0f, 1.0f, 1.0f };
 		sphere.Radius = 0.1f;
-		sphere.MaterialIndex = 1;
+		sphere.MaterialIndex = 3;
 		m_World.Spheres.push_back(sphere);
 	}
 
@@ -215,7 +220,8 @@ void Application::RunLoop() {
 	while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
 		glfwPollEvents();
 
-		m_Camera.OnUpdate(m_DeltaTime);
+		if (m_Camera.OnUpdate(m_DeltaTime))
+			m_Renderer.ResetPathTracingCounter();
 
 		ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -323,11 +329,8 @@ void Application::RenderUI(float deltaTime) {
 
 		ImGui::Spacing();
 		ImGui::Text("Background");
-		ImGui::ColorEdit4("Background Color", glm::value_ptr(m_World.BackgroundColor));
-
-		ImGui::Spacing();
-		ImGui::Text("Light");
-		ImGui::DragFloat3("Light Position", glm::value_ptr(m_World.LightPosition));
+		ImGui::ColorEdit3("Background Color", glm::value_ptr(m_World.BackgroundColor));
+		ImGui::DragFloat("Ambient Occlusion Intensity",&m_World.AmbientOcclusionIntensity, 0.1f, 0.0f, 1.0f);
 
 		ImGui::Spacing();
 		ImGui::Spacing();
@@ -377,8 +380,10 @@ void Application::RenderUI(float deltaTime) {
 
 			ImGui::PushID(i);
 			ImGui::Text("Material %d", i);
-			ImGui::ColorEdit4("Color", glm::value_ptr(material.Color));
+			ImGui::ColorEdit3("Color", glm::value_ptr(material.Color));
 			ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f);
+			ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX);
+			ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor));
 			ImGui::Separator();
 			ImGui::PopID();
 		}

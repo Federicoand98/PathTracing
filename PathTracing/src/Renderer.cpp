@@ -92,9 +92,9 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 
 #define DIFFUSE 1
 #if DIFFUSE
-    bool BackgroundContribution = true;
     int depth = 5;
-    float brigthness = 1.0f;
+    glm::vec3 light(0.0f);
+    glm::vec3 contribution(1.0f);
 
     for (int i = 0; i < depth; i++) {
 		HitInfo hit = TraceRay(ray);
@@ -102,28 +102,24 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
         glm::vec4 objColor;
 
         if (hit.Type == ObjectType::BACKGROUND) {
-            if(BackgroundContribution || i == 0)
-				pixelColor += m_World->BackgroundColor * brigthness;
+			light += m_World->BackgroundColor * contribution * m_World->AmbientOcclusionIntensity;
             break;
         }
 		else if (hit.Type == ObjectType::SPHERE) {
 			material = m_World->Materials.at(m_World->Spheres.at(hit.ObjectIndex).MaterialIndex);
-			objColor = material.Color;
 		}
 		else if (hit.Type == ObjectType::QUAD) {
-			pixelColor += m_World->Quads.at(hit.ObjectIndex).Color * brigthness;
+			//pixelColor += m_World->Quads.at(hit.ObjectIndex).Color * brigthness;
             // colore
 		}
 
-		glm::vec3 lightDirection = glm::normalize(m_World->LightPosition);
-		float lightIntensity = glm::max(glm::dot(hit.Normal, lightDirection), 0.0f);
+		contribution *= material.Color;
+        light += material.GetEmission();
 
-        objColor *= lightIntensity;
-		pixelColor += objColor * brigthness;
-        brigthness *= 0.5;
+        glm::vec3 diffuse = glm::normalize(hit.Normal + PseudoRandom::GetVec3(-1.0f, 1.0f));
+        glm::vec3 specular = glm::reflect(ray.Direction, hit.Normal);
 
         ray.Origin = hit.HitPosition + hit.Normal * 0.001f; // shadow acne fix
-		ray.Direction = glm::reflect(ray.Direction, hit.Normal + material.Roughness * PseudoRandom::GetVec3(-1.0f, 1.0f));
     }
 #else
     HitInfo hit = TraceRay(ray);
@@ -146,7 +142,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
     pixelColor *= lightIntensity;
 #endif
 
-    return pixelColor;
+    return glm::vec4(light, 1.0f);
 }
 
 Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
