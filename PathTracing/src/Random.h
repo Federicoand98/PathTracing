@@ -6,7 +6,7 @@
 #include <random>
 #include <glm/glm.hpp>
 
-class PseudoRandom {
+class Random {
 public:
 	static int GetInt(int min, int max) {
 		static std::random_device rd;

@@ -3,7 +3,7 @@
 //
 
 #include "Renderer.h"
-#include "PseudoRandom.h"
+#include "Random.h"
 #include <algorithm>
 #include <execution>
 
@@ -54,6 +54,7 @@ void Renderer::Render(const Camera& camera, const World& world) {
 
             glm::vec4 tempColor = m_BufferImage[x + y * m_RenderedImage->GetWidth()];
             tempColor /= (float)m_PTCounter;
+
             tempColor = glm::clamp(tempColor, glm::vec4(0.0f), glm::vec4(1.0f));
 
             m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = Utils::ConvertToRGBA(tempColor.x);  // R
@@ -65,12 +66,17 @@ void Renderer::Render(const Camera& camera, const World& world) {
 #else
     for(uint32_t y = 0; y < m_RenderedImage->GetHeight(); y++) {
         for(uint32_t x = 0; x < m_RenderedImage->GetWidth(); x++) {
-            glm::vec2 coord = {(float)x / (float)m_RenderedImage->GetWidth(), (float)y / (float)m_RenderedImage->GetHeight()};
             glm::vec4 color = PerPixel(x, y);
+            m_BufferImage[x + y * m_RenderedImage->GetWidth()] += color;
 
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = Utils::ConvertToRGBA(color.x);  // R
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 1] = Utils::ConvertToRGBA(color.y);  // G
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 2] = Utils::ConvertToRGBA(color.z);   // B
+            glm::vec4 tempColor = m_BufferImage[x + y * m_RenderedImage->GetWidth()];
+            tempColor /= (float)m_PTCounter;
+
+            tempColor = glm::clamp(tempColor, glm::vec4(0.0f), glm::vec4(1.0f));
+
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = Utils::ConvertToRGBA(tempColor.x);  // R
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 1] = Utils::ConvertToRGBA(tempColor.y);  // G
+            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 2] = Utils::ConvertToRGBA(tempColor.z);   // B
             m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 3] = 255; // Alpha
         }
     }
@@ -89,9 +95,8 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
     ray.Origin = m_Camera->GetPosition();
     ray.Direction = m_Camera->GetRayDirections()[x + y * m_RenderedImage->GetWidth()];
     glm::vec4 pixelColor(0.0f);
+    bool shouldRefract = false;
 
-#define DIFFUSE 1
-#if DIFFUSE
     int depth = 5;
     glm::vec3 light(0.0f);
     glm::vec3 contribution(1.0f);
@@ -115,32 +120,33 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 		contribution *= material.Color;
         light += material.GetEmission();
 
-        glm::vec3 diffuse = glm::normalize(hit.Normal + PseudoRandom::GetVec3(-1.0f, 1.0f));
-        glm::vec3 specular = glm::reflect(ray.Direction, hit.Normal);
+        if (material.Refractive) {
+            glm::vec3 refractedDirection;
 
-        ray.Origin = hit.HitPosition + hit.Normal * 0.001f; // shadow acne fix
-        ray.Direction = glm::normalize(glm::lerp(specular, diffuse, material.Roughness));
+            glm::vec3 unitDirection = glm::normalize(ray.Direction);
+            float ni_over_nt = glm::dot(unitDirection, hit.Normal) > 0 ? material.RefractionRatio : 1.0f / material.RefractionRatio;
+
+            refractedDirection = glm::refract(unitDirection, hit.Normal, ni_over_nt);
+
+            if (glm::length(refractedDirection)) {
+                ray.Origin = hit.HitPosition + refractedDirection * 0.001f;
+                ray.Direction = refractedDirection;
+            }
+            else {
+                // Total Internal Reflection
+                glm::vec3 reflectedDirection = glm::reflect(unitDirection, hit.Normal);
+                ray.Origin = hit.HitPosition + reflectedDirection * 0.001f;
+                ray.Direction = reflectedDirection;
+            }
+        }
+        else {
+			glm::vec3 diffuse = glm::normalize(hit.Normal + Random::GetVec3(-1.0f, 1.0f));
+			glm::vec3 specular = glm::reflect(ray.Direction, hit.Normal);
+
+			ray.Origin = hit.HitPosition + hit.Normal * 0.001f; // shadow acne fix
+			ray.Direction = glm::normalize(glm::lerp(specular, diffuse, material.Roughness));
+        }
     }
-#else
-    HitInfo hit = TraceRay(ray);
-    Material material;
-
-    if (hit.Type == ObjectType::BACKGROUND)
-        return m_World->BackgroundColor;
-    else if (hit.Type == ObjectType::SPHERE) {
-        material = m_World->Materials.at(m_World->Spheres.at(hit.ObjectIndex).MaterialIndex);
-        pixelColor = material.Color;
-    }
-    else if (hit.Type == ObjectType::QUAD) {
-		pixelColor = m_World->Quads.at(hit.ObjectIndex).Color;
-    }
-
-    glm::vec3 lightDirection = glm::normalize(m_World->LightPosition);
-    float lightIntensity = glm::max(glm::dot(hit.Normal, lightDirection), 0.0f);
-
-
-    pixelColor *= lightIntensity;
-#endif
 
     return glm::vec4(light, 1.0f);
 }
@@ -188,15 +194,22 @@ Renderer::HitInfo Renderer::HandleHit(const Ray &ray, HitInfo& hit) {
     if (hit.Type == ObjectType::SPHERE) {
         origin = ray.Origin - m_World->Spheres.at(hit.ObjectIndex).Position;
         closestPosition = m_World->Spheres.at(hit.ObjectIndex).Position;
+
+		hit.HitPosition = origin + ray.Direction * hit.HitDistance;
+		hit.Normal = glm::normalize(hit.HitPosition);
+		hit.HitPosition += closestPosition;
     }
     else if (hit.Type == ObjectType::QUAD) {
+        glm::vec3 U = m_World->Quads.at(hit.ObjectIndex).U;
+        glm::vec3 V = m_World->Quads.at(hit.ObjectIndex).V;
+
         origin = ray.Origin - m_World->Quads.at(hit.ObjectIndex).PositionLLC;
         closestPosition = m_World->Quads.at(hit.ObjectIndex).PositionLLC;
+        
+		hit.HitPosition = origin + ray.Direction * hit.HitDistance;
+        hit.Normal = normalize(glm::cross(U, V));
+		hit.HitPosition += closestPosition;
     }
-
-    hit.HitPosition = origin + ray.Direction * hit.HitDistance;
-    hit.Normal = glm::normalize(hit.HitPosition);
-    hit.HitPosition += closestPosition;
 
     return hit;
 }

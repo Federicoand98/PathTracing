@@ -49,7 +49,7 @@ struct Quad {
 	float Hit(const Ray& ray) const {
 		glm::vec3 normal = glm::normalize(glm::cross(U, V));
 		double d = glm::dot(normal, PositionLLC);
-		glm::vec3 w = normal / glm::dot(normal, normal);
+		glm::vec3 w = normal / (glm::dot(normal, normal) + 0.0001f);
 
 		auto denom = glm::dot(normal, ray.Direction);
 		

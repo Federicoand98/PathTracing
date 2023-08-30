@@ -166,27 +166,38 @@ void Application::RunLoop() {
 }
 
 void Application::InitializeMaterials() {
-	Material redMaterial, blueMaterial, pinkMaterial, lightMaterial, greenMaterial, whiteMaterial;
+	Material redMaterial, blueMaterial, pinkMaterial, lightMaterial, greenMaterial, whiteMaterial, glassMaterial;
+	redMaterial.Name = "Red Material";
 	redMaterial.Color = { 1.0f, 0.0f, 0.0f };
 	redMaterial.Roughness = 0.5f;
+	blueMaterial.Name = "Blue Material";
 	blueMaterial.Color = { 0.0f, 0.0f, 1.0f };
 	blueMaterial.Roughness = 0.0f;
+	pinkMaterial.Name = "Pink Material";
 	pinkMaterial.Color = { 0.2f, 0.3f, 1.0f };
 	pinkMaterial.Roughness = 1.0f;
+	lightMaterial.Name = "Light";
 	lightMaterial.Color = { 0.88f, 0.83f, 0.3f };
 	lightMaterial.Roughness = 1.0f;
 	lightMaterial.EmissiveColor = lightMaterial.Color;
 	lightMaterial.EmissiveStrenght = 1.0f;
+	greenMaterial.Name = "Green Material";
 	greenMaterial.Color = { 0.0f, 1.0f, 0.0f };
 	greenMaterial.Roughness = 1.0f;
+	whiteMaterial.Name = "White Material";
 	whiteMaterial.Color = { 1.0f, 1.0f, 1.0f };
 	whiteMaterial.Roughness = 1.0f;
+	glassMaterial.Name = "Glass";
+	glassMaterial.Color = { 1.0f, 1.0f, 1.0f };
+	glassMaterial.Refractive = true;
+	glassMaterial.RefractionRatio = 1.7f;
 	m_World.Materials.push_back(redMaterial);
 	m_World.Materials.push_back(blueMaterial);
 	m_World.Materials.push_back(pinkMaterial);
 	m_World.Materials.push_back(lightMaterial);
 	m_World.Materials.push_back(whiteMaterial);
 	m_World.Materials.push_back(greenMaterial);
+	m_World.Materials.push_back(glassMaterial);
 
 	m_World.BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
 }
@@ -310,9 +321,33 @@ void setupCornellBox(World& m_World) {
 	}
 }
 
+void setupAltScene(World& world) {
+	{
+		Sphere sphere;
+		sphere.Position = { 0.0f, -1.0f, 2.0f };
+		sphere.Radius = 1.0f;
+		sphere.MaterialIndex = 3;
+		world.Spheres.push_back(sphere);
+	}
+
+	// bot white
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, -1.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 0;
+
+		world.Quads.push_back(quad);
+	}
+}
+
 void Application::InitializeScene() {
-	//setupSpheres(m_World);
-	setupCornellBox(m_World);
+	setupSpheres(m_World);
+	//setupCornellBox(m_World);
+	//setupAltScene(m_World);
 }
 
 void Application::CalculateTime() {
@@ -348,59 +383,71 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Separator();
 
 	ImGui::Spacing();
-	ImGui::SeparatorText("PathTracing Config");
-	ImGui::Checkbox("Enable", &m_Renderer.PathTracing);
-	if (ImGui::Button("Reset"))
+	ImGui::SeparatorText("Engine Configuration");
+	ImGui::Checkbox("Enable Path Tracing", &m_Renderer.PathTracing);
+	if (ImGui::Button("Reset Accumulation"))
 		m_Renderer.ResetPathTracingCounter();
 
 	ImGui::Spacing();
 	ImGui::Spacing();
 	ImGui::Separator();
 
-	if (ImGui::CollapsingHeader("Scene")) {
-		ImGui::SeparatorText("Scene Configurations");
+	ImGui::SeparatorText("Scene Configurations");
 
-		ImGui::Spacing();
-		ImGui::Text("Background");
-		ImGui::ColorEdit3("Background Color", glm::value_ptr(m_World.BackgroundColor));
-		ImGui::DragFloat("Ambient Occlusion Intensity",&m_World.AmbientOcclusionIntensity, 0.1f, 0.0f, 1.0f);
+	ImGui::Spacing();
+	ImGui::Text("Background");
+	ImGui::ColorEdit3("Background Color", glm::value_ptr(m_World.BackgroundColor));
+	ImGui::DragFloat("Ambient Occlusion Intensity",&m_World.AmbientOcclusionIntensity, 0.1f, 0.0f, 1.0f);
 
-		ImGui::Spacing();
-		ImGui::Spacing();
+	ImGui::Spacing();
+	ImGui::Spacing();
 
-		ImGui::Text("Objects:");
+	ImGui::Text("Objects:");
 
-		if (ImGui::TreeNode("Spheres") && m_World.Spheres.size() > 0) {
-			for (size_t i = 0; i < m_World.Spheres.size(); i++) {
-				Sphere& sphere = m_World.Spheres.at(i);
+	if (ImGui::TreeNode("Spheres") && m_World.Spheres.size() > 0) {
+		for (size_t i = 0; i < m_World.Spheres.size(); i++) {
+			Sphere& sphere = m_World.Spheres.at(i);
 
-				ImGui::PushID(i);
-				ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
-				ImGui::DragFloat("Radius", &sphere.Radius, 0.1f, 0.0f, 10.0f);
-				ImGui::DragInt("Material", &sphere.MaterialIndex, 1.0f, 0, m_World.Materials.size() - 1);
-				ImGui::Separator();
-				ImGui::PopID();
+			ImGui::PushID(i);
+			ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
+			ImGui::DragFloat("Radius", &sphere.Radius, 0.1f, 0.0f, 10.0f);
+			if (ImGui::BeginCombo("Material", m_World.Materials.at(sphere.MaterialIndex).Name, 0 << 1)) {
+				for (int i = 0; i < m_World.Materials.size(); i++) {
+					const bool isSelected = sphere.MaterialIndex == i;
+
+					if (ImGui::Selectable(m_World.Materials.at(i).Name, isSelected)) {
+						m_Renderer.ResetPathTracingCounter();
+						sphere.MaterialIndex = i;
+					}
+
+					if (isSelected)
+						ImGui::SetItemDefaultFocus();
+				}
+
+				ImGui::EndCombo();
 			}
-
-			ImGui::TreePop();
+			ImGui::Separator();
+			ImGui::PopID();
 		}
 
-		if (ImGui::TreeNode("Quads") && m_World.Quads.size() > 0) {
-			for (size_t i = 0; i < m_World.Quads.size(); i++) {
-				Quad& quad = m_World.Quads.at(i);
+		ImGui::TreePop();
+	}
 
-				ImGui::PushID(i);
-				ImGui::DragFloat3("Position", glm::value_ptr(quad.PositionLLC), 0.1f);
-				ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f);
-				ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f);
-				ImGui::DragFloat("Width", &quad.Width, 0.1f);
-				ImGui::DragFloat("Height", &quad.Height, 0.1f);
-				ImGui::Separator();
-				ImGui::PopID();
-			}
+	if (ImGui::TreeNode("Quads") && m_World.Quads.size() > 0) {
+		for (size_t i = 0; i < m_World.Quads.size(); i++) {
+			Quad& quad = m_World.Quads.at(i);
 
-			ImGui::TreePop();
+			ImGui::PushID(i);
+			ImGui::DragFloat3("Position", glm::value_ptr(quad.PositionLLC), 0.1f);
+			ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f);
+			ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f);
+			ImGui::DragFloat("Width", &quad.Width, 0.1f);
+			ImGui::DragFloat("Height", &quad.Height, 0.1f);
+			ImGui::Separator();
+			ImGui::PopID();
 		}
+
+		ImGui::TreePop();
 	}
 
 	ImGui::Spacing();
@@ -411,11 +458,13 @@ void Application::RenderUI(float deltaTime) {
 			Material& material = m_World.Materials.at(i);
 
 			ImGui::PushID(i);
-			ImGui::Text("Material %d", i);
+			ImGui::SeparatorText(material.Name);
 			ImGui::ColorEdit3("Color", glm::value_ptr(material.Color));
 			ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f);
 			ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX);
 			ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor));
+			ImGui::Checkbox("Refractive", &material.Refractive);
+			ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.1f, 1.0f, 3.0f);
 			ImGui::Separator();
 			ImGui::PopID();
 		}
