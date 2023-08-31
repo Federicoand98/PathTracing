@@ -2,6 +2,7 @@
 #include "stb_image.h"
 #include "Application.h"
 #include <glm/gtc/type_ptr.hpp>
+#include "Random.h"
 
 static Application* s_Instance = nullptr;
 
@@ -9,7 +10,7 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 
-	InitializeMaterials();
+	//InitializeMaterials();
 	InitializeScene();
 }
 
@@ -174,7 +175,7 @@ void Application::InitializeMaterials() {
 	blueMaterial.Color = { 0.0f, 0.0f, 1.0f };
 	blueMaterial.Roughness = 0.0f;
 	pinkMaterial.Name = "Pink Material";
-	pinkMaterial.Color = { 0.2f, 0.3f, 1.0f };
+	pinkMaterial.Color = { 1.0f, 0.0f, 1.0f };
 	pinkMaterial.Roughness = 1.0f;
 	lightMaterial.Name = "Light";
 	lightMaterial.Color = { 0.88f, 0.83f, 0.3f };
@@ -344,10 +345,56 @@ void setupAltScene(World& world) {
 	}
 }
 
+void setupRandomSpheres(World& world) {
+	world.BackgroundColor = { 0.54f, 0.73f, 0.95f };
+
+	Sphere base = { {0.0f, -1001.0f, 0.0f}, 1000.0f, 3 };
+	Sphere sphere1 = { {0.0f, 0.0f, 0.0f}, 1.0f, 0 };
+	Sphere sphere2 = { {-3.0f, 0.0f, 0.0f}, 1.0f, 2 };
+	Sphere sphere3 = { {3.0f, 0.0f, 0.0f}, 1.0f, 1 };
+
+	Material dielectric, metal, diffuse, baseMat;
+	dielectric.CreateDefaultDielectric();
+	metal.CreateDefaultMetal();
+	diffuse.CreateDefaultDiffuse();
+	baseMat.Name = "World";
+	baseMat.Color = { 0.5f, 0.5f, 0.5f };
+	baseMat.Roughness = 0.8f;
+
+	world.Materials.push_back(dielectric);
+	world.Materials.push_back(metal);
+	world.Materials.push_back(diffuse);
+	world.Materials.push_back(baseMat);
+	world.Spheres.push_back(sphere1);
+	world.Spheres.push_back(sphere2);
+	world.Spheres.push_back(sphere3);
+	world.Spheres.push_back(base);
+
+	for (int a = -11; a < 11; a++) {
+		for (int b = -11; b < 11; b++) {
+			glm::vec3 center(a + 0.9 * Random::GetFloat(0, 1), -0.82f, b + 0.9 * Random::GetFloat(0, 1));
+
+			if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
+				Material mat;
+				mat.CreateRandom("material");
+				Sphere s = { center, 0.2f, 0 };
+
+				world.Materials.push_back(mat);
+				world.Spheres.push_back(s);
+			}
+		}
+	}
+
+	for (int i = 4; i < world.Spheres.size(); i++) {
+		world.Spheres.at(i).MaterialIndex = Random::GetInt(3, world.Materials.size() - 1);
+	}
+}
+
 void Application::InitializeScene() {
-	setupSpheres(m_World);
+	//setupSpheres(m_World);
 	//setupCornellBox(m_World);
 	//setupAltScene(m_World);
+	setupRandomSpheres(m_World);
 }
 
 void Application::CalculateTime() {
