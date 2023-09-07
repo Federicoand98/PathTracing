@@ -4,7 +4,44 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "Random.h"
 
+#include "Shader.h"
+#include "ComputeShader.h"
+
 static Application* s_Instance = nullptr;
+
+unsigned int textureID;
+
+uint32_t currentW;
+uint32_t currentH;
+
+unsigned int quadVAO = 0;
+unsigned int quadVBO;
+void renderQuad()
+{
+	if (quadVAO == 0)
+	{
+		float quadVertices[] = {
+			// positions        // texture Coords
+			-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+			-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+			 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+			 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+		};
+		// setup plane VAO
+		glGenVertexArrays(1, &quadVAO);
+		glGenBuffers(1, &quadVBO);
+		glBindVertexArray(quadVAO);
+		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+	}
+	glBindVertexArray(quadVAO);
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	glBindVertexArray(0);
+}
 
 Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_IsRunning(true),
                              m_Camera(45.0f, 0.1f, 100.0f) {
@@ -27,6 +64,9 @@ bool Application::Initialize(int width, int height) {
 	m_Width = width;
 	m_Height = height;
 
+	currentW = m_Width;
+	currentH = m_Height;
+
 	if (!glfwInit())
 		return false;
 
@@ -47,8 +87,8 @@ bool Application::Initialize(int width, int height) {
 #else
 	// GL 3.0 + GLSL 130
 	const char* glsl_version = "#version 130";
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
 	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
 #endif
@@ -69,6 +109,17 @@ bool Application::Initialize(int width, int height) {
 		Shutdown();
 		return false;
 	}
+
+	int max_compute_work_group_count[3];
+	int max_compute_work_group_size[3];
+	int max_compute_work_group_invocations;
+
+	for (int idx = 0; idx < 3; idx++) {
+		glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, idx, &max_compute_work_group_count[idx]);
+		glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, idx, &max_compute_work_group_size[idx]);
+	}
+
+	glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &max_compute_work_group_invocations);
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -100,6 +151,26 @@ bool Application::Initialize(int width, int height) {
 
 void Application::RunLoop() {
 	ImGuiIO& io = ImGui::GetIO();
+
+	Shader screenQuad("shaders/vScreenQuad.glsl", "shaders/fScreenQuad.glsl");
+	ComputeShader computeShader("shaders/compute.glsl");
+	//Image texture(m_Width, m_Height);
+	//textureID = texture.GetTexture();
+
+	glGenTextures(1, &textureID);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, currentW, currentH, 0, GL_RGBA, GL_FLOAT, NULL);
+	glBindImageTexture(0, textureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textureID);
+
+	screenQuad.use();
+	screenQuad.setInt("tex", 0);
 
 	while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
 		glfwPollEvents();
@@ -146,7 +217,35 @@ void Application::RunLoop() {
 		}
 
 		RenderUI(m_DeltaTime);
-		Render(m_DeltaTime);
+		//Render(m_DeltaTime);
+		//texture.Resize(m_ViewportWidth, m_ViewportHeight);
+		if (currentW != m_ViewportWidth && currentH != m_ViewportHeight) {
+			currentW = m_ViewportWidth;
+			currentH = m_ViewportHeight;
+
+			glGenTextures(1, &textureID);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, textureID);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, currentW, currentH, 0, GL_RGBA, GL_FLOAT, NULL);
+			glBindImageTexture(0, textureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, textureID);
+		}
+
+		computeShader.Use();
+		computeShader.SetFloat("t", m_LastFrameTime);
+		glDispatchCompute((unsigned int)currentW/ 10, (unsigned int)currentH/ 10, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		screenQuad.use();
+
+		renderQuad();
+
 
 		// Rendering
 		ImGui::Render();
@@ -394,7 +493,7 @@ void Application::InitializeScene() {
 	//setupSpheres(m_World);
 	//setupCornellBox(m_World);
 	//setupAltScene(m_World);
-	setupRandomSpheres(m_World);
+	//setupRandomSpheres(m_World);
 }
 
 void Application::CalculateTime() {
@@ -524,9 +623,23 @@ void Application::RenderUI(float deltaTime) {
 	m_ViewportWidth = (uint32_t)ImGui::GetContentRegionAvail().x;
 	m_ViewportHeight = (uint32_t)ImGui::GetContentRegionAvail().y;
 
+	/*
     auto image = m_Renderer.GetRenderedImage();
     if(image)
         ImGui::Image(image->GetTexture(), {(float)image->GetWidth(), (float)image->GetHeight()}, ImVec2(0, 1), ImVec2(1, 0));
+		*/
+
+	ImVec2 pos = ImGui::GetCursorScreenPos();
+
+	// and here we can add our created texture as image to ImGui
+	// unfortunately we need to use the cast to void* or I didn't find another way tbh
+	ImGui::GetWindowDrawList()->AddImage(
+		textureID,
+		ImVec2(pos.x, pos.y),
+		ImVec2(pos.x + currentW, pos.y + currentH),
+		ImVec2(0, 1),
+		ImVec2(1, 0)
+	);
 
 	ImGui::End();
     ImGui::PopStyleVar();
@@ -534,7 +647,7 @@ void Application::RenderUI(float deltaTime) {
 
 void Application::Render(float deltaTime) {
     m_Camera.OnResize(m_ViewportWidth, m_ViewportHeight);
-    m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
-    m_Renderer.Render(m_Camera, m_World);
+    //m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
+    //m_Renderer.Render(m_Camera, m_World);
 }
 
