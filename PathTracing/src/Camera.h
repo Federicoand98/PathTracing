@@ -8,6 +8,12 @@
 #include <glm/glm.hpp>
 #include <vector>
 
+struct CameraUBO {
+    glm::mat4 InverseProj;
+    glm::mat4 InverseView;
+    glm::vec3 CameraPosition;
+};
+
 class Camera {
 public:
     Camera(float verticalFOV, float nearClip, float farClip);
@@ -22,6 +28,15 @@ public:
     const glm::vec3& GetPosition() const { return m_Position; }
     const glm::vec3& GetDirection() const { return m_ForwardDirection; }
     const std::vector<glm::vec3>& GetRayDirections() const { return m_RayDirections; }
+
+    const CameraUBO GetCameraUBO() const {
+        return {
+            GetInverseProjection(),
+            GetInverseView(),
+            GetPosition()
+        };
+    }
+
     float GetRotationSpeed();
 private:
     void RecalculateProjection();

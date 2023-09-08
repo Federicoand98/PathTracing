@@ -4,44 +4,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "Random.h"
 
-#include "Shader.h"
-#include "ComputeShader.h"
-
 static Application* s_Instance = nullptr;
-
-unsigned int textureID;
-
-uint32_t currentW;
-uint32_t currentH;
-
-unsigned int quadVAO = 0;
-unsigned int quadVBO;
-void renderQuad()
-{
-	if (quadVAO == 0)
-	{
-		float quadVertices[] = {
-			// positions        // texture Coords
-			-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-			-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-			 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-			 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-		};
-		// setup plane VAO
-		glGenVertexArrays(1, &quadVAO);
-		glGenBuffers(1, &quadVBO);
-		glBindVertexArray(quadVAO);
-		glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-		glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-	}
-	glBindVertexArray(quadVAO);
-	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	glBindVertexArray(0);
-}
 
 Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_IsRunning(true),
                              m_Camera(45.0f, 0.1f, 100.0f) {
@@ -63,9 +26,6 @@ Application &Application::Get() {
 bool Application::Initialize(int width, int height) {
 	m_Width = width;
 	m_Height = height;
-
-	currentW = m_Width;
-	currentH = m_Height;
 
 	if (!glfwInit())
 		return false;
@@ -110,6 +70,14 @@ bool Application::Initialize(int width, int height) {
 		return false;
 	}
 
+	std::cout << "" << std::endl;
+	std::cout << "OpenGL Info" << std::endl;
+	std::cout << "" << "OpenGL Vendor: " << glGetString(GL_VENDOR) << std::endl;
+	std::cout << "" << "OpenGL Renderer: " << glGetString(GL_RENDERER) << std::endl;
+	std::cout << "" << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
+	std::cout << "" << "OpenGL Shading Language Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+	std::cout << "" << std::endl;
+
 	int max_compute_work_group_count[3];
 	int max_compute_work_group_size[3];
 	int max_compute_work_group_invocations;
@@ -120,6 +88,13 @@ bool Application::Initialize(int width, int height) {
 	}
 
 	glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &max_compute_work_group_invocations);
+
+	std::cout << "" << std::endl;
+	std::cout << "Compute Shader Info" << std::endl;
+	std::cout << "Max global (total) work group counts X: " << max_compute_work_group_count[0] << ", Y: " << max_compute_work_group_count[1] << ", Z: " << max_compute_work_group_count[2] << std::endl;
+	std::cout << "Max local (in one shader) work group sizes X: " << max_compute_work_group_size[0] << ", Y: " << max_compute_work_group_size[1] << ", Z: " << max_compute_work_group_size[2] << std::endl;
+	std::cout << "Max local work group invocations: " << max_compute_work_group_invocations << std::endl;
+	std::cout << "" << std::endl;
 
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
@@ -152,25 +127,8 @@ bool Application::Initialize(int width, int height) {
 void Application::RunLoop() {
 	ImGuiIO& io = ImGui::GetIO();
 
-	Shader screenQuad("shaders/vScreenQuad.glsl", "shaders/fScreenQuad.glsl");
-	ComputeShader computeShader("shaders/compute.glsl");
-	//Image texture(m_Width, m_Height);
-	//textureID = texture.GetTexture();
-
-	glGenTextures(1, &textureID);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textureID);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, currentW, currentH, 0, GL_RGBA, GL_FLOAT, NULL);
-	glBindImageTexture(0, textureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textureID);
-
-	screenQuad.use();
-	screenQuad.setInt("tex", 0);
+	m_Camera.OnResize(m_Width, m_Height);
+	m_Renderer.Initialize(m_Camera, m_World);
 
 	while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
 		glfwPollEvents();
@@ -216,38 +174,9 @@ void Application::RunLoop() {
 			ImGui::End();
 		}
 
-		RenderUI(m_DeltaTime);
-		//Render(m_DeltaTime);
-		//texture.Resize(m_ViewportWidth, m_ViewportHeight);
-		if (currentW != m_ViewportWidth && currentH != m_ViewportHeight) {
-			currentW = m_ViewportWidth;
-			currentH = m_ViewportHeight;
-
-			glGenTextures(1, &textureID);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, textureID);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, currentW, currentH, 0, GL_RGBA, GL_FLOAT, NULL);
-			glBindImageTexture(0, textureID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, textureID);
-		}
-
-		computeShader.Use();
-		computeShader.SetFloat("t", m_LastFrameTime);
-		glDispatchCompute((unsigned int)currentW/ 10, (unsigned int)currentH/ 10, 1);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		screenQuad.use();
-
-		renderQuad();
-
-
 		// Rendering
+		RenderUI(m_DeltaTime);
+		Render(m_DeltaTime);
 		ImGui::Render();
 
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -623,23 +552,16 @@ void Application::RenderUI(float deltaTime) {
 	m_ViewportWidth = (uint32_t)ImGui::GetContentRegionAvail().x;
 	m_ViewportHeight = (uint32_t)ImGui::GetContentRegionAvail().y;
 
-	/*
-    auto image = m_Renderer.GetRenderedImage();
-    if(image)
-        ImGui::Image(image->GetTexture(), {(float)image->GetWidth(), (float)image->GetHeight()}, ImVec2(0, 1), ImVec2(1, 0));
-		*/
-
 	ImVec2 pos = ImGui::GetCursorScreenPos();
-
-	// and here we can add our created texture as image to ImGui
-	// unfortunately we need to use the cast to void* or I didn't find another way tbh
-	ImGui::GetWindowDrawList()->AddImage(
-		textureID,
-		ImVec2(pos.x, pos.y),
-		ImVec2(pos.x + currentW, pos.y + currentH),
-		ImVec2(0, 1),
-		ImVec2(1, 0)
-	);
+    auto image = m_Renderer.GetRenderedImage();
+	if(image)
+		ImGui::GetWindowDrawList()->AddImage(
+			image->GetTexture(),
+			ImVec2(pos.x, pos.y),
+			ImVec2(pos.x + m_ViewportWidth, pos.y + m_ViewportHeight),
+			ImVec2(0, 1),
+			ImVec2(1, 0)
+		);
 
 	ImGui::End();
     ImGui::PopStyleVar();
@@ -647,7 +569,7 @@ void Application::RenderUI(float deltaTime) {
 
 void Application::Render(float deltaTime) {
     m_Camera.OnResize(m_ViewportWidth, m_ViewportHeight);
-    //m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
-    //m_Renderer.Render(m_Camera, m_World);
+    m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
+    m_Renderer.Render(m_Camera, m_World);
 }
 

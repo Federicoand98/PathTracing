@@ -1,0 +1,94 @@
+#version 430 core
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(rgba32f, binding = 0) uniform image2D imgOutput;
+
+uniform int width;
+uniform int height;
+
+uniform vec3 cameraPosition;
+uniform mat4 inverseProjection;
+uniform mat4 inverseView;
+
+layout(std430, binding = 0) buffer RayDirections {
+    vec3 rayDirections[];
+};
+
+layout(std430, binding = 1) buffer CameraUBO {
+    mat4 InverseProjection;
+    mat4 InverseView;
+    vec3 CameraPosition;
+};
+
+struct Ray {
+    vec3 Origin;
+    vec3 Direction;
+};
+
+struct Sphere {
+    vec3 Position;
+    float Radius;
+};
+
+struct HitInfo {
+    float HitDistance;
+    vec3 HitPosition;
+    vec3 Normal;
+    int ObjectIndex;
+};
+
+Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc);
+float HitSphere(Ray ray, Sphere sphere);
+
+vec3 spherePos = vec3(0.0, 0.0, 0.0);
+
+void main() {
+    vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    vec2 ndc = (2.0 * vec2(texelCoord) / imageSize(imgOutput)) - 1.0;
+
+    Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
+
+    Sphere sphere = Sphere(vec3(0.0), 1.0);
+
+    float distance = HitSphere(ray, sphere);
+
+    if(distance > 0) {
+        vec3 hitPoint = ray.Origin + ray.Direction * distance;
+        vec3 normal = normalize(hitPoint);
+
+        vec3 lightDir = normalize(vec3(-1.0, -1.0, -1.0));
+        float d = max(dot(normal, -lightDir), 0.0);
+
+        vec3 sphereColor = vec3(1.0, 0.0, 1.0);
+        sphereColor *= d; 
+
+        value = vec4(clamp(sphereColor, 0.0, 1.0), 1.0);
+    }
+
+    imageStore(imgOutput, texelCoord, value);
+}
+
+float HitSphere(Ray ray, Sphere sphere) {
+    vec3 oc = ray.Origin - sphere.Position;
+
+    float a = dot(ray.Direction, ray.Direction);
+    float b = 2.0 * dot(ray.Origin, ray.Direction);
+    float c = dot(ray.Origin, ray.Origin) - sphere.Radius * sphere.Radius;
+    float discriminant = b * b - 4.0 * a * c;
+
+    if(discriminant < 0.0)
+        return -1.0;
+
+    float closestT = (-b - sqrt(discriminant)) / (2.0 * a);
+
+    return closestT;
+}
+
+Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc) {
+    vec4 target = inverseProj * vec4(ndc, 1.0, 1.0);
+    vec3 rayDirection = vec3(inverseView * vec4(normalize(vec3(target) / target.w), 0.0));
+
+    return Ray(cameraPos, rayDirection);
+}

@@ -18,35 +18,62 @@ void Renderer::OnResize(uint32_t width, uint32_t height) {
         if (m_RenderedImage->GetWidth() == width && m_RenderedImage->GetHeight() == height)
             return;
 
+        m_Width = width;
+        m_Height = height;
         m_RenderedImage->Resize(width, height);
     } else {
         m_RenderedImage = std::make_shared<Image>(width, height);
     }
-
-    //delete[] m_ImageData, m_BufferImage;
-    m_ImageData = new unsigned char[width * height * 4];
-    m_BufferImage = new glm::vec4[width * height];
-
-    m_HeightIterator.resize(height);
-    m_WidthIterator.resize(width);
-
-    for (uint32_t i = 0; i < m_RenderedImage->GetHeight(); i++)
-        m_HeightIterator.at(i) = i;
-
-    for (uint32_t i = 0; i < m_RenderedImage->GetWidth(); i++)
-        m_WidthIterator.at(i) = i;
 }
 
-void Renderer::Render(const Camera& camera, const World& world) {
+void Renderer::Initialize(const Camera& camera, const World& world) {
     m_Camera = &camera;
     m_World = &world;
 
+    m_Shader = std::make_shared<Shader>("shaders/vScreenQuad.vert", "shaders/fScreenQuad.vert");
+    m_ComputeShader = std::make_shared<ComputeShader>("shaders/PathTracing.comp");
+
+    m_Shader->use();
+    m_Shader->setInt("tex", 0);
+
+    glGenBuffers(1, &m_RayDirBuffer);
+    // glGenBuffers(1, &m_CameraUBO);
+}
+
+void Renderer::Render(const Camera& camera, const World& world) {
+    m_ComputeShader->Use();
+    m_ComputeShader->SetInt("width", m_Width);
+    m_ComputeShader->SetInt("height", m_Height);
+    m_ComputeShader->SetVec3("cameraPosition", m_Camera->GetPosition());
+    m_ComputeShader->SetMat4("inverseProjection", m_Camera->GetInverseProjection());
+    m_ComputeShader->SetMat4("inverseView", m_Camera->GetInverseView());
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_RayDirBuffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, m_Camera->GetRayDirections().size() * sizeof(glm::vec3), m_Camera->GetRayDirections().data(), GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_RayDirBuffer);
+
+    // CameraUBO
+    // CameraUBO ubo = m_Camera->GetCameraUBO();
+    // glBindBuffer(GL_UNIFORM_BUFFER, m_CameraUBO);
+    // glBufferData(GL_UNIFORM_BUFFER, sizeof(CameraUBO), &ubo, GL_STATIC_DRAW);
+    // glUniformBlockBinding(m_ComputeShader->ID, glGetUniformBlockIndex(m_ComputeShader->ID, "CameraUBO"), 1);
+    // glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_CameraUBO);
+
+
+	glDispatchCompute((unsigned int)m_Width, (unsigned int)m_Height, 1);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    m_Shader->use();
+
+    DrawQuad();
+
+    /*
     if (m_PTCounter == 1) {
         memset(m_BufferImage, 0, m_RenderedImage->GetWidth() * m_RenderedImage->GetHeight() * sizeof(glm::vec4));
     }
 
-#define MULTITHREADING 1
-#if MULTITHREADING
     std::for_each(std::execution::par, m_HeightIterator.begin(), m_HeightIterator.end(), [this](uint32_t y) {
         std::for_each(std::execution::par, m_WidthIterator.begin(), m_WidthIterator.end(), [this, y](uint32_t x) {
             glm::vec4 color = PerPixel(x, y);
@@ -63,31 +90,39 @@ void Renderer::Render(const Camera& camera, const World& world) {
             m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 3] = 255; // Alpha
 		});
     });
-#else
-    for(uint32_t y = 0; y < m_RenderedImage->GetHeight(); y++) {
-        for(uint32_t x = 0; x < m_RenderedImage->GetWidth(); x++) {
-            glm::vec4 color = PerPixel(x, y);
-            m_BufferImage[x + y * m_RenderedImage->GetWidth()] += color;
-
-            glm::vec4 tempColor = m_BufferImage[x + y * m_RenderedImage->GetWidth()];
-            tempColor /= (float)m_PTCounter;
-
-            tempColor = glm::clamp(tempColor, glm::vec4(0.0f), glm::vec4(1.0f));
-
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4] = Utils::ConvertToRGBA(tempColor.x);  // R
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 1] = Utils::ConvertToRGBA(tempColor.y);  // G
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 2] = Utils::ConvertToRGBA(tempColor.z);   // B
-            m_ImageData[(x + y * m_RenderedImage->GetWidth()) * 4 + 3] = 255; // Alpha
-        }
-    }
-#endif
 
     m_RenderedImage->SetData(m_ImageData);
+    */
 
     if (PathTracing)
         m_PTCounter++;
     else
         m_PTCounter = 1;
+}
+
+void Renderer::DrawQuad() {
+    if (m_QuadVAO == 0) {
+        float quadVertices[] = {
+            // positions        // texture Coords
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        };
+        // setup plane VAO
+        glGenVertexArrays(1, &m_QuadVAO);
+        glGenBuffers(1, &m_QuadVBO);
+        glBindVertexArray(m_QuadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, m_QuadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    }
+    glBindVertexArray(m_QuadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
 }
 
 glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
