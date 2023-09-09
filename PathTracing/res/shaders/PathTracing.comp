@@ -98,6 +98,9 @@ void main() {
 
     value = PerPixel(ndc);
 
+    // accumulazione path tracing
+    vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
+
     imageStore(imgOutput, texelCoord, value);
 }
 
