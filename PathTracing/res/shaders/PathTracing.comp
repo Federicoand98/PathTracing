@@ -51,6 +51,7 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index);
 HitInfo NoHit();
 float HitSphere(Ray ray, Sphere sphere);
 float HitSphere2(Ray ray, Sphere2 sphere);
+vec3 GetRandomVector(uint seed);
 
 uniform int width;
 uniform int height;
@@ -76,14 +77,14 @@ void main() {
     vec4 value = vec4(BackgroundColor, 1.0);
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
 
+    rndSeed = gl_GlobalInvocationID.x * 1973 + gl_GlobalInvocationID.y * 9277 + rendererFrame * 2699 | 1;
+
     vec2 ndc = (2.0 * vec2(texelCoord) / imageSize(imgOutput)) - 1.0;
 
     value = PerPixel(ndc);
 
     // accumulazione path tracing
     vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
-
-    // blending accumulazione
     value = mix(lastFrameColor, value, 1.0 / (rendererFrame));
 
     imageStore(imgOutput, texelCoord, value);
@@ -95,43 +96,30 @@ vec4 PerPixel(vec2 ndc) {
     int depth = 5;
     float multiplier = 1.0;
     vec3 light = vec3(0.0);
+    vec3 contribution = vec3(1.0);
 
     for(int i = 0; i < depth; i++) {
         HitInfo hit = TraceRay(ray);
 
         if(hit.HitDistance < 0.0) {
-            light += BackgroundColor * multiplier;
+            light += BackgroundColor * contribution;
             break;
         }
-
-        vec3 lightDir = normalize(vec3(-1.0, -1.0, -1.0));
-        float lightIntensity = max(dot(hit.Normal, -lightDir), 0.0);
 
         Sphere2 sphere = Spheres[hit.ObjectIndex];
         Material material = Materials[int(sphere.Mat.x)];
 
-        vec3 sphereColor = material.Color;
-        sphereColor *= lightIntensity;
+        contribution *= material.Color;
+        light += (material.EmissiveColor * material.EmissiveStrenght);
 
-        multiplier *= 0.5;
+        vec3 diffuse = normalize(hit.Normal + GetRandomVector(rndSeed));
+        vec3 specular = reflect(ray.Direction, hit.Normal);
 
         vec3 newRayOrigin = hit.HitPosition + hit.Normal * 0.0001;
-        vec3 newRayDir = reflect(ray.Direction, hit.Normal);
+        vec3 newRayDir = normalize(mix(specular, diffuse, material.Roughness));
 
         ray = Ray(newRayOrigin, newRayDir);
     }
-
-    // HitInfo hit = TraceRay(ray);
-    // if(hit.HitDistance > 0) {
-    //     vec3 lightDir = normalize(vec3(-1.0, -1.0, -1.0));
-    //     float d = max(dot(hit.Normal, -lightDir), 0.0);
-    //     vec3 sphereColor = Materials[0].Color;
-    //     sphereColor *= d; 
-
-    //     light = clamp(sphereColor, 0.0, 1.0);
-    // } else {
-    //     light = BackgroundColor;
-    // }
 
     return vec4(light, 1.0);
 }
@@ -217,4 +205,18 @@ Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, v
     vec3 rayDirection = vec3(inverseView * vec4(normalize(vec3(target) / target.w), 0.0));
 
     return Ray(cameraPos, rayDirection);
+}
+
+vec3 GetRandomVector(uint seed) {
+    vec3 seedVec = vec3(
+        float(seed & 0xFF) / 255.0,
+        float((seed >> 8) & 0xFF) / 255.0,
+        float((seed >> 16) & 0xFF) / 255.0
+    );
+
+    return vec3(
+        fract(sin(dot(seedVec, vec3(12.9898, 78.233, 45.543))) * 43758.5453) * 2.0 - 1.0,
+        fract(sin(dot(seedVec, vec3(39.3465, 93.535, 23.987))) * 43758.5453) * 2.0 - 1.0,
+        fract(sin(dot(seedVec, vec3(67.123, 12.789, 98.456))) * 43758.5453) * 2.0 - 1.0
+    );
 }
