@@ -44,6 +44,7 @@ void Renderer::Render(const Camera& camera, const World& world) {
     m_ComputeShader->SetInt("height", m_Height);
     m_ComputeShader->SetInt("numberOfSpheres", (int)m_World->Spheres.size());
     m_ComputeShader->SetInt("numberOfMaterials", (int)m_World->Materials.size());
+    m_ComputeShader->SetInt("rendererFrame", m_PTCounter);
     m_ComputeShader->SetVec3("cameraPosition", m_Camera->GetPosition());
     m_ComputeShader->SetVec3("BackgroundColor", m_World->BackgroundColor);
     m_ComputeShader->SetMat4("inverseProjection", m_Camera->GetInverseProjection());

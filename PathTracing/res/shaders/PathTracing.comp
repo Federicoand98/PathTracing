@@ -56,6 +56,7 @@ uniform int width;
 uniform int height;
 uniform int numberOfSpheres;
 uniform int numberOfMaterials;
+uniform int rendererFrame;
 uniform vec3 cameraPosition;
 uniform mat4 inverseProjection;
 uniform mat4 inverseView;
@@ -77,29 +78,13 @@ void main() {
 
     vec2 ndc = (2.0 * vec2(texelCoord) / imageSize(imgOutput)) - 1.0;
 
-    // Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
-
-    // Sphere2 sphere = Spheres[0];
-
-    // float distance = HitSphere2(ray, sphere);
-
-    // if(distance > 0) {
-    //     vec3 hitPoint = ray.Origin + ray.Direction * distance;
-    //     vec3 normal = normalize(hitPoint);
-
-    //     vec3 lightDir = normalize(vec3(-1.0, -1.0, -1.0));
-    //     float d = max(dot(normal, -lightDir), 0.0);
-
-    //     vec3 sphereColor = Materials[int(sphere.Mat.x)].Color;
-    //     sphereColor *= d; 
-
-    //     value = vec4(clamp(sphereColor, 0.0, 1.0), 1.0);
-    // }
-
     value = PerPixel(ndc);
 
     // accumulazione path tracing
     vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
+
+    // blending accumulazione
+    value = mix(lastFrameColor, value, 1.0 / (rendererFrame));
 
     imageStore(imgOutput, texelCoord, value);
 }
