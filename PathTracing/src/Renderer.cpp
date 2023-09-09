@@ -30,35 +30,26 @@ void Renderer::Initialize(const Camera& camera, const World& world) {
     m_Camera = &camera;
     m_World = &world;
 
-    m_Shader = std::make_shared<Shader>("shaders/vScreenQuad.vert", "shaders/fScreenQuad.vert");
+    m_Shader = std::make_shared<Shader>("shaders/vScreenQuad.vert", "shaders/fScreenQuad.frag");
     m_ComputeShader = std::make_shared<ComputeShader>("shaders/PathTracing.comp");
+    m_ComputeShader->UpdateWorldBuffer(world);
 
     m_Shader->use();
     m_Shader->setInt("tex", 0);
-
-    glGenBuffers(1, &m_RayDirBuffer);
-    // glGenBuffers(1, &m_CameraUBO);
 }
 
 void Renderer::Render(const Camera& camera, const World& world) {
     m_ComputeShader->Use();
     m_ComputeShader->SetInt("width", m_Width);
     m_ComputeShader->SetInt("height", m_Height);
+    m_ComputeShader->SetInt("numberOfSpheres", (int)m_World->Spheres.size());
+    m_ComputeShader->SetInt("numberOfMaterials", (int)m_World->Materials.size());
     m_ComputeShader->SetVec3("cameraPosition", m_Camera->GetPosition());
+    m_ComputeShader->SetVec3("BackgroundColor", m_World->BackgroundColor);
     m_ComputeShader->SetMat4("inverseProjection", m_Camera->GetInverseProjection());
     m_ComputeShader->SetMat4("inverseView", m_Camera->GetInverseView());
-
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_RayDirBuffer);
-    glBufferData(GL_SHADER_STORAGE_BUFFER, m_Camera->GetRayDirections().size() * sizeof(glm::vec3), m_Camera->GetRayDirections().data(), GL_DYNAMIC_DRAW);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, m_RayDirBuffer);
-
-    // CameraUBO
-    // CameraUBO ubo = m_Camera->GetCameraUBO();
-    // glBindBuffer(GL_UNIFORM_BUFFER, m_CameraUBO);
-    // glBufferData(GL_UNIFORM_BUFFER, sizeof(CameraUBO), &ubo, GL_STATIC_DRAW);
-    // glUniformBlockBinding(m_ComputeShader->ID, glGetUniformBlockIndex(m_ComputeShader->ID, "CameraUBO"), 1);
-    // glBindBufferBase(GL_UNIFORM_BUFFER, 1, m_CameraUBO);
-
+    m_ComputeShader->SetWorld();
+    m_ComputeShader->UpdateWorldBuffer(world);
 
 	glDispatchCompute((unsigned int)m_Width, (unsigned int)m_Height, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -133,8 +124,8 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
     bool shouldRefract = false;
 
     int depth = 5;
-    glm::vec3 light(0.0f);
-    glm::vec3 contribution(1.0f);
+    glm::vec4 light(0.0f);
+    glm::vec4 contribution(1.0f);
 
     for (int i = 0; i < depth; i++) {
 		HitInfo hit = TraceRay(ray);
@@ -142,7 +133,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
         glm::vec4 objColor;
 
         if (hit.Type == ObjectType::BACKGROUND) {
-			light += m_World->BackgroundColor * contribution * m_World->AmbientOcclusionIntensity;
+			light += glm::vec4(m_World->BackgroundColor, 1.0f) * contribution * m_World->AmbientOcclusionIntensity;
             break;
         }
 		else if (hit.Type == ObjectType::SPHERE) {
@@ -153,9 +144,9 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 		}
 
 		contribution *= material.Color;
-        light += material.GetEmission();
+        light += (material.EmissiveColor * material.EmissiveStrenght);
 
-        if (material.Refractive) {
+        if (material.RefractionRatio > 1.0f) {
             glm::vec3 refractedDirection;
 
             glm::vec3 unitDirection = glm::normalize(ray.Direction);
@@ -183,7 +174,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
         }
     }
 
-    return glm::vec4(light, 1.0f);
+    return light;
 }
 
 Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
@@ -195,7 +186,8 @@ Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
     for (size_t i = 0; m_World->Spheres.size() > 0 && i < m_World->Spheres.size(); i++) {
 		const Sphere& sphere = m_World->Spheres.at(i);
 
-        float distance = sphere.Hit(ray);
+        //float distance = sphere.Hit(ray);
+        float distance = 5;
 
         if (distance >= 0.0f && distance < hitInfo.HitDistance) {
             hitInfo.HitDistance = distance;

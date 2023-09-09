@@ -12,6 +12,7 @@
 #include "Material.h"
 #include "Shader.h"
 #include "ComputeShader.h"
+#include "UniformBufferObject.h"
 #include <memory>
 #include <iostream>
 #include <glm/gtx/compatibility.hpp>
@@ -53,8 +54,6 @@ private:
     std::shared_ptr<ComputeShader> m_ComputeShader;
     unsigned int m_QuadVAO = 0;
     unsigned int m_QuadVBO = 0;
-    unsigned int m_RayDirBuffer = 0;
-    unsigned int m_CameraUBO = 0;
     uint32_t m_Width = 0, m_Height = 0;
     unsigned char* m_ImageData;
     int m_PTCounter = 1;

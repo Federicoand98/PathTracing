@@ -10,7 +10,7 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 
-	//InitializeMaterials();
+	InitializeMaterials();
 	InitializeScene();
 }
 
@@ -196,29 +196,29 @@ void Application::RunLoop() {
 
 void Application::InitializeMaterials() {
 	Material redMaterial, blueMaterial, pinkMaterial, lightMaterial, greenMaterial, whiteMaterial, glassMaterial;
-	redMaterial.Name = "Red Material";
-	redMaterial.Color = { 1.0f, 0.0f, 0.0f };
+	//redMaterial.Name = "Red Material";
+	redMaterial.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
 	redMaterial.Roughness = 0.5f;
-	blueMaterial.Name = "Blue Material";
-	blueMaterial.Color = { 0.0f, 0.0f, 1.0f };
+	//blueMaterial.Name = "Blue Material";
+	blueMaterial.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
 	blueMaterial.Roughness = 0.0f;
-	pinkMaterial.Name = "Pink Material";
-	pinkMaterial.Color = { 1.0f, 0.0f, 1.0f };
+	//pinkMaterial.Name = "Pink Material";
+	pinkMaterial.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
 	pinkMaterial.Roughness = 1.0f;
-	lightMaterial.Name = "Light";
-	lightMaterial.Color = { 0.88f, 0.83f, 0.3f };
+	//lightMaterial.Name = "Light";
+	lightMaterial.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
 	lightMaterial.Roughness = 1.0f;
 	lightMaterial.EmissiveColor = lightMaterial.Color;
 	lightMaterial.EmissiveStrenght = 1.0f;
-	greenMaterial.Name = "Green Material";
-	greenMaterial.Color = { 0.0f, 1.0f, 0.0f };
+	//greenMaterial.Name = "Green Material";
+	greenMaterial.Color = { 0.0f, 1.0f, 0.0f, 1.0f };
 	greenMaterial.Roughness = 1.0f;
-	whiteMaterial.Name = "White Material";
-	whiteMaterial.Color = { 1.0f, 1.0f, 1.0f };
+	//whiteMaterial.Name = "White Material";
+	whiteMaterial.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	whiteMaterial.Roughness = 1.0f;
-	glassMaterial.Name = "Glass";
-	glassMaterial.Color = { 1.0f, 1.0f, 1.0f };
-	glassMaterial.Refractive = true;
+	//glassMaterial.Name = "Glass";
+	glassMaterial.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+	// glassMaterial.Refractive = true;
 	glassMaterial.RefractionRatio = 1.7f;
 	m_World.Materials.push_back(redMaterial);
 	m_World.Materials.push_back(blueMaterial);
@@ -232,33 +232,52 @@ void Application::InitializeMaterials() {
 }
 
 void setupSpheres(World& m_World) {	
+	// {
+	// 	Sphere sphere;
+	// 	sphere.Position = { -0.8f, 0.0f, 0.0f };
+	// 	sphere.Radius = 1.0f;
+	// 	sphere.MaterialIndex = 0;
+	// 	m_World.Spheres.push_back(sphere);
+	// }
+	// {
+	// 	Sphere sphere;
+	// 	sphere.Position = { 0.0f, 0.2f, 0.0f };
+	// 	sphere.Radius = 0.8f;
+	// 	sphere.MaterialIndex = 1;
+	// 	m_World.Spheres.push_back(sphere);
+	// }
+	// {
+	// 	Sphere sphere;
+	// 	sphere.Position = { 0.0f, -101.0f, 0.0f };
+	// 	sphere.Radius = 100.0f;
+	// 	sphere.MaterialIndex = 2;
+	// 	m_World.Spheres.push_back(sphere);
+	// }
+	// {
+	// 	Sphere sphere;
+	// 	sphere.Position = { 1.0f, 1.0f, 1.0f };
+	// 	sphere.Radius = 0.1f;
+	// 	sphere.MaterialIndex = 3;
+	// 	m_World.Spheres.push_back(sphere);
+	// }
+
 	{
-		Sphere sphere;
-		sphere.Position = { -0.8f, 0.0f, 0.0f };
-		sphere.Radius = 1.0f;
-		sphere.MaterialIndex = 0;
-		m_World.Spheres.push_back(sphere);
+		Sphere2 s;
+		s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
+		s.Mat = { 0.0f, 0.0f, 0.0f, 0.0f };
+		m_World.s.push_back(s);
 	}
 	{
-		Sphere sphere;
-		sphere.Position = { 1.0f, -0.2f, 0.0f };
-		sphere.Radius = 0.8f;
-		sphere.MaterialIndex = 1;
-		m_World.Spheres.push_back(sphere);
+		Sphere2 s;
+		s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
+		s.Mat = { 1.0f, 0.0f, 0.0f, 0.0f };
+		m_World.s.push_back(s);
 	}
 	{
-		Sphere sphere;
-		sphere.Position = { 0.0f, -101.0f, 0.0f };
-		sphere.Radius = 100.0f;
-		sphere.MaterialIndex = 2;
-		m_World.Spheres.push_back(sphere);
-	}
-	{
-		Sphere sphere;
-		sphere.Position = { 1.0f, 1.0f, 1.0f };
-		sphere.Radius = 0.1f;
-		sphere.MaterialIndex = 3;
-		m_World.Spheres.push_back(sphere);
+		Sphere2 s;
+		s.Position = { 0.0f, -101.0f, 0.0f, 100.0f };
+		s.Mat = { 2.0f, 0.0f, 0.0f, 0.0f };
+		m_World.s.push_back(s);
 	}
 }
 
@@ -382,11 +401,11 @@ void setupRandomSpheres(World& world) {
 	Sphere sphere3 = { {3.0f, 0.0f, 0.0f}, 1.0f, 1 };
 
 	Material dielectric, metal, diffuse, baseMat;
-	dielectric.CreateDefaultDielectric();
-	metal.CreateDefaultMetal();
-	diffuse.CreateDefaultDiffuse();
-	baseMat.Name = "World";
-	baseMat.Color = { 0.5f, 0.5f, 0.5f };
+	//dielectric.CreateDefaultDielectric();
+	//metal.CreateDefaultMetal();
+	//diffuse.CreateDefaultDiffuse();
+	//baseMat.Name = "World";
+	baseMat.Color = { 0.5f, 0.5f, 0.5f, 1.0f };
 	baseMat.Roughness = 0.8f;
 
 	world.Materials.push_back(dielectric);
@@ -404,7 +423,7 @@ void setupRandomSpheres(World& world) {
 
 			if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
 				Material mat;
-				mat.CreateRandom("material");
+				//mat.CreateRandom("material");
 				Sphere s = { center, 0.2f, 0 };
 
 				world.Materials.push_back(mat);
@@ -419,7 +438,7 @@ void setupRandomSpheres(World& world) {
 }
 
 void Application::InitializeScene() {
-	//setupSpheres(m_World);
+	setupSpheres(m_World);
 	//setupCornellBox(m_World);
 	//setupAltScene(m_World);
 	//setupRandomSpheres(m_World);
@@ -479,13 +498,47 @@ void Application::RenderUI(float deltaTime) {
 
 	ImGui::Text("Objects:");
 
-	if (ImGui::TreeNode("Spheres") && m_World.Spheres.size() > 0) {
-		for (size_t i = 0; i < m_World.Spheres.size(); i++) {
-			Sphere& sphere = m_World.Spheres.at(i);
+	// if (ImGui::TreeNode("Spheres") && m_World.Spheres.size() > 0) {
+	// 	for (size_t i = 0; i < m_World.Spheres.size(); i++) {
+	// 		Sphere& sphere = m_World.Spheres.at(i);
+
+	// 		ImGui::PushID(i);
+	// 		ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
+	// 		ImGui::DragFloat("Radius", &sphere.Radius, 0.1f, 0.0f, 10.0f);
+	// 		ImGui::DragInt("Material", &sphere.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1);
+	// 		/*
+	// 		if (ImGui::BeginCombo("Material", m_World.Materials.at(sphere.MaterialIndex).Name, 0 << 1)) {
+	// 			for (int i = 0; i < m_World.Materials.size(); i++) {
+	// 				const bool isSelected = sphere.MaterialIndex == i;
+
+	// 				if (ImGui::Selectable(m_World.Materials.at(i).Name, isSelected)) {
+	// 					m_Renderer.ResetPathTracingCounter();
+	// 					sphere.MaterialIndex = i;
+	// 				}
+
+	// 				if (isSelected)
+	// 					ImGui::SetItemDefaultFocus();
+	// 			}
+
+	// 			ImGui::EndCombo();
+	// 		}
+	// 		*/
+	// 		ImGui::Separator();
+	// 		ImGui::PopID();
+	// 	}
+
+	// 	ImGui::TreePop();
+	// }
+
+	if (ImGui::TreeNode("Spheres") && m_World.s.size() > 0) {
+		for (size_t i = 0; i < m_World.s.size(); i++) {
+			Sphere2& sphere = m_World.s.at(i);
 
 			ImGui::PushID(i);
 			ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
-			ImGui::DragFloat("Radius", &sphere.Radius, 0.1f, 0.0f, 10.0f);
+			ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, 0.0f, 10.0f);
+			ImGui::DragFloat("Material", &sphere.Mat.x, 1.0f, 0, (int)m_World.Materials.size() - 1);
+			/*
 			if (ImGui::BeginCombo("Material", m_World.Materials.at(sphere.MaterialIndex).Name, 0 << 1)) {
 				for (int i = 0; i < m_World.Materials.size(); i++) {
 					const bool isSelected = sphere.MaterialIndex == i;
@@ -501,6 +554,7 @@ void Application::RenderUI(float deltaTime) {
 
 				ImGui::EndCombo();
 			}
+			*/
 			ImGui::Separator();
 			ImGui::PopID();
 		}
@@ -533,12 +587,12 @@ void Application::RenderUI(float deltaTime) {
 			Material& material = m_World.Materials.at(i);
 
 			ImGui::PushID(i);
-			ImGui::SeparatorText(material.Name);
+			//ImGui::SeparatorText(material.Name);
 			ImGui::ColorEdit3("Color", glm::value_ptr(material.Color));
 			ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f);
 			ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX);
 			ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor));
-			ImGui::Checkbox("Refractive", &material.Refractive);
+			//ImGui::Checkbox("Refractive", &material.Refractive);
 			ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.1f, 1.0f, 3.0f);
 			ImGui::Separator();
 			ImGui::PopID();

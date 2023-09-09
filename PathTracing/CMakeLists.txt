@@ -51,7 +51,7 @@ set(SOURCES
 	"${IMGUI_DIR}/imgui_tables.cpp"
 	"${IMGUI_DIR}/imgui_widgets.cpp"
 	"${IMGUI_DIR}/imgui.cpp"
- "src/Application.h" "src/Application.cpp" "src/Image.h" "src/Image.cpp"   "src/stb_image.h" src/Renderer.cpp src/Renderer.h src/Ray.h src/Camera.cpp src/Camera.h src/Input.cpp src/Input.h "src/World.h" "src/Material.h" "src/Random.h" "src/ComputeShader.h" "src/Shader.h")
+ "src/Application.h" "src/Application.cpp" "src/Image.h" "src/Image.cpp"   "src/stb_image.h" src/Renderer.cpp src/Renderer.h src/Ray.h src/Camera.cpp src/Camera.h src/Input.cpp src/Input.h "src/World.h" "src/Material.h" "src/Random.h" "src/ComputeShader.h" "src/Shader.h" "src/UniformBufferObject.h")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${RES_DIR})
 add_executable (${PROJECT_NAME} ${SOURCES})
