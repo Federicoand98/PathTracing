@@ -130,6 +130,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
     glm::vec4 light(0.0f);
     glm::vec4 contribution(1.0f);
  
+	/*
     for (int i = 0; i < depth; i++) {
 		HitInfo hit = TraceRay(ray);
 		Material material;
@@ -176,6 +177,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
 			ray.Direction = glm::normalize(glm::lerp(specular, diffuse, material.Roughness));
         }
     }
+    */
 
     return light;
 }
@@ -186,6 +188,7 @@ Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
     hitInfo.HitDistance = std::numeric_limits<float>::max();
     hitInfo.ObjectIndex = -1;
 
+    /*
     for (size_t i = 0; m_World->Spheres.size() > 0 && i < m_World->Spheres.size(); i++) {
 		const Sphere& sphere = m_World->Spheres.at(i);
 
@@ -210,6 +213,7 @@ Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
             hitInfo.Type = ObjectType::QUAD;
         }
     }
+    */
 
     if (hitInfo.HitDistance == std::numeric_limits<float>::max())
        return NoHit();
@@ -221,6 +225,7 @@ Renderer::HitInfo Renderer::HandleHit(const Ray &ray, HitInfo& hit) {
     glm::vec3 origin;
     glm::vec3 closestPosition;
 
+    /*
     if (hit.Type == ObjectType::SPHERE) {
         origin = ray.Origin - m_World->Spheres.at(hit.ObjectIndex).Position;
         closestPosition = m_World->Spheres.at(hit.ObjectIndex).Position;
@@ -240,6 +245,7 @@ Renderer::HitInfo Renderer::HandleHit(const Ray &ray, HitInfo& hit) {
         hit.Normal = normalize(glm::cross(U, V));
 		hit.HitPosition += closestPosition;
     }
+    */
 
     return hit;
 }

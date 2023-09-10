@@ -1,9 +1,10 @@
 //
 // Created by Federico Andrucci on 22/08/23.
 //
+#pragma once
 
-#ifndef PATHTRACING_CAMERA_H
-#define PATHTRACING_CAMERA_H
+#ifndef CAMERA_H
+#define CAMERA_H
 
 #include <glm/glm.hpp>
 #include <vector>
@@ -63,4 +64,4 @@ private:
     uint32_t m_ViewportWidth = 0, m_ViewportHeight = 0;
 };
 
-#endif //PATHTRACING_CAMERA_H
+#endif // CAMERA_H

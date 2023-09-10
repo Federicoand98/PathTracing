@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef Application_h__
-#define Application_h__
+#ifndef APPLICATION_H
+#define APPLICATION_H
 
 #include <iostream>
 #include <GL/glew.h>
@@ -18,7 +18,6 @@
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 #include "Image.h"
 #include "Renderer.h"
-#include "World.h"
 
 class Application {
 public:
@@ -36,9 +35,6 @@ private:
 	void CalculateTime();
 	void RenderUI(float deltaTime);
 	void Render(float deltaTime);
-
-	void InitializeMaterials();
-	void InitializeScene();
 private:
     Renderer m_Renderer;
     Camera m_Camera;
@@ -58,4 +54,4 @@ private:
 	GLFWwindow* m_Window;
 };
 
-#endif // Application_h__
+#endif // APPLICATION_H

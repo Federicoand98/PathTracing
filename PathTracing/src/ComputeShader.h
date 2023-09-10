@@ -9,7 +9,6 @@
 #include <sstream>
 #include <iostream>
 #include <glm/gtc/type_ptr.hpp>
-#include "UniformBufferObject.h"
 #include "World.h"
 
 class ComputeShader {
@@ -77,12 +76,6 @@ public:
         glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, glm::value_ptr(mat));
     }
 
-    void SetSpheres(const std::string& name, const std::vector<Sphere>& spheres) {
-        glUniform3fv(glGetUniformLocation(ID, name.c_str()), spheres.size(), glm::value_ptr(spheres[0].Position));
-        glUniform1fv(glGetUniformLocation(ID, name.c_str()) + 1, spheres.size(), &spheres[0].Radius);
-        glUniform1iv(glGetUniformLocation(ID, name.c_str()) + 2, spheres.size(), &spheres[0].MaterialIndex);
-    }
-
     void SetWorld() {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_s);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo_m);
@@ -91,15 +84,13 @@ public:
     void UpdateWorldBuffer(const World& world) {
         glGenBuffers(1, &ssbo_s);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_s);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Sphere2) * world.s.size(), world.s.data(), GL_STATIC_DRAW);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Sphere2) * world.Spheres.size(), world.Spheres.data(), GL_STATIC_DRAW);
 
         glGenBuffers(1, &ssbo_m);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_m);
         glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Material) * world.Materials.size(), world.Materials.data(), GL_STATIC_DRAW);
     }
 
-private:
-    UniformBufferObject m_UBO;
 private:
     void checkCompileErrors(unsigned int shader, std::string type) {
         int success;

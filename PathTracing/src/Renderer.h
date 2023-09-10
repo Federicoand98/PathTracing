@@ -1,21 +1,16 @@
-//
-// Created by Federico Andrucci on 21/08/23.
-//
+#pragma once
 
-#ifndef PATHTRACING_RENDERER_H
-#define PATHTRACING_RENDERER_H
+#ifndef RENDERER_H
+#define RENDERER_H
 
-#include "Image.h"
-#include "Ray.h"
-#include "Camera.h"
-#include "World.h"
-#include "Material.h"
-#include "Shader.h"
-#include "ComputeShader.h"
-#include "UniformBufferObject.h"
 #include <memory>
 #include <iostream>
 #include <glm/gtx/compatibility.hpp>
+#include "Image.h"
+#include "Ray.h"
+#include "Camera.h"
+#include "Shader.h"
+#include "ComputeShader.h"
 
 class Renderer {
 public:
@@ -61,4 +56,4 @@ private:
     int m_PTCounter = 1;
 };
 
-#endif //PATHTRACING_RENDERER_H
+#endif // RENDERER_H

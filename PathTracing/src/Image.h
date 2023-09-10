@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef Image_h__
-#define Image_h__
+#ifndef IMAGE_H
+#define IMAGE_H
 
 #include <string>
 #include <GL/glew.h>
@@ -27,4 +27,4 @@ private:
 	GLuint m_Texture;
 };
 
-#endif // Image_h__
+#endif // IMAGE_H

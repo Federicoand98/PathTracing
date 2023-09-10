@@ -1,13 +1,13 @@
 #pragma once
 
-#ifndef World_h__
-#define World_h__
+#ifndef WORLD_H
+#define WORLD_H
 
 #include "Ray.h"
-#include "Material.h"
 #include <vector>
 #include <glm/glm.hpp>
 #include <cmath>
+#include "Material.h"
 
 enum class ObjectType {
 	SPHERE,
@@ -79,13 +79,36 @@ struct Quad {
 	}
 };
 
-struct World {
-	glm::vec3 BackgroundColor;
-	std::vector<Material> Materials;
-	std::vector<Sphere> Spheres;
-	std::vector<Quad> Quads;
-	float AmbientOcclusionIntensity = 1.0f;
-	std::vector<Sphere2> s;
+// struct World {
+// 	glm::vec3 BackgroundColor;
+// 	std::vector<Material> Materials;
+// 	std::vector<Sphere> Spheres;
+// 	std::vector<Quad> Quads;
+// 	float AmbientOcclusionIntensity = 1.0f;
+// 	std::vector<Sphere2> s;
+// };
+
+enum class SceneType {
+	TWO_SPHERES,
+	RANDOM_SPHERES
 };
 
-#endif // World_h__
+class World {
+public:
+	World();
+	~World();
+
+	void LoadScene(SceneType type);
+	void DestroyScene();
+public:
+	glm::vec3 BackgroundColor;
+	std::vector<Sphere2> Spheres;
+	std::vector<Material> Materials;
+	float AmbientOcclusionIntensity = 1.0f;
+private:
+	void PrepareMaterials();
+	void PrepareSimpleScene();
+	void PrepareRandomScene();
+};
+
+#endif // WORLD_H

@@ -63,4 +63,4 @@ public:
 	}
 };
 
-#endif
+#endif // UNIFORMBUFFEROBJECT_H

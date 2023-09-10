@@ -10,12 +10,12 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 
-	InitializeMaterials();
-	InitializeScene();
+	m_World.LoadScene(SceneType::TWO_SPHERES);
 }
 
 Application::~Application() {
     //Shutdown();
+	m_World.DestroyScene();
     s_Instance = nullptr;
 }
 
@@ -194,255 +194,50 @@ void Application::RunLoop() {
 	}
 }
 
-void Application::InitializeMaterials() {
-	Material redMaterial, blueMaterial, pinkMaterial, lightMaterial, greenMaterial, whiteMaterial, glassMaterial;
-	//redMaterial.Name = "Red Material";
-	redMaterial.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
-	redMaterial.Roughness = 0.5f;
-	//blueMaterial.Name = "Blue Material";
-	blueMaterial.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
-	blueMaterial.Roughness = 0.0f;
-	//pinkMaterial.Name = "Pink Material";
-	pinkMaterial.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
-	pinkMaterial.Roughness = 1.0f;
-	//lightMaterial.Name = "Light";
-	lightMaterial.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
-	lightMaterial.Roughness = 1.0f;
-	lightMaterial.EmissiveColor = lightMaterial.Color;
-	lightMaterial.EmissiveStrenght = 1.0f;
-	//greenMaterial.Name = "Green Material";
-	greenMaterial.Color = { 0.0f, 1.0f, 0.0f, 1.0f };
-	greenMaterial.Roughness = 1.0f;
-	//whiteMaterial.Name = "White Material";
-	whiteMaterial.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
-	whiteMaterial.Roughness = 1.0f;
-	//glassMaterial.Name = "Glass";
-	glassMaterial.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
-	// glassMaterial.Refractive = true;
-	glassMaterial.RefractionRatio = 1.7f;
-	m_World.Materials.push_back(redMaterial);
-	m_World.Materials.push_back(blueMaterial);
-	m_World.Materials.push_back(pinkMaterial);
-	m_World.Materials.push_back(lightMaterial);
-	m_World.Materials.push_back(whiteMaterial);
-	m_World.Materials.push_back(greenMaterial);
-	m_World.Materials.push_back(glassMaterial);
+// void setupRandomSpheres(World& world) {
+// 	world.BackgroundColor = { 0.54f, 0.73f, 0.95f };
 
-	m_World.BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
-}
+// 	Sphere base = { {0.0f, -1001.0f, 0.0f}, 1000.0f, 3 };
+// 	Sphere sphere1 = { {0.0f, 0.0f, 0.0f}, 1.0f, 0 };
+// 	Sphere sphere2 = { {-3.0f, 0.0f, 0.0f}, 1.0f, 2 };
+// 	Sphere sphere3 = { {3.0f, 0.0f, 0.0f}, 1.0f, 1 };
 
-void setupSpheres(World& m_World) {	
-	// {
-	// 	Sphere sphere;
-	// 	sphere.Position = { -0.8f, 0.0f, 0.0f };
-	// 	sphere.Radius = 1.0f;
-	// 	sphere.MaterialIndex = 0;
-	// 	m_World.Spheres.push_back(sphere);
-	// }
-	// {
-	// 	Sphere sphere;
-	// 	sphere.Position = { 0.0f, 0.2f, 0.0f };
-	// 	sphere.Radius = 0.8f;
-	// 	sphere.MaterialIndex = 1;
-	// 	m_World.Spheres.push_back(sphere);
-	// }
-	// {
-	// 	Sphere sphere;
-	// 	sphere.Position = { 0.0f, -101.0f, 0.0f };
-	// 	sphere.Radius = 100.0f;
-	// 	sphere.MaterialIndex = 2;
-	// 	m_World.Spheres.push_back(sphere);
-	// }
-	// {
-	// 	Sphere sphere;
-	// 	sphere.Position = { 1.0f, 1.0f, 1.0f };
-	// 	sphere.Radius = 0.1f;
-	// 	sphere.MaterialIndex = 3;
-	// 	m_World.Spheres.push_back(sphere);
-	// }
+// 	Material dielectric, metal, diffuse, baseMat;
+// 	//dielectric.CreateDefaultDielectric();
+// 	//metal.CreateDefaultMetal();
+// 	//diffuse.CreateDefaultDiffuse();
+// 	//baseMat.Name = "World";
+// 	baseMat.Color = { 0.5f, 0.5f, 0.5f, 1.0f };
+// 	baseMat.Roughness = 0.8f;
 
-	{
-		Sphere2 s;
-		s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
-		s.Mat = { 0.0f, 0.0f, 0.0f, 0.0f };
-		m_World.s.push_back(s);
-	}
-	{
-		Sphere2 s;
-		s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
-		s.Mat = { 1.0f, 0.0f, 0.0f, 0.0f };
-		m_World.s.push_back(s);
-	}
-	{
-		Sphere2 s;
-		s.Position = { 0.0f, -101.0f, 0.0f, 100.0f };
-		s.Mat = { 2.0f, 0.0f, 0.0f, 0.0f };
-		m_World.s.push_back(s);
-	}
-}
+// 	world.Materials.push_back(dielectric);
+// 	world.Materials.push_back(metal);
+// 	world.Materials.push_back(diffuse);
+// 	world.Materials.push_back(baseMat);
+// 	world.Spheres.push_back(sphere1);
+// 	world.Spheres.push_back(sphere2);
+// 	world.Spheres.push_back(sphere3);
+// 	world.Spheres.push_back(base);
 
-void setupCornellBox(World& m_World) {
-	{
-		Sphere sphere;
-		sphere.Position = { 0.0f, 0.0f, 0.0f };
-		sphere.Radius = 1.0f;
-		sphere.MaterialIndex = 0;
-		m_World.Spheres.push_back(sphere);
-	}
-	// left green
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
-		quad.U = { 0.0f, 0.0f, -1.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 5;
+// 	for (int a = -11; a < 11; a++) {
+// 		for (int b = -11; b < 11; b++) {
+// 			glm::vec3 center(a + 0.9 * Random::GetFloat(0, 1), -0.82f, b + 0.9 * Random::GetFloat(0, 1));
 
-		m_World.Quads.push_back(quad);
-	}
+// 			if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
+// 				Material mat;
+// 				//mat.CreateRandom("material");
+// 				Sphere s = { center, 0.2f, 0 };
 
-	// back white
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 0.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 4;
+// 				world.Materials.push_back(mat);
+// 				world.Spheres.push_back(s);
+// 			}
+// 		}
+// 	}
 
-		m_World.Quads.push_back(quad);
-	}
-
-	// right red
-	{
-		Quad quad;
-		quad.PositionLLC = { 2.0f, -2.0f, 0.0f };
-		quad.U = { 0.0f, 0.0f, 1.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 0;
-
-		m_World.Quads.push_back(quad);
-	}
-	
-
-	// top white
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, 2.0f, 0.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 0.0f, 1.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 4;
-
-		m_World.Quads.push_back(quad);
-	}
-
-	// bot white
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 0.0f, -1.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 4;
-
-		m_World.Quads.push_back(quad);
-	}
-
-	// top light
-	{
-		Quad quad;
-		quad.PositionLLC = { -0.25f, 1.95f, 2.00f };
-		quad.U = { 1.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 0.0f, 1.0f };
-		quad.Width = 0.5f;
-		quad.Height = 0.5f;
-		quad.MaterialIndex = 3;
-
-		m_World.Quads.push_back(quad);
-	}
-}
-
-void setupAltScene(World& world) {
-	{
-		Sphere sphere;
-		sphere.Position = { 0.0f, -1.0f, 2.0f };
-		sphere.Radius = 1.0f;
-		sphere.MaterialIndex = 3;
-		world.Spheres.push_back(sphere);
-	}
-
-	// bot white
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 4.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 0.0f, -1.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 0;
-
-		world.Quads.push_back(quad);
-	}
-}
-
-void setupRandomSpheres(World& world) {
-	world.BackgroundColor = { 0.54f, 0.73f, 0.95f };
-
-	Sphere base = { {0.0f, -1001.0f, 0.0f}, 1000.0f, 3 };
-	Sphere sphere1 = { {0.0f, 0.0f, 0.0f}, 1.0f, 0 };
-	Sphere sphere2 = { {-3.0f, 0.0f, 0.0f}, 1.0f, 2 };
-	Sphere sphere3 = { {3.0f, 0.0f, 0.0f}, 1.0f, 1 };
-
-	Material dielectric, metal, diffuse, baseMat;
-	//dielectric.CreateDefaultDielectric();
-	//metal.CreateDefaultMetal();
-	//diffuse.CreateDefaultDiffuse();
-	//baseMat.Name = "World";
-	baseMat.Color = { 0.5f, 0.5f, 0.5f, 1.0f };
-	baseMat.Roughness = 0.8f;
-
-	world.Materials.push_back(dielectric);
-	world.Materials.push_back(metal);
-	world.Materials.push_back(diffuse);
-	world.Materials.push_back(baseMat);
-	world.Spheres.push_back(sphere1);
-	world.Spheres.push_back(sphere2);
-	world.Spheres.push_back(sphere3);
-	world.Spheres.push_back(base);
-
-	for (int a = -11; a < 11; a++) {
-		for (int b = -11; b < 11; b++) {
-			glm::vec3 center(a + 0.9 * Random::GetFloat(0, 1), -0.82f, b + 0.9 * Random::GetFloat(0, 1));
-
-			if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
-				Material mat;
-				//mat.CreateRandom("material");
-				Sphere s = { center, 0.2f, 0 };
-
-				world.Materials.push_back(mat);
-				world.Spheres.push_back(s);
-			}
-		}
-	}
-
-	for (int i = 4; i < world.Spheres.size(); i++) {
-		world.Spheres.at(i).MaterialIndex = Random::GetInt(3, world.Materials.size() - 1);
-	}
-}
-
-void Application::InitializeScene() {
-	setupSpheres(m_World);
-	//setupCornellBox(m_World);
-	//setupAltScene(m_World);
-	//setupRandomSpheres(m_World);
-}
+// 	for (int i = 4; i < world.Spheres.size(); i++) {
+// 		world.Spheres.at(i).MaterialIndex = Random::GetInt(3, world.Materials.size() - 1);
+// 	}
+// }
 
 void Application::CalculateTime() {
 	float time = glfwGetTime();
@@ -568,9 +363,9 @@ void Application::RenderUI(float deltaTime) {
 	// 	ImGui::TreePop();
 	// }
 
-	if (ImGui::TreeNode("Spheres") && m_World.s.size() > 0) {
-		for (size_t i = 0; i < m_World.s.size(); i++) {
-			Sphere2& sphere = m_World.s.at(i);
+	if (ImGui::TreeNode("Spheres") && m_World.Spheres.size() > 0) {
+		for (size_t i = 0; i < m_World.Spheres.size(); i++) {
+			Sphere2& sphere = m_World.Spheres.at(i);
 
 			ImGui::PushID(i);
 			ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
@@ -600,6 +395,7 @@ void Application::RenderUI(float deltaTime) {
 		ImGui::TreePop();
 	}
 
+	/*
 	if (ImGui::TreeNode("Quads") && m_World.Quads.size() > 0) {
 		for (size_t i = 0; i < m_World.Quads.size(); i++) {
 			Quad& quad = m_World.Quads.at(i);
@@ -616,6 +412,7 @@ void Application::RenderUI(float deltaTime) {
 
 		ImGui::TreePop();
 	}
+	*/
 
 	ImGui::Spacing();
 	ImGui::Spacing();

@@ -1,9 +1,10 @@
 //
 // Created by Federico Andrucci on 22/08/23.
 //
+#pragma once
 
-#ifndef PATHTRACING_INPUT_H
-#define PATHTRACING_INPUT_H
+#ifndef INPUT_H
+#define INPUT_H
 
 #include "Application.h"
 #include <glm/glm.hpp>
@@ -40,4 +41,4 @@ public:
 };
 
 
-#endif //PATHTRACING_INPUT_H
+#endif // INPUT_H
