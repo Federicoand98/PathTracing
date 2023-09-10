@@ -28,10 +28,9 @@ struct Quad {
 };
 
 struct Material {
-    vec3 Color;
+    vec4 Color;
     float Roughness;
     float SpecularProbability;
-    bool Refractive;
     float RefractionRatio;
     float EmissiveStrenght;
     vec3 EmissiveColor;
@@ -58,6 +57,8 @@ uniform int height;
 uniform int numberOfSpheres;
 uniform int numberOfMaterials;
 uniform int rendererFrame;
+uniform int samplesPerPixel;
+uniform int rayDepth;
 uniform vec3 cameraPosition;
 uniform mat4 inverseProjection;
 uniform mat4 inverseView;
@@ -74,14 +75,19 @@ layout(std430, binding = 1) buffer MaterialsBuffer {
 uint rndSeed;
 
 void main() {
-    vec4 value = vec4(BackgroundColor, 1.0);
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+    vec2 ndc = (2.0 * vec2(texelCoord) / imageSize(imgOutput)) - 1.0;
 
     rndSeed = gl_GlobalInvocationID.x * 1973 + gl_GlobalInvocationID.y * 9277 + rendererFrame * 2699 | 1;
 
-    vec2 ndc = (2.0 * vec2(texelCoord) / imageSize(imgOutput)) - 1.0;
+    vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
+    for(int i = 0; i < samplesPerPixel; i++) {
+        // aliasing
 
-    value = PerPixel(ndc);
+        value += PerPixel(ndc);
+    }
+
+    value /= samplesPerPixel;
 
     // accumulazione path tracing
     vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
@@ -93,12 +99,11 @@ void main() {
 vec4 PerPixel(vec2 ndc) {
     Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
 
-    int depth = 5;
     float multiplier = 1.0;
     vec3 light = vec3(0.0);
     vec3 contribution = vec3(1.0);
 
-    for(int i = 0; i < depth; i++) {
+    for(int i = 0; i < rayDepth; i++) {
         HitInfo hit = TraceRay(ray);
 
         if(hit.HitDistance < 0.0) {
@@ -109,16 +114,37 @@ vec4 PerPixel(vec2 ndc) {
         Sphere2 sphere = Spheres[hit.ObjectIndex];
         Material material = Materials[int(sphere.Mat.x)];
 
-        contribution *= material.Color;
+        contribution *= vec3(material.Color);
         light += (material.EmissiveColor * material.EmissiveStrenght);
 
-        vec3 diffuse = normalize(hit.Normal + GetRandomVector(rndSeed));
-        vec3 specular = reflect(ray.Direction, hit.Normal);
+        if(material.RefractionRatio > 1.0) {
+            vec3 unitDirection = normalize(ray.Direction);
+            float ni_over_nt = dot(unitDirection, hit.Normal) > 0 ? material.RefractionRatio : 1.0 / material.RefractionRatio;
+            vec3 refractedDir = refract(unitDirection, hit.Normal, ni_over_nt);
 
-        vec3 newRayOrigin = hit.HitPosition + hit.Normal * 0.0001;
-        vec3 newRayDir = normalize(mix(specular, diffuse, material.Roughness));
+            if(length(refractedDir) > 0.0) {
+                vec3 newRayOrigin = hit.HitPosition + refractedDir * 0.0001;
+                vec3 newRayDir = refractedDir;
 
-        ray = Ray(newRayOrigin, newRayDir);
+                ray = Ray(newRayOrigin, newRayDir);
+            } else {
+                // total internal reflection
+                vec3 reflectedDirection = reflect(unitDirection, hit.Normal);
+                vec3 newRayOrigin = hit.HitPosition + reflectedDirection * 0.0001;
+                vec3 newRayDir = refractedDir;
+
+                ray = Ray(newRayOrigin, newRayDir);
+            }
+
+        } else {
+            vec3 diffuse = normalize(hit.Normal + GetRandomVector(rndSeed));
+            vec3 specular = reflect(ray.Direction, hit.Normal);
+
+            vec3 newRayOrigin = hit.HitPosition + hit.Normal * 0.0001;
+            vec3 newRayDir = normalize(mix(specular, diffuse, material.Roughness));
+
+            ray = Ray(newRayOrigin, newRayDir);
+        }
     }
 
     return vec4(light, 1.0);

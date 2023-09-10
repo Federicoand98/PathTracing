@@ -45,6 +45,8 @@ void Renderer::Render(const Camera& camera, const World& world) {
     m_ComputeShader->SetInt("numberOfSpheres", (int)m_World->Spheres.size());
     m_ComputeShader->SetInt("numberOfMaterials", (int)m_World->Materials.size());
     m_ComputeShader->SetInt("rendererFrame", m_PTCounter);
+    m_ComputeShader->SetInt("samplesPerPixel", m_SamplesPerPixel);
+    m_ComputeShader->SetInt("rayDepth", m_RayDepth);
     m_ComputeShader->SetVec3("cameraPosition", m_Camera->GetPosition());
     m_ComputeShader->SetVec3("BackgroundColor", m_World->BackgroundColor);
     m_ComputeShader->SetMat4("inverseProjection", m_Camera->GetInverseProjection());
@@ -127,7 +129,7 @@ glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
     int depth = 5;
     glm::vec4 light(0.0f);
     glm::vec4 contribution(1.0f);
-
+ 
     for (int i = 0; i < depth; i++) {
 		HitInfo hit = TraceRay(ray);
 		Material material;
