@@ -377,12 +377,12 @@ void Application::RenderUI(float deltaTime) {
 
 			ImGui::PushID(i);
 			//ImGui::SeparatorText(material.Name);
-			ImGui::ColorEdit3("Color", glm::value_ptr(material.Color));
-			ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f);
-			ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX);
-			ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor));
+			if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color))) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
 			//ImGui::Checkbox("Refractive", &material.Refractive);
-			ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.1f, 1.0f, 3.0f);
+			if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.1f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
 			ImGui::Separator();
 			ImGui::PopID();
 		}
