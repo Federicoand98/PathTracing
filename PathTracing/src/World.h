@@ -24,22 +24,6 @@ struct Sphere {
 	glm::vec3 Position{0.0f};
 	float Radius = 1.0f;
 	int MaterialIndex = 0;
-
-	// float Hit(const Ray& ray) const {
-	// 	glm::vec3 oc = ray.Origin - Position;
-
-	// 	float a = glm::dot(ray.Direction, ray.Direction);
-	// 	float b = 2.0f * glm::dot(oc, ray.Direction);
-	// 	float c = glm::dot(oc, oc) - Radius * Radius;
-	// 	float discriminant = b * b - 4.0f * a * c;
-
-	// 	if (discriminant < 0.0f)
-	// 		return -1.0f;
-
-	// 	float closestHit = (-b - glm::sqrt(discriminant)) / (2.0f * a);
-
-	// 	return closestHit;
-	// }
 };
 
 struct Quad {
@@ -79,18 +63,9 @@ struct Quad {
 	}
 };
 
-// struct World {
-// 	glm::vec3 BackgroundColor;
-// 	std::vector<Material> Materials;
-// 	std::vector<Sphere> Spheres;
-// 	std::vector<Quad> Quads;
-// 	float AmbientOcclusionIntensity = 1.0f;
-// 	std::vector<Sphere2> s;
-// };
-
 enum class SceneType {
-	TWO_SPHERES,
-	RANDOM_SPHERES
+	TWO_SPHERES = 0,
+	RANDOM_SPHERES = 1
 };
 
 class World {
@@ -98,13 +73,14 @@ public:
 	World();
 	~World();
 
-	void LoadScene(SceneType type);
+	void LoadScene();
 	void DestroyScene();
 public:
 	glm::vec3 BackgroundColor;
 	std::vector<Sphere2> Spheres;
 	std::vector<Material> Materials;
 	float AmbientOcclusionIntensity = 1.0f;
+	int CurrentScene = 1;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();

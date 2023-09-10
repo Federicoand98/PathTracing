@@ -42,8 +42,6 @@ void Renderer::Render(const Camera& camera, const World& world) {
     m_ComputeShader->Use();
     m_ComputeShader->SetInt("width", m_Width);
     m_ComputeShader->SetInt("height", m_Height);
-    m_ComputeShader->SetInt("numberOfSpheres", (int)m_World->Spheres.size());
-    m_ComputeShader->SetInt("numberOfMaterials", (int)m_World->Materials.size());
     m_ComputeShader->SetInt("rendererFrame", m_PTCounter);
     m_ComputeShader->SetInt("samplesPerPixel", m_SamplesPerPixel);
     m_ComputeShader->SetInt("rayDepth", m_RayDepth);
@@ -52,9 +50,11 @@ void Renderer::Render(const Camera& camera, const World& world) {
     m_ComputeShader->SetMat4("inverseProjection", m_Camera->GetInverseProjection());
     m_ComputeShader->SetMat4("inverseView", m_Camera->GetInverseView());
     m_ComputeShader->SetWorld();
-    m_ComputeShader->UpdateWorldBuffer(world);
 
-	glDispatchCompute((unsigned int)m_Width, (unsigned int)m_Height, 1);
+    if(m_PTCounter == 1)
+		m_ComputeShader->UpdateWorldBuffer(world);
+
+	glDispatchCompute((unsigned int)m_Width / 8, (unsigned int)m_Height / 8, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

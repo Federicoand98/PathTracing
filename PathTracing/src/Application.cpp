@@ -10,7 +10,7 @@ Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_
                              m_Camera(45.0f, 0.1f, 100.0f) {
     s_Instance = this;
 
-	m_World.LoadScene(SceneType::TWO_SPHERES);
+	m_World.LoadScene();
 }
 
 Application::~Application() {
@@ -194,51 +194,6 @@ void Application::RunLoop() {
 	}
 }
 
-// void setupRandomSpheres(World& world) {
-// 	world.BackgroundColor = { 0.54f, 0.73f, 0.95f };
-
-// 	Sphere base = { {0.0f, -1001.0f, 0.0f}, 1000.0f, 3 };
-// 	Sphere sphere1 = { {0.0f, 0.0f, 0.0f}, 1.0f, 0 };
-// 	Sphere sphere2 = { {-3.0f, 0.0f, 0.0f}, 1.0f, 2 };
-// 	Sphere sphere3 = { {3.0f, 0.0f, 0.0f}, 1.0f, 1 };
-
-// 	Material dielectric, metal, diffuse, baseMat;
-// 	//dielectric.CreateDefaultDielectric();
-// 	//metal.CreateDefaultMetal();
-// 	//diffuse.CreateDefaultDiffuse();
-// 	//baseMat.Name = "World";
-// 	baseMat.Color = { 0.5f, 0.5f, 0.5f, 1.0f };
-// 	baseMat.Roughness = 0.8f;
-
-// 	world.Materials.push_back(dielectric);
-// 	world.Materials.push_back(metal);
-// 	world.Materials.push_back(diffuse);
-// 	world.Materials.push_back(baseMat);
-// 	world.Spheres.push_back(sphere1);
-// 	world.Spheres.push_back(sphere2);
-// 	world.Spheres.push_back(sphere3);
-// 	world.Spheres.push_back(base);
-
-// 	for (int a = -11; a < 11; a++) {
-// 		for (int b = -11; b < 11; b++) {
-// 			glm::vec3 center(a + 0.9 * Random::GetFloat(0, 1), -0.82f, b + 0.9 * Random::GetFloat(0, 1));
-
-// 			if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
-// 				Material mat;
-// 				//mat.CreateRandom("material");
-// 				Sphere s = { center, 0.2f, 0 };
-
-// 				world.Materials.push_back(mat);
-// 				world.Spheres.push_back(s);
-// 			}
-// 		}
-// 	}
-
-// 	for (int i = 4; i < world.Spheres.size(); i++) {
-// 		world.Spheres.at(i).MaterialIndex = Random::GetInt(3, world.Materials.size() - 1);
-// 	}
-// }
-
 void Application::CalculateTime() {
 	float time = glfwGetTime();
 	m_Timer = time - m_ResetTimer;
@@ -307,24 +262,23 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
 	ImGui::SeparatorText("SCENE CONFIGURATIONS");
 	ImGui::PopStyleColor();	
-	ImGui::Separator();
 
+	ImGui::Separator();
 	ImGui::Spacing();
-	ImGui::SeparatorText("Engine Configuration");
-	ImGui::Checkbox("Enable Path Tracing", &m_Renderer.PathTracing);
-	if (ImGui::Button("Reset Accumulation"))
+	ImGui::Text("Background");
+	if(ImGui::ColorEdit3("Background Color", glm::value_ptr(m_World.BackgroundColor)))
+		m_Renderer.ResetPathTracingCounter();
+	if(ImGui::DragFloat("Ambient Occlusion Intensity",&m_World.AmbientOcclusionIntensity, 0.1f, 0.0f, 1.0f))
 		m_Renderer.ResetPathTracingCounter();
 
 	ImGui::Spacing();
 	ImGui::Spacing();
-	ImGui::Separator();
-
-	ImGui::SeparatorText("Scene Configurations");
-
-	ImGui::Spacing();
-	ImGui::Text("Background");
-	ImGui::ColorEdit3("Background Color", glm::value_ptr(m_World.BackgroundColor));
-	ImGui::DragFloat("Ambient Occlusion Intensity",&m_World.AmbientOcclusionIntensity, 0.1f, 0.0f, 1.0f);
+	ImGui::Text("Select the scene");
+	if (ImGui::Combo("Current Scene", &m_World.CurrentScene, "TWO SPHERES\0RANDOM SPHERES\0\0")) {
+		m_World.DestroyScene();
+		m_World.LoadScene();
+		m_Renderer.ResetPathTracingCounter();
+	}
 
 	ImGui::Spacing();
 	ImGui::Spacing();
@@ -368,9 +322,9 @@ void Application::RenderUI(float deltaTime) {
 			Sphere2& sphere = m_World.Spheres.at(i);
 
 			ImGui::PushID(i);
-			ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
-			ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, 0.0f, 10.0f);
-			ImGui::DragFloat("Material", &sphere.Mat.x, 1.0f, 0, (int)m_World.Materials.size() - 1);
+			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, 0.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Material", &sphere.Mat.x, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
 			/*
 			if (ImGui::BeginCombo("Material", m_World.Materials.at(sphere.MaterialIndex).Name, 0 << 1)) {
 				for (int i = 0; i < m_World.Materials.size(); i++) {

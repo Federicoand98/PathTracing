@@ -9,7 +9,9 @@ World::~World() {
     Materials.clear();
 }
 
-void World::LoadScene(SceneType type) {
+void World::LoadScene() {
+	SceneType type = static_cast<SceneType>(CurrentScene);
+
     switch (type) {
         case SceneType::TWO_SPHERES:
             PrepareMaterials();
@@ -107,7 +109,7 @@ void World::PrepareRandomScene() {
 
 			if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
 				Material mat;
-				//mat.CreateRandom("material");
+				mat = CreateRandom("material");
 				Sphere2 s = { {center, 0.2f}, {0.0, 0.0, 0.0, 0.0} };
 
 				Materials.push_back(mat);
@@ -117,7 +119,8 @@ void World::PrepareRandomScene() {
 	}
 
 	for (int i = 4; i < Spheres.size(); i++) {
-		Spheres.at(i).Mat.x = Random::GetInt(3, Materials.size() - 1);
+		glm::vec4 m = glm::vec4(Random::GetInt(3, Materials.size() - 1), 0.0f, 0.0f, 0.0f);
+		Spheres.at(i).Mat = m;
 	}
 
 }

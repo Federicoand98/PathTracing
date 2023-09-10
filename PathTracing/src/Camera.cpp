@@ -63,7 +63,7 @@ bool Camera::OnUpdate(float ts) {
 
     if (moved){
         RecalculateView();
-        RecalculateRayDirections();
+        // RecalculateRayDirections();
     }
 
     return moved;
@@ -77,7 +77,7 @@ void Camera::OnResize(uint32_t width, uint32_t height) {
     m_ViewportHeight = height;
 
     RecalculateProjection();
-    RecalculateRayDirections();
+    //RecalculateRayDirections();
 }
 
 float Camera::GetRotationSpeed() {

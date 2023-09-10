@@ -3,7 +3,7 @@
 #define FLT_MAX 3.402823466e+38
 #define FLT_MIN 1.175494351e-38
 
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
 
@@ -54,8 +54,6 @@ vec3 GetRandomVector(uint seed);
 
 uniform int width;
 uniform int height;
-uniform int numberOfSpheres;
-uniform int numberOfMaterials;
 uniform int rendererFrame;
 uniform int samplesPerPixel;
 uniform int rayDepth;
