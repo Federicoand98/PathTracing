@@ -474,6 +474,44 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Begin("Settings");
 	ImGui::Text("FPS: %f", m_FPS);
 	ImGui::Text("Last Render: %.3fms", deltaTime * 1000);
+	ImGui::Spacing();
+	ImGui::SeparatorText("OpenGL info:");
+	ImGui::Text("Vendor: %s", glGetString(GL_VENDOR));
+	ImGui::Text("Renderer: %s", glGetString(GL_RENDERER));
+	ImGui::Text("Version: %s", glGetString(GL_VERSION));
+	ImGui::Separator();
+
+	ImGui::Spacing();
+
+	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
+	ImGui::SeparatorText("ENGINE CONFIGURATIONS");
+	ImGui::PopStyleColor();
+	ImGui::Spacing();
+	if (ImGui::Checkbox("Vsync", &m_Vsync))
+		glfwSwapInterval(m_Vsync);
+	ImGui::Spacing();
+	ImGui::Spacing();
+	ImGui::Text("Samples Per Pixel:");
+	if(ImGui::SliderInt("samples", &m_Renderer.m_SamplesPerPixel, 1, 16))
+		m_Renderer.ResetPathTracingCounter();
+	ImGui::Spacing();
+	ImGui::Spacing();
+	ImGui::Text("Ray Depth:");
+	if(ImGui::SliderInt("ray", &m_Renderer.m_RayDepth, 1, 50))
+		m_Renderer.ResetPathTracingCounter();
+	ImGui::Spacing();
+	ImGui::Spacing();
+	ImGui::Checkbox("Enable Path Tracing", &m_Renderer.PathTracing);
+	if (ImGui::Button("Reset Accumulation"))
+		m_Renderer.ResetPathTracingCounter();
+
+	ImGui::Spacing();
+	ImGui::Spacing();
+	ImGui::Separator();
+
+	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
+	ImGui::SeparatorText("SCENE CONFIGURATIONS");
+	ImGui::PopStyleColor();	
 	ImGui::Separator();
 
 	ImGui::Spacing();
