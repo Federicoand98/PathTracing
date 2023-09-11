@@ -359,6 +359,7 @@ void Application::RenderUI(float deltaTime) {
 			if (ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Width", &quad.Width, 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Height", &quad.Height, 0.1f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Material", &quad.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
 			ImGui::Separator();
 			ImGui::PopID();
 		}
