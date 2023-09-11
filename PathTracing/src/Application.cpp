@@ -274,7 +274,7 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Spacing();
 	ImGui::Spacing();
 	ImGui::Text("Select the scene");
-	if (ImGui::Combo("Current Scene", &m_World.CurrentScene, "TWO SPHERES\0RANDOM SPHERES\0\0")) {
+	if (ImGui::Combo("Current Scene", &m_World.CurrentScene, "TWO SPHERES\0RANDOM SPHERES\0CORNELL BOX\0\0")) {
 		m_World.DestroyScene();
 		m_Renderer.ResetPathTracingCounter();
 		m_World.LoadScene();
@@ -319,7 +319,7 @@ void Application::RenderUI(float deltaTime) {
 
 	if (ImGui::TreeNode("Spheres") && m_World.Spheres.size() > 0) {
 		for (size_t i = 0; i < m_World.Spheres.size(); i++) {
-			Sphere2& sphere = m_World.Spheres.at(i);
+			Sphere& sphere = m_World.Spheres.at(i);
 
 			ImGui::PushID(i);
 			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
@@ -349,24 +349,22 @@ void Application::RenderUI(float deltaTime) {
 		ImGui::TreePop();
 	}
 
-	/*
-	if (ImGui::TreeNode("Quads") && m_World.Quads.size() > 0) {
-		for (size_t i = 0; i < m_World.Quads.size(); i++) {
-			Quad& quad = m_World.Quads.at(i);
+	if (ImGui::TreeNode("Quads") && m_World.Cuboids.size() > 0) {
+		for (size_t i = 0; i < m_World.Cuboids.size(); i++) {
+			Cuboid& quad = m_World.Cuboids.at(i);
 
 			ImGui::PushID(i);
-			ImGui::DragFloat3("Position", glm::value_ptr(quad.PositionLLC), 0.1f);
-			ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f);
-			ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f);
-			ImGui::DragFloat("Width", &quad.Width, 0.1f);
-			ImGui::DragFloat("Height", &quad.Height, 0.1f);
+			if (ImGui::DragFloat3("Position", glm::value_ptr(quad.PositionLLC), 0.1f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Width", &quad.Width, 0.1f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Height", &quad.Height, 0.1f)) m_Renderer.ResetPathTracingCounter();
 			ImGui::Separator();
 			ImGui::PopID();
 		}
 
 		ImGui::TreePop();
 	}
-	*/
 
 	ImGui::Spacing();
 	ImGui::Spacing();

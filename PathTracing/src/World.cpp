@@ -20,6 +20,10 @@ void World::LoadScene() {
 		case SceneType::RANDOM_SPHERES:
             PrepareRandomScene();
             break;
+		case SceneType::CORNELL_BOX:
+			PrepareMaterials();
+			PrepareCornellBox();
+			break;
         default:
             break;
     }
@@ -27,17 +31,18 @@ void World::LoadScene() {
 
 void World::DestroyScene() {
     Spheres.clear();
+	Cuboids.clear();
     Materials.clear();
 }
 
 void World::PrepareMaterials() {
-	Material redMaterial, blueMaterial, pinkMaterial, lightMaterial, greenMaterial, whiteMaterial, glassMaterial;
+	Material redMaterial, blueMaterial, metal, lightMaterial, greenMaterial, whiteMaterial, glassMaterial;
 	redMaterial.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
 	redMaterial.Roughness = 0.5f;
 	blueMaterial.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
 	blueMaterial.Roughness = 0.0f;
-	pinkMaterial.Color = { 1.0f, 0.0f, 1.0f, 1.0f };
-	pinkMaterial.Roughness = 1.0f;
+	metal.Color = { 0.3294f, 0.7019f, 0.6118f, 1.0f };
+	metal.Roughness = 0.0f;
 	lightMaterial.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
 	lightMaterial.Roughness = 1.0f;
 	lightMaterial.EmissiveColor = lightMaterial.Color;
@@ -51,7 +56,7 @@ void World::PrepareMaterials() {
 
 	Materials.push_back(redMaterial);
 	Materials.push_back(blueMaterial);
-	Materials.push_back(pinkMaterial);
+	Materials.push_back(metal);
 	Materials.push_back(lightMaterial);
 	Materials.push_back(whiteMaterial);
 	Materials.push_back(greenMaterial);
@@ -60,35 +65,142 @@ void World::PrepareMaterials() {
 
 void World::PrepareSimpleScene() {
 	{
-		Sphere2 s;
+		Sphere s;
 		s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
-		//s.Mat = { 0.0f, 0.0f, 0.0f, 0.0f };
+		s.Mat = 2;
+		Spheres.push_back(s);
+	}
+	{
+		Sphere s;
+		s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
+		s.Mat = 3;
+		Spheres.push_back(s);
+	}
+	{
+		Sphere s;
+		s.Position = { 0.0f, -101.0f, 0.0f, 100.0f };
 		s.Mat = 0;
 		Spheres.push_back(s);
 	}
+	// right red
 	{
-		Sphere2 s;
-		s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
-		//s.Mat = { 1.0f, 0.0f, 0.0f, 0.0f };
-		s.Mat = 1;
+		Cuboid quad;
+		quad.PositionLLC = { 2.0f, -2.0f, 0.0f, 0.0f };
+		quad.U = { 0.0f, 0.0f, 1.0f, 1.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f, 1.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 2;
+
+		Cuboids.push_back(quad);
+	}
+}
+
+void World::PrepareCornellBox() {
+	{
+		Sphere s;
+		s.Position = { -0.9f, -1.2f, 1.5f, 0.8f };
+		s.Mat = 2;
 		Spheres.push_back(s);
 	}
 	{
-		Sphere2 s;
-		s.Position = { 0.0f, -101.0f, 0.0f, 100.0f };
-		//s.Mat = { 2.0f, 0.0f, 0.0f, 0.0f };
+		Sphere s;
+		s.Position = { 0.0f, -1.6f, 2.3f, 0.4f };
 		s.Mat = 2;
 		Spheres.push_back(s);
+	}
+	{
+		Sphere s;
+		s.Position = { 0.9f, -1.0f, 1.1f, 1.0f };
+		s.Mat = 2;
+		Spheres.push_back(s);
+	}
+	// left green
+	{
+		Cuboid quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
+		quad.U = { 0.0f, 0.0f, -1.0f, 0.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 5;
+
+		Cuboids.push_back(quad);
+	}
+
+	// back white
+	{
+		Cuboid quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 0.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 4;
+
+		Cuboids.push_back(quad);
+	}
+
+	// right red
+	{
+		Cuboid quad;
+		quad.PositionLLC = { 2.0f, -2.0f, 0.0f, 0.0f };
+		quad.U = { 0.0f, 0.0f, 1.0f, 0.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 0;
+
+		Cuboids.push_back(quad);
+	}
+
+	// top white
+	{
+		Cuboid quad;
+		quad.PositionLLC = { -2.0f, 2.0f, 0.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 4;
+
+		Cuboids.push_back(quad);
+	}
+
+	// bot white
+	{
+		Cuboid quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, -1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 4;
+
+		Cuboids.push_back(quad);
+	}
+
+	// top light
+	{
+		Cuboid quad;
+		quad.PositionLLC = { -0.25f, 1.95f, 2.00f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
+		quad.Width = 0.5f;
+		quad.Height = 0.5f;
+		quad.MaterialIndex = 3;
+
+		Cuboids.push_back(quad);
 	}
 }
 
 void World::PrepareRandomScene() {
 	BackgroundColor = { 0.54f, 0.73f, 0.95f };
 
-	Sphere2 base = { {0.0f, -1001.0f, 0.0f, 1000.0f}, 3.0f };
-	Sphere2 sphere1 = { {0.0f, 0.0f, 0.0f, 1.0f}, 0.0f };
-	Sphere2 sphere2 = { {-3.0f, 0.0f, 0.0f, 1.0f}, 2.0f };
-	Sphere2 sphere3 = { {3.0f, 0.0f, 0.0f, 1.0f}, 1.0f };
+	Sphere base = { {0.0f, -1001.0f, 0.0f, 1000.0f}, 3.0f };
+	Sphere sphere1 = { {0.0f, 0.0f, 0.0f, 1.0f}, 0.0f };
+	Sphere sphere2 = { {-3.0f, 0.0f, 0.0f, 1.0f}, 2.0f };
+	Sphere sphere3 = { {3.0f, 0.0f, 0.0f, 1.0f}, 1.0f };
 
 	Material dielectric, metal, diffuse, baseMat;
 	dielectric = CreateDefaultDielectric();
@@ -113,7 +225,7 @@ void World::PrepareRandomScene() {
 			if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
 				Material mat;
 				mat = CreateRandom("material");
-				Sphere2 s = { {center, 0.2f}, 0.0 };
+				Sphere s = { {center, 0.2f}, 0.0 };
 
 				Materials.push_back(mat);
 				Spheres.push_back(s);
@@ -124,5 +236,4 @@ void World::PrepareRandomScene() {
 	for (int i = 4; i < Spheres.size(); i++) {
 		Spheres.at(i).Mat = Random::GetFloat(3, Materials.size() - 1);
 	}
-
 }

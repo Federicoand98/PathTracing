@@ -1,7 +1,8 @@
 #version 430 core
 
-#define FLT_MAX 3.402823466e+38
-#define FLT_MIN 1.175494351e-38
+#define FLOAT_MAX 3.4028235e+38
+#define FLOAT_MIN -3.4028235e+38
+#define EPSILON 0.001
 
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -13,18 +14,17 @@ struct Ray {
 };
 
 struct Sphere {
-    vec3 Position;
-    float Radius;
-    int MaterialIndex;
-};
-
-struct Sphere2 {
     vec4 Position;
-    vec4 Mat;
+    float Mat;
 };
 
-struct Quad {
-    vec3 Position;
+struct Cuboid {
+	vec4 PositionLLC;
+	vec4 U;
+	vec4 V;
+	float MaterialIndex;
+	float Width;
+	float Height;
 };
 
 struct Material {
@@ -41,15 +41,18 @@ struct HitInfo {
     vec3 HitPosition;
     vec3 Normal;
     int ObjectIndex;
+    int ObjectType;
 };
 
 Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc);
 vec4 PerPixel(vec2 ndc);
 HitInfo TraceRay(Ray ray);
-HitInfo HandleHit(Ray ray, float hitDistance, int index);
+HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType);
 HitInfo NoHit();
 float HitSphere(Ray ray, Sphere sphere);
-float HitSphere2(Ray ray, Sphere2 sphere);
+float HitCuboid(Ray ray, Cuboid cuboid);
+float HitQuad(Ray ray, Cuboid cuboid);
+vec3 GetNormal(Cuboid cuboid, vec3 surfacePosition);
 uint GetPCGHash(inout uint seed);
 float GetRandomFloat();
 vec3 GetRandomVector(uint seed);
@@ -65,11 +68,15 @@ uniform mat4 inverseView;
 uniform vec3 BackgroundColor;
 
 layout(std430, binding = 0) buffer SpheresBuffer {
-    Sphere2 Spheres[];
+    Sphere Spheres[];
 };
 
 layout(std430, binding = 1) buffer MaterialsBuffer {
     Material Materials[];
+};
+
+layout(std430, binding = 2) buffer CuboidsBuffer {
+    Cuboid Cuboids[];
 };
 
 uint rndSeed;
@@ -101,6 +108,7 @@ void main() {
 vec4 PerPixel(vec2 ndc) {
     Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
 
+    Material material;
     float multiplier = 1.0;
     vec3 light = vec3(0.0);
     vec3 contribution = vec3(1.0);
@@ -113,8 +121,13 @@ vec4 PerPixel(vec2 ndc) {
             break;
         }
 
-        Sphere2 sphere = Spheres[hit.ObjectIndex];
-        Material material = Materials[int(sphere.Mat.x)];
+        if(hit.ObjectType == 0)
+            material = Materials[int(Spheres[hit.ObjectIndex].Mat)];
+        else if(hit.ObjectType == 1)
+            material = Materials[int(Cuboids[hit.ObjectIndex].MaterialIndex)];
+
+        // Sphere sphere = Spheres[hit.ObjectIndex];
+        // Material material = Materials[int(sphere.Mat)];
 
         contribution *= vec3(material.Color);
         light += (vec3(material.EmissiveColor) * material.EmissiveStrenght);
@@ -155,15 +168,29 @@ vec4 PerPixel(vec2 ndc) {
 HitInfo TraceRay(Ray ray) {
     float hitDistance = 100000.0;
     int index = -1;
+    int objType = -1; // 0 Sphere, 1 Cuboid
 
     for(int i = 0; i < Spheres.length(); i++) {
-        Sphere2 sphere = Spheres[i];
+        Sphere sphere = Spheres[i];
 
-        float distance = HitSphere2(ray, sphere);
+        float distance = HitSphere(ray, sphere);
 
         if(distance >= 0 && distance < hitDistance) {
             hitDistance = distance;
             index = i;
+            objType = 0;
+        }
+    }
+
+    for(int i = 0; i < Cuboids.length(); i++) {
+        Cuboid cuboid = Cuboids[i];
+
+        float distance = HitQuad(ray, cuboid);
+
+        if(distance >= 0 && distance < hitDistance) {
+            hitDistance = distance;
+            index = i;
+            objType = 1;
         }
     }
 
@@ -172,44 +199,41 @@ HitInfo TraceRay(Ray ray) {
         return result;
     }
 
-    HitInfo result = HandleHit(ray, hitDistance, index);
+    HitInfo result = HandleHit(ray, hitDistance, index, objType);
     return result;
 }
 
-HitInfo HandleHit(Ray ray, float hitDistance, int index) {
-    vec3 spherePos = vec3(Spheres[index].Position.x, Spheres[index].Position.y, Spheres[index].Position.z);
+HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType) {
+    HitInfo hit;
 
-    vec3 origin = ray.Origin - spherePos;
-    vec3 closestPosition = spherePos;
-    vec3 hitPosition = origin + ray.Direction * hitDistance;
-    vec3 normal = normalize(hitPosition);
-    hitPosition += closestPosition;
+    if(objType == 0) { // SPHERE
+        vec3 spherePos = vec3(Spheres[index].Position);
 
-    HitInfo hit = HitInfo(hitDistance, hitPosition, normal, index);
+        vec3 origin = ray.Origin - spherePos;
+        vec3 closestPosition = spherePos;
+        vec3 hitPosition = origin + ray.Direction * hitDistance;
+        vec3 normal = normalize(hitPosition);
+        hitPosition += closestPosition;
+
+        hit = HitInfo(hitDistance, hitPosition, normal, index, 0);
+    } else if(objType == 1) { // CUBOID
+        vec3 origin = ray.Origin - vec3(Cuboids[index].PositionLLC);
+        vec3 closestPosition = vec3(Cuboids[index].PositionLLC);
+        vec3 hitPosition = origin + ray.Direction * hitDistance;
+        vec3 normal = GetNormal(Cuboids[index], hitPosition);
+        hitPosition += closestPosition;
+
+        hit = HitInfo(hitDistance, hitPosition, normal, index, 1);
+    }
+
     return hit;
 }
 
 HitInfo NoHit() {
-    return HitInfo(-1.0, vec3(0.0), vec3(0.0), -1);
+    return HitInfo(-1.0, vec3(0.0), vec3(0.0), -1, -1);
 }
 
 float HitSphere(Ray ray, Sphere sphere) {
-    vec3 oc = ray.Origin - sphere.Position;
-
-    float a = dot(ray.Direction, ray.Direction);
-    float b = 2.0 * dot(ray.Origin, ray.Direction);
-    float c = dot(ray.Origin, ray.Origin) - sphere.Radius * sphere.Radius;
-    float discriminant = b * b - 4.0 * a * c;
-
-    if(discriminant < 0.0)
-        return -1.0;
-
-    float closestT = (-b - sqrt(discriminant)) / (2.0 * a);
-
-    return closestT;
-}
-
-float HitSphere2(Ray ray, Sphere2 sphere) {
     vec3 spherePos = vec3(sphere.Position);
     float radius = sphere.Position.w;
 
@@ -225,6 +249,60 @@ float HitSphere2(Ray ray, Sphere2 sphere) {
     float closestT = (-b - sqrt(discriminant)) / (2.0 * a);
 
     return closestT;
+}
+
+float HitCuboid(Ray ray, Cuboid cuboid) {
+    // float t1 = FLOAT_MAX;
+    // float t2 = FLOAT_MIN;
+
+    // vec3 t0s = (cuboid.Min - ray.Origin) / ray.Direction;
+    // vec3 t1s = (cuboid.Max - ray.Origin) / ray.Direction;
+
+    // vec3 tSmaller = min(t0s, t1s);
+    // vec3 tBigger = max(t0s, t1s);
+
+    // t1 = max(t1, max(tSmaller.x, max(tSmaller.y, tSmaller.z)));
+    // t2 = min(t1, min(tSmaller.x, min(tSmaller.y, tSmaller.z)));
+
+    return 0.0;
+}
+
+float HitQuad(Ray ray, Cuboid cuboid) {
+    vec3 normal = normalize(cross(vec3(cuboid.U), vec3(cuboid.V)));
+    float d = dot(normal, vec3(cuboid.PositionLLC));
+    vec3 w = normal / (dot(normal, normal) + 0.0001);
+
+    float denom = dot(normal, ray.Direction);
+    
+    // no hit if the ray is parallel to the plane
+    if (abs(denom) < 1e-8)
+        return -1.0;
+
+    float t = (d - dot(normal, ray.Origin)) / denom;
+    if (t < 0.001 || t > uintBitsToFloat(0x7F800000))
+        return -1.0;
+
+    vec3 intersection = ray.Origin + (t * ray.Direction);
+    vec3 planar_hitpt_vector = intersection - vec3(cuboid.PositionLLC);
+    float alpha = dot(w, cross(planar_hitpt_vector, vec3(cuboid.V)));
+    float beta = dot(w, cross(vec3(cuboid.U), planar_hitpt_vector));
+
+    // is not interior
+    if ((alpha < 0) || (cuboid.Width < alpha) || (beta < 0) || (cuboid.Height < beta))
+        return -1;
+
+    return t;
+}
+
+vec3 GetNormal(Cuboid cuboid, vec3 surfacePosition) {
+    // vec3 halfSize = (cuboid.Max - cuboid.Min) * 0.5;
+    // vec3 centerSurface = surfacePosition - (cuboid.Max + cuboid.Min) * 0.5;
+    
+    // vec3 normal = vec3(0.0);
+    // normal += vec3(sign(centerSurface.x), 0.0, 0.0) * step(abs(abs(centerSurface.x) - halfSize.x), EPSILON);
+    // normal += vec3(0.0, sign(centerSurface.y), 0.0) * step(abs(abs(centerSurface.y) - halfSize.y), EPSILON);
+    // normal += vec3(0.0, 0.0, sign(centerSurface.z)) * step(abs(abs(centerSurface.z) - halfSize.z), EPSILON);
+    return normalize(cross(vec3(cuboid.U), vec3(cuboid.V)));
 }
 
 Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc) {
@@ -243,7 +321,6 @@ uint GetPCGHash(inout uint seed) {
 float GetRandomFloat() {
     return float(GetPCGHash(rndSeed)) / 4294967296.0;
 }
-
 
 vec3 GetRandomVector(uint seed) {
     vec3 seedVec = vec3(
