@@ -17,7 +17,9 @@ enum class ObjectType {
 
 struct Sphere2 {
 	glm::vec4 Position{0.0f};
-	glm::vec4 Mat{0.0f};
+	//glm::vec4 Mat{0.0f};
+	float Mat = 0;
+	glm::vec3 padding{ 0.0f };
 };
 
 struct Sphere {
@@ -80,7 +82,7 @@ public:
 	std::vector<Sphere2> Spheres;
 	std::vector<Material> Materials;
 	float AmbientOcclusionIntensity = 1.0f;
-	int CurrentScene = 1;
+	int CurrentScene = 0;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();

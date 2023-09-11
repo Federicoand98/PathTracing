@@ -33,7 +33,7 @@ struct Material {
     float SpecularProbability;
     float RefractionRatio;
     float EmissiveStrenght;
-    vec3 EmissiveColor;
+    vec4 EmissiveColor;
 };
 
 struct HitInfo {
@@ -50,6 +50,8 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index);
 HitInfo NoHit();
 float HitSphere(Ray ray, Sphere sphere);
 float HitSphere2(Ray ray, Sphere2 sphere);
+uint GetPCGHash(inout uint seed);
+float GetRandomFloat();
 vec3 GetRandomVector(uint seed);
 
 uniform int width;
@@ -73,14 +75,16 @@ layout(std430, binding = 1) buffer MaterialsBuffer {
 uint rndSeed;
 
 void main() {
+    ivec2 imageResultSize = imageSize(imgOutput);
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
-    vec2 ndc = (2.0 * vec2(texelCoord) / imageSize(imgOutput)) - 1.0;
 
     rndSeed = gl_GlobalInvocationID.x * 1973 + gl_GlobalInvocationID.y * 9277 + rendererFrame * 2699 | 1;
 
     vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
     for(int i = 0; i < samplesPerPixel; i++) {
-        // aliasing
+        // anti aliasing
+        vec2 subPixelOffset = vec2(GetRandomFloat(), GetRandomFloat());
+        vec2 ndc = (texelCoord + subPixelOffset) / imageResultSize * 2.0 - 1.0;
 
         value += PerPixel(ndc);
     }
@@ -113,7 +117,7 @@ vec4 PerPixel(vec2 ndc) {
         Material material = Materials[int(sphere.Mat.x)];
 
         contribution *= vec3(material.Color);
-        light += (material.EmissiveColor * material.EmissiveStrenght);
+        light += (vec3(material.EmissiveColor) * material.EmissiveStrenght);
 
         if(material.RefractionRatio > 1.0) {
             vec3 unitDirection = normalize(ray.Direction);
@@ -206,7 +210,6 @@ float HitSphere(Ray ray, Sphere sphere) {
 }
 
 float HitSphere2(Ray ray, Sphere2 sphere) {
-    // vec3 spherePos = vec3(sphere.Position.x, sphere.Position.y, sphere.Position.z);
     vec3 spherePos = vec3(sphere.Position);
     float radius = sphere.Position.w;
 
@@ -230,6 +233,17 @@ Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, v
 
     return Ray(cameraPos, rayDirection);
 }
+
+uint GetPCGHash(inout uint seed) {
+    seed = seed * 747796405u + 2891336453u;
+    uint word = ((seed >> ((seed >> 28u) + 4u)) ^ seed) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+ 
+float GetRandomFloat() {
+    return float(GetPCGHash(rndSeed)) / 4294967296.0;
+}
+
 
 vec3 GetRandomVector(uint seed) {
     vec3 seedVec = vec3(

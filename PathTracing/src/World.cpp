@@ -62,19 +62,22 @@ void World::PrepareSimpleScene() {
 	{
 		Sphere2 s;
 		s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
-		s.Mat = { 0.0f, 0.0f, 0.0f, 0.0f };
+		//s.Mat = { 0.0f, 0.0f, 0.0f, 0.0f };
+		s.Mat = 0;
 		Spheres.push_back(s);
 	}
 	{
 		Sphere2 s;
 		s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
-		s.Mat = { 1.0f, 0.0f, 0.0f, 0.0f };
+		//s.Mat = { 1.0f, 0.0f, 0.0f, 0.0f };
+		s.Mat = 1;
 		Spheres.push_back(s);
 	}
 	{
 		Sphere2 s;
 		s.Position = { 0.0f, -101.0f, 0.0f, 100.0f };
-		s.Mat = { 2.0f, 0.0f, 0.0f, 0.0f };
+		//s.Mat = { 2.0f, 0.0f, 0.0f, 0.0f };
+		s.Mat = 2;
 		Spheres.push_back(s);
 	}
 }
@@ -82,10 +85,10 @@ void World::PrepareSimpleScene() {
 void World::PrepareRandomScene() {
 	BackgroundColor = { 0.54f, 0.73f, 0.95f };
 
-	Sphere2 base = { {0.0f, -1001.0f, 0.0f, 1000.0f}, {3.0f, 0.0f, 0.0f, 0.0f} };
-	Sphere2 sphere1 = { {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 0.0f, 0.0f} };
-	Sphere2 sphere2 = { {-3.0f, 0.0f, 0.0f, 1.0f}, {2.0f, 0.0f, 0.0f, 0.0f} };
-	Sphere2 sphere3 = { {3.0f, 0.0f, 0.0f, 1.0f}, {1.0f, 0.0f, 0.0f, 0.0f} };
+	Sphere2 base = { {0.0f, -1001.0f, 0.0f, 1000.0f}, 3.0f };
+	Sphere2 sphere1 = { {0.0f, 0.0f, 0.0f, 1.0f}, 0.0f };
+	Sphere2 sphere2 = { {-3.0f, 0.0f, 0.0f, 1.0f}, 2.0f };
+	Sphere2 sphere3 = { {3.0f, 0.0f, 0.0f, 1.0f}, 1.0f };
 
 	Material dielectric, metal, diffuse, baseMat;
 	dielectric = CreateDefaultDielectric();
@@ -110,7 +113,7 @@ void World::PrepareRandomScene() {
 			if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
 				Material mat;
 				mat = CreateRandom("material");
-				Sphere2 s = { {center, 0.2f}, {0.0, 0.0, 0.0, 0.0} };
+				Sphere2 s = { {center, 0.2f}, 0.0 };
 
 				Materials.push_back(mat);
 				Spheres.push_back(s);
@@ -119,8 +122,7 @@ void World::PrepareRandomScene() {
 	}
 
 	for (int i = 4; i < Spheres.size(); i++) {
-		glm::vec4 m = glm::vec4(Random::GetInt(3, Materials.size() - 1), 0.0f, 0.0f, 0.0f);
-		Spheres.at(i).Mat = m;
+		Spheres.at(i).Mat = Random::GetFloat(3, Materials.size() - 1);
 	}
 
 }

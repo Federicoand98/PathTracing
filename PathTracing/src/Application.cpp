@@ -276,8 +276,8 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Text("Select the scene");
 	if (ImGui::Combo("Current Scene", &m_World.CurrentScene, "TWO SPHERES\0RANDOM SPHERES\0\0")) {
 		m_World.DestroyScene();
-		m_World.LoadScene();
 		m_Renderer.ResetPathTracingCounter();
+		m_World.LoadScene();
 	}
 
 	ImGui::Spacing();
@@ -324,7 +324,7 @@ void Application::RenderUI(float deltaTime) {
 			ImGui::PushID(i);
 			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, 0.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Material", &sphere.Mat.x, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Material", &sphere.Mat, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
 			/*
 			if (ImGui::BeginCombo("Material", m_World.Materials.at(sphere.MaterialIndex).Name, 0 << 1)) {
 				for (int i = 0; i < m_World.Materials.size(); i++) {
