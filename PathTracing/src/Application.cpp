@@ -367,7 +367,7 @@ void Application::RenderUI(float deltaTime) {
 		ImGui::TreePop();
 	}
 
-	if (ImGui::TreeNode("Boxez") && m_World.Boxes.size() > 0) {
+	if (ImGui::TreeNode("Boxes") && m_World.Boxes.size() > 0) {
 		for (size_t i = 0; i < m_World.Boxes.size(); i++) {
 			Box& box = m_World.Boxes.at(i);
 
