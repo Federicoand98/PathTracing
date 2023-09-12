@@ -324,7 +324,7 @@ void Application::RenderUI(float deltaTime) {
 			ImGui::PushID(i);
 			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, 0.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Material", &sphere.Mat, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Material", &sphere.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
 			/*
 			if (ImGui::BeginCombo("Material", m_World.Materials.at(sphere.MaterialIndex).Name, 0 << 1)) {
 				for (int i = 0; i < m_World.Materials.size(); i++) {
@@ -360,6 +360,21 @@ void Application::RenderUI(float deltaTime) {
 			if (ImGui::DragFloat("Width", &quad.Width, 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Height", &quad.Height, 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Material", &quad.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
+			ImGui::Separator();
+			ImGui::PopID();
+		}
+
+		ImGui::TreePop();
+	}
+
+	if (ImGui::TreeNode("Boxez") && m_World.Boxes.size() > 0) {
+		for (size_t i = 0; i < m_World.Boxes.size(); i++) {
+			Box& box = m_World.Boxes.at(i);
+
+			ImGui::PushID(i);
+			if (ImGui::DragFloat3("Min", glm::value_ptr(box.Min), 0.1f)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
+			if (ImGui::DragFloat3("Max", glm::value_ptr(box.Max), 0.1f)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
+			if (ImGui::DragFloat("Material", &box.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
 			ImGui::Separator();
 			ImGui::PopID();
 		}

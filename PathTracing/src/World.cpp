@@ -62,57 +62,46 @@ void World::PrepareMaterials() {
 	Materials.push_back(greenMaterial);
 	Materials.push_back(glassMaterial);
 }
-
 void World::PrepareSimpleScene() {
 	{
 		Sphere s;
 		s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
-		s.Mat = 2;
+		s.MaterialIndex = 2;
 		Spheres.push_back(s);
 	}
 	{
 		Sphere s;
 		s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
-		s.Mat = 3;
+		s.MaterialIndex = 3;
 		Spheres.push_back(s);
 	}
 	{
 		Sphere s;
 		s.Position = { 0.0f, -101.0f, 0.0f, 100.0f };
-		s.Mat = 0;
+		s.MaterialIndex = 0;
 		Spheres.push_back(s);
 	}
-	// right red
-	{
-		Quad quad;
-		quad.PositionLLC = { 2.0f, -2.0f, 0.0f, 0.0f };
-		quad.U = { 0.0f, 0.0f, 1.0f, 1.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f, 1.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 2;
 
-		Quads.push_back(quad);
-	}
+	CreateBox({ 0,0,0 }, { 3,1,1 }, 1);
 }
 
 void World::PrepareCornellBox() {
 	{
 		Sphere s;
 		s.Position = { -0.9f, -1.2f, 1.5f, 0.8f };
-		s.Mat = 2;
+		s.MaterialIndex = 2;
 		Spheres.push_back(s);
 	}
 	{
 		Sphere s;
 		s.Position = { 0.0f, -1.6f, 2.3f, 0.4f };
-		s.Mat = 2;
+		s.MaterialIndex = 2;
 		Spheres.push_back(s);
 	}
 	{
 		Sphere s;
 		s.Position = { 0.9f, -1.0f, 1.1f, 1.0f };
-		s.Mat = 2;
+		s.MaterialIndex = 2;
 		Spheres.push_back(s);
 	}
 	// left green
@@ -234,6 +223,95 @@ void World::PrepareRandomScene() {
 	}
 
 	for (int i = 4; i < Spheres.size(); i++) {
-		Spheres.at(i).Mat = Random::GetFloat(3, Materials.size() - 1);
+		Spheres.at(i).MaterialIndex = Random::GetFloat(3, Materials.size() - 1);
 	}
+}
+
+void World::CreateBox(const glm::vec3 &a, const glm::vec3 &b, float MaterialIndex) {
+	Box box;
+	box.Min = glm::vec3(fmin(a.x, b.x), fmin(a.y, b.y), fmin(a.z, b.z));
+	box.Max = glm::vec3(fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z));
+
+	glm::vec3 dx = glm::vec3(box.Max.x - box.Min.x, 0, 0);
+	glm::vec3 dy = glm::vec3(0, box.Max.y - box.Min.y, 0);
+	glm::vec3 dz = glm::vec3(0, 0, box.Max.z - box.Min.z);
+
+	glm::vec3 nx = glm::normalize(dx);
+	glm::vec3 ny = glm::normalize(dy);
+	glm::vec3 nz = glm::normalize(dz);
+
+	box.index = Quads.size();
+	box.MaterialIndex = MaterialIndex;
+
+	Quad quad;
+
+	quad.MaterialIndex = box.MaterialIndex;
+
+	// front
+	{
+		quad.PositionLLC = { box.Min.x, box.Min.y, box.Max.z, 0 };
+		quad.U = { nx, 0 };
+		quad.V = { ny, 0 };
+		quad.Width = dx.x;
+		quad.Height = dy.y;
+
+		Quads.push_back(quad);
+	}
+
+	// right
+	{
+		quad.PositionLLC = { box.Max.x, box.Min.y, box.Max.z, 0 };
+		quad.U = { -nz, 0 };
+		quad.V = { ny, 0 };
+		quad.Width = dz.z;
+		quad.Height = dy.y;
+
+		Quads.push_back(quad);
+	}
+
+	// back
+	{
+		quad.PositionLLC = { box.Max.x, box.Min.y, box.Min.z, 0 };
+		quad.U = { -nx, 0 };
+		quad.V = { ny, 0 };
+		quad.Width = dx.x;
+		quad.Height = dy.y;
+
+		Quads.push_back(quad);
+	}
+
+	// left
+	{
+		quad.PositionLLC = { box.Min.x, box.Min.y, box.Min.z, 0 };
+		quad.U = { nz, 0 };
+		quad.V = { ny, 0 };
+		quad.Width = dz.z;
+		quad.Height = dy.y;
+
+		Quads.push_back(quad);
+	}
+
+	// top
+	{
+		quad.PositionLLC = { box.Min.x, box.Max.y, box.Max.z, 0 };
+		quad.U = { nx, 0 };
+		quad.V = { -nz, 0 };
+		quad.Width = dx.x;
+		quad.Height = dz.z;
+
+		Quads.push_back(quad);
+	}
+
+	// bottom
+	{
+		quad.PositionLLC = { box.Min.x, box.Min.y, box.Min.z, 0 };
+		quad.U = { nx, 0 };
+		quad.V = { nz, 0 };
+		quad.Width = dx.x;
+		quad.Height = dz.z;
+
+		Quads.push_back(quad);
+	}
+
+	Boxes.push_back(box);
 }
