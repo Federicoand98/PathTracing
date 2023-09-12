@@ -121,7 +121,8 @@ struct Box {
 enum class SceneType {
 	TWO_SPHERES = 0,
 	RANDOM_SPHERES = 1,
-	CORNELL_BOX = 2
+	CORNELL_BOX = 2,
+	RANDOM_BOXES = 3
 };
 
 class World {
@@ -138,12 +139,13 @@ public:
 	std::vector<Box> Boxes;
 	std::vector<Material> Materials;
 	float AmbientOcclusionIntensity = 1.0f;
-	int CurrentScene = 0;
+	int CurrentScene = 3;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();
 	void PrepareCornellBox();
-	void PrepareRandomScene();
+	void PrepareRandomSpheres();
+	void PrepareRandomBoxes();
 
 	void CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex);
 };

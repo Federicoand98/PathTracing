@@ -18,11 +18,14 @@ void World::LoadScene() {
             PrepareSimpleScene();
             break;
 		case SceneType::RANDOM_SPHERES:
-            PrepareRandomScene();
+            PrepareRandomSpheres();
             break;
 		case SceneType::CORNELL_BOX:
 			PrepareMaterials();
 			PrepareCornellBox();
+			break;
+		case SceneType::RANDOM_BOXES:
+			PrepareRandomBoxes();
 			break;
         default:
             break;
@@ -62,6 +65,7 @@ void World::PrepareMaterials() {
 	Materials.push_back(greenMaterial);
 	Materials.push_back(glassMaterial);
 }
+
 void World::PrepareSimpleScene() {
 	{
 		Sphere s;
@@ -183,7 +187,7 @@ void World::PrepareCornellBox() {
 	}
 }
 
-void World::PrepareRandomScene() {
+void World::PrepareRandomSpheres() {
 	BackgroundColor = { 0.54f, 0.73f, 0.95f };
 
 	Sphere base = { {0.0f, -1001.0f, 0.0f, 1000.0f}, 3.0f };
@@ -224,6 +228,54 @@ void World::PrepareRandomScene() {
 
 	for (int i = 4; i < Spheres.size(); i++) {
 		Spheres.at(i).MaterialIndex = Random::GetFloat(3, Materials.size() - 1);
+	}
+}
+
+void World::PrepareRandomBoxes() {
+	Material dielectric, metal, diffuse, lightMaterial, baseMat;
+	dielectric = CreateDefaultDielectric();
+	metal = CreateDefaultMetal();
+	diffuse = CreateDefaultDiffuse();
+	baseMat.Color = { 0.5f, 0.5f, 0.5f, 1.0f };
+	baseMat.Roughness = 0.8f;
+
+	lightMaterial.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
+	lightMaterial.Roughness = 1.0f;
+	lightMaterial.EmissiveColor = lightMaterial.Color;
+	lightMaterial.EmissiveStrenght = 1.0f;
+
+	Materials.push_back(dielectric);
+	Materials.push_back(metal);
+	Materials.push_back(diffuse);
+	Materials.push_back(lightMaterial);
+	Materials.push_back(baseMat);
+
+	{
+		Sphere s;
+		s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
+		s.MaterialIndex = 1;
+		Spheres.push_back(s);
+	}
+	{
+		Sphere s;
+		s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
+		s.MaterialIndex = 3;
+		Spheres.push_back(s);
+	}
+
+	for (int a = 0; a < 10; a++) {
+		Material mat;
+		mat = CreateRandom("material");
+
+		Materials.push_back(mat);
+	}
+
+	for (int x = -5; x < 6; x++) {
+		for (int z = -5; z < 6; z++) {
+			float y = Random::GetFloat(-4, -3);
+
+			CreateBox({ x, y, z }, { x + 1, y + 1, z + 1 }, Random::GetInt(5, Materials.size() - 1));
+		}
 	}
 }
 
