@@ -31,7 +31,7 @@ void World::LoadScene() {
 
 void World::DestroyScene() {
     Spheres.clear();
-	Cuboids.clear();
+	Quads.clear();
     Materials.clear();
 }
 
@@ -84,7 +84,7 @@ void World::PrepareSimpleScene() {
 	}
 	// right red
 	{
-		Cuboid quad;
+		Quad quad;
 		quad.PositionLLC = { 2.0f, -2.0f, 0.0f, 0.0f };
 		quad.U = { 0.0f, 0.0f, 1.0f, 1.0f };
 		quad.V = { 0.0f, 1.0f, 0.0f, 1.0f };
@@ -92,7 +92,7 @@ void World::PrepareSimpleScene() {
 		quad.Height = 4.0f;
 		quad.MaterialIndex = 2;
 
-		Cuboids.push_back(quad);
+		Quads.push_back(quad);
 	}
 }
 
@@ -117,7 +117,7 @@ void World::PrepareCornellBox() {
 	}
 	// left green
 	{
-		Cuboid quad;
+		Quad quad;
 		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
 		quad.U = { 0.0f, 0.0f, -1.0f, 0.0f };
 		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
@@ -125,12 +125,12 @@ void World::PrepareCornellBox() {
 		quad.Height = 4.0f;
 		quad.MaterialIndex = 5;
 
-		Cuboids.push_back(quad);
+		Quads.push_back(quad);
 	}
 
 	// back white
 	{
-		Cuboid quad;
+		Quad quad;
 		quad.PositionLLC = { -2.0f, -2.0f, 0.0f, 0.0f };
 		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
@@ -138,12 +138,12 @@ void World::PrepareCornellBox() {
 		quad.Height = 4.0f;
 		quad.MaterialIndex = 4;
 
-		Cuboids.push_back(quad);
+		Quads.push_back(quad);
 	}
 
 	// right red
 	{
-		Cuboid quad;
+		Quad quad;
 		quad.PositionLLC = { 2.0f, -2.0f, 0.0f, 0.0f };
 		quad.U = { 0.0f, 0.0f, 1.0f, 0.0f };
 		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
@@ -151,12 +151,12 @@ void World::PrepareCornellBox() {
 		quad.Height = 4.0f;
 		quad.MaterialIndex = 0;
 
-		Cuboids.push_back(quad);
+		Quads.push_back(quad);
 	}
 
 	// top white
 	{
-		Cuboid quad;
+		Quad quad;
 		quad.PositionLLC = { -2.0f, 2.0f, 0.0f, 0.0f };
 		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
@@ -164,12 +164,12 @@ void World::PrepareCornellBox() {
 		quad.Height = 4.0f;
 		quad.MaterialIndex = 4;
 
-		Cuboids.push_back(quad);
+		Quads.push_back(quad);
 	}
 
 	// bot white
 	{
-		Cuboid quad;
+		Quad quad;
 		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
 		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		quad.V = { 0.0f, 0.0f, -1.0f, 0.0f };
@@ -177,12 +177,12 @@ void World::PrepareCornellBox() {
 		quad.Height = 4.0f;
 		quad.MaterialIndex = 4;
 
-		Cuboids.push_back(quad);
+		Quads.push_back(quad);
 	}
 
 	// top light
 	{
-		Cuboid quad;
+		Quad quad;
 		quad.PositionLLC = { -0.25f, 1.95f, 2.00f, 0.0f };
 		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
@@ -190,7 +190,7 @@ void World::PrepareCornellBox() {
 		quad.Height = 0.5f;
 		quad.MaterialIndex = 3;
 
-		Cuboids.push_back(quad);
+		Quads.push_back(quad);
 	}
 }
 

@@ -94,7 +94,7 @@ public:
 
         glGenBuffers(1, &ssbo_c);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_c);
-        glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Cuboid) * world.Cuboids.size(), world.Cuboids.data(), GL_STATIC_DRAW);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Quad) * world.Quads.size(), world.Quads.data(), GL_STATIC_DRAW);
     }
 
 private:

@@ -349,9 +349,9 @@ void Application::RenderUI(float deltaTime) {
 		ImGui::TreePop();
 	}
 
-	if (ImGui::TreeNode("Quads") && m_World.Cuboids.size() > 0) {
-		for (size_t i = 0; i < m_World.Cuboids.size(); i++) {
-			Cuboid& quad = m_World.Cuboids.at(i);
+	if (ImGui::TreeNode("Quads") && m_World.Quads.size() > 0) {
+		for (size_t i = 0; i < m_World.Quads.size(); i++) {
+			Quad& quad = m_World.Quads.at(i);
 
 			ImGui::PushID(i);
 			if (ImGui::DragFloat3("Position", glm::value_ptr(quad.PositionLLC), 0.1f)) m_Renderer.ResetPathTracingCounter();
