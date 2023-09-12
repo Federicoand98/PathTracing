@@ -323,7 +323,7 @@ void Application::RenderUI(float deltaTime) {
 
 			ImGui::PushID(i);
 			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, 0.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, -10.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Material", &sphere.Mat, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
 			/*
 			if (ImGui::BeginCombo("Material", m_World.Materials.at(sphere.MaterialIndex).Name, 0 << 1)) {
@@ -378,10 +378,10 @@ void Application::RenderUI(float deltaTime) {
 			//ImGui::SeparatorText(material.Name);
 			if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color))) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Specular Probability", &material.SpecularProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.1f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
-			//ImGui::Checkbox("Refractive", &material.Refractive);
-			if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.1f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
 			ImGui::Separator();
 			ImGui::PopID();
 		}

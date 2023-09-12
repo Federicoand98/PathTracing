@@ -50,8 +50,8 @@ HitInfo TraceRay(Ray ray);
 HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType);
 HitInfo NoHit();
 float HitSphere(Ray ray, Sphere sphere);
-float HitCuboid(Ray ray, Cuboid cuboid);
 float HitQuad(Ray ray, Cuboid cuboid);
+float Schlick(float cosine, float ratio);
 vec3 GetNormal(Cuboid cuboid, vec3 surfacePosition);
 uint GetPCGHash(inout uint seed);
 float GetRandomFloat();
@@ -109,7 +109,6 @@ vec4 PerPixel(vec2 ndc) {
     Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
 
     Material material;
-    float multiplier = 1.0;
     vec3 light = vec3(0.0);
     vec3 contribution = vec3(1.0);
 
@@ -126,30 +125,44 @@ vec4 PerPixel(vec2 ndc) {
         else if(hit.ObjectType == 1)
             material = Materials[int(Cuboids[hit.ObjectIndex].MaterialIndex)];
 
-        // Sphere sphere = Spheres[hit.ObjectIndex];
-        // Material material = Materials[int(sphere.Mat)];
-
+        light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
         contribution *= vec3(material.Color);
-        light += (vec3(material.EmissiveColor) * material.EmissiveStrenght);
 
         if(material.RefractionRatio > 1.0) {
+            // vec3 unitDirection = normalize(ray.Direction);
+            // float ni_over_nt = dot(unitDirection, hit.Normal) > 0 ? material.RefractionRatio : 1.0 / material.RefractionRatio;
+            // vec3 refractedDir = refract(unitDirection, hit.Normal, ni_over_nt);
+
+            // if(length(refractedDir) > 0.0) {
+            //     vec3 newRayOrigin = hit.HitPosition + refractedDir * 0.0001;
+            //     vec3 newRayDir = refractedDir;
+
+            //     ray = Ray(newRayOrigin, newRayDir);
+            // } else {
+            //     // total internal reflection
+            //     vec3 reflectedDirection = reflect(unitDirection, hit.Normal);
+            //     vec3 newRayOrigin = hit.HitPosition + reflectedDirection * 0.0001;
+            //     vec3 newRayDir = refractedDir;
+
+            //     ray = Ray(newRayOrigin, newRayDir);
+            // }
+
             vec3 unitDirection = normalize(ray.Direction);
             float ni_over_nt = dot(unitDirection, hit.Normal) > 0 ? material.RefractionRatio : 1.0 / material.RefractionRatio;
-            vec3 refractedDir = refract(unitDirection, hit.Normal, ni_over_nt);
+            float cosTheta = min(dot(-unitDirection, hit.Normal), 1.0);
+            float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 
-            if(length(refractedDir) > 0.0) {
-                vec3 newRayOrigin = hit.HitPosition + refractedDir * 0.0001;
-                vec3 newRayDir = refractedDir;
+            bool cannotRefract = ni_over_nt * sinTheta > 1.0;
+            vec3 newRayDir, newRayOrigin;
 
-                ray = Ray(newRayOrigin, newRayDir);
-            } else {
-                // total internal reflection
-                vec3 reflectedDirection = reflect(unitDirection, hit.Normal);
-                vec3 newRayOrigin = hit.HitPosition + reflectedDirection * 0.0001;
-                vec3 newRayDir = refractedDir;
+            if(cannotRefract || Schlick(cosTheta, ni_over_nt) > GetRandomFloat())
+                newRayDir = reflect(unitDirection, hit.Normal);
+            else
+                newRayDir = refract(unitDirection, hit.Normal, ni_over_nt);
 
-                ray = Ray(newRayOrigin, newRayDir);
-            }
+            newRayOrigin = hit.HitPosition + newRayOrigin * 0.0001;
+
+            ray = Ray(newRayOrigin, newRayDir);
 
         } else {
             vec3 diffuse = normalize(hit.Normal + GetRandomVector(rndSeed));
@@ -251,22 +264,6 @@ float HitSphere(Ray ray, Sphere sphere) {
     return closestT;
 }
 
-float HitCuboid(Ray ray, Cuboid cuboid) {
-    // float t1 = FLOAT_MAX;
-    // float t2 = FLOAT_MIN;
-
-    // vec3 t0s = (cuboid.Min - ray.Origin) / ray.Direction;
-    // vec3 t1s = (cuboid.Max - ray.Origin) / ray.Direction;
-
-    // vec3 tSmaller = min(t0s, t1s);
-    // vec3 tBigger = max(t0s, t1s);
-
-    // t1 = max(t1, max(tSmaller.x, max(tSmaller.y, tSmaller.z)));
-    // t2 = min(t1, min(tSmaller.x, min(tSmaller.y, tSmaller.z)));
-
-    return 0.0;
-}
-
 float HitQuad(Ray ray, Cuboid cuboid) {
     vec3 normal = normalize(cross(vec3(cuboid.U), vec3(cuboid.V)));
     float d = dot(normal, vec3(cuboid.PositionLLC));
@@ -294,14 +291,13 @@ float HitQuad(Ray ray, Cuboid cuboid) {
     return t;
 }
 
+float Schlick(float cosine, float ratio) {
+	float r0 = (1 - ratio) / (1 + ratio);
+	r0 = r0 * r0;
+	return r0 + (1 - r0) * pow((1 - cosine), 5);
+}
+
 vec3 GetNormal(Cuboid cuboid, vec3 surfacePosition) {
-    // vec3 halfSize = (cuboid.Max - cuboid.Min) * 0.5;
-    // vec3 centerSurface = surfacePosition - (cuboid.Max + cuboid.Min) * 0.5;
-    
-    // vec3 normal = vec3(0.0);
-    // normal += vec3(sign(centerSurface.x), 0.0, 0.0) * step(abs(abs(centerSurface.x) - halfSize.x), EPSILON);
-    // normal += vec3(0.0, sign(centerSurface.y), 0.0) * step(abs(abs(centerSurface.y) - halfSize.y), EPSILON);
-    // normal += vec3(0.0, 0.0, sign(centerSurface.z)) * step(abs(abs(centerSurface.z) - halfSize.z), EPSILON);
     return normalize(cross(vec3(cuboid.U), vec3(cuboid.V)));
 }
 
