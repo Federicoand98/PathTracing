@@ -150,6 +150,14 @@ vec4 PerPixel(vec2 ndc) {
 
         contribution /= rayProbability;
 
+        {
+            float p = max(contribution.x, max(contribution.y, contribution.z));
+            if(GetRandomFloat() > p)
+                break;
+
+            contribution *= 1.0 / p;
+        }
+
         // if(material.RefractionRatio > 1.0) {
         //     // vec3 unitDirection = normalize(ray.Direction);
         //     // float ni_over_nt = dot(unitDirection, hit.Normal) > 0 ? material.RefractionRatio : 1.0 / material.RefractionRatio;
@@ -219,9 +227,9 @@ float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive,
 
     if(specularProbability > 0.0) {
         specularProbability = FresnelSchlick(
-        hit.Inside ? material.RefractionRatio : 1.0,
-        !hit.Inside ? material.RefractionRatio : 1.0,
-        ray.Direction, hit.Normal, material.SpecularProbability, 1.0
+            hit.Inside ? material.RefractionRatio : 1.0,
+            !hit.Inside ? material.RefractionRatio : 1.0,
+            ray.Direction, hit.Normal, material.SpecularProbability, 1.0
         );
 
         float probabilityMultiplier = (1.0 - specularProbability) / (1.0 - material.SpecularProbability);
@@ -282,14 +290,6 @@ HitInfo TraceRay(Ray ray) {
             inside = hitDistance == t2;
             objType = 0;
         }
-
-        // float distance = HitSphere(ray, sphere, t1, t2);
-
-        // if(distance >= 0 && distance < hitDistance) {
-        //     hitDistance = distance;
-        //     index = i;
-        //     objType = 0;
-        // }
     }
 
     for(int i = 0; i < Cuboids.length(); i++) {
