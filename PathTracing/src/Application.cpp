@@ -392,6 +392,7 @@ void Application::RenderUI(float deltaTime) {
 			ImGui::PushID(i);
 			//ImGui::SeparatorText(material.Name);
 			if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color))) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::ColorEdit3("Specular Color", glm::value_ptr(material.SpecularColor))) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Specular Probability", &material.SpecularProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.1f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();

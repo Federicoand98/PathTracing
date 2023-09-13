@@ -13,6 +13,7 @@ struct Material {
 	float RefractionRatio = 1.0f;
 	float EmissiveStrenght = 0.0f;
 	glm::vec4 EmissiveColor{ 0.0f };
+	glm::vec4 SpecularColor{0.0f};
 };
 
 static Material CreateDefaultDiffuse() {

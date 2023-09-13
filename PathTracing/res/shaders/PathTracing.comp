@@ -34,6 +34,7 @@ struct Material {
     float RefractionRatio;
     float EmissiveStrenght;
     vec4 EmissiveColor;
+	vec4 SpecularColor;
 };
 
 struct HitInfo {
@@ -125,8 +126,6 @@ vec4 PerPixel(vec2 ndc) {
         else if(hit.ObjectType == 1)
             material = Materials[int(Cuboids[hit.ObjectIndex].MaterialIndex)];
 
-        light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
-        contribution *= vec3(material.Color);
 
         if(material.RefractionRatio > 1.0) {
             // vec3 unitDirection = normalize(ray.Direction);
@@ -164,15 +163,24 @@ vec4 PerPixel(vec2 ndc) {
 
             ray = Ray(newRayOrigin, newRayDir);
 
+            light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
+            contribution *= vec3(material.Color);
         } else {
+            float doSpecular = (GetRandomFloat() < material.SpecularProbability) ? 1.0 : 0.0;
+
             vec3 diffuse = normalize(hit.Normal + GetRandomVector(rndSeed));
             vec3 specular = reflect(ray.Direction, hit.Normal);
+            specular = normalize(mix(specular, diffuse, material.Roughness * material.Roughness));
 
             vec3 newRayOrigin = hit.HitPosition + hit.Normal * 0.0001;
-            vec3 newRayDir = normalize(mix(specular, diffuse, material.Roughness));
+            vec3 newRayDir = normalize(mix(diffuse, specular, doSpecular));
 
             ray = Ray(newRayOrigin, newRayDir);
+
+            light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
+            contribution *= mix(vec3(material.Color), vec3(material.SpecularColor), doSpecular);
         }
+
     }
 
     return vec4(light, 1.0);
