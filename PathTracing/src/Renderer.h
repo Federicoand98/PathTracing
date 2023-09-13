@@ -23,6 +23,7 @@ public:
     std::shared_ptr<Image> GetRenderedImage() const { return m_RenderedImage; }
 public:
     bool PathTracing = true;
+    bool PostProcessing = true;
     int m_SamplesPerPixel = 1;
     int m_RayDepth = 5;
 private:

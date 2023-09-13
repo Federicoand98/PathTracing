@@ -241,6 +241,9 @@ void Application::RenderUI(float deltaTime) {
 		glfwSwapInterval(m_Vsync);
 	ImGui::Spacing();
 	ImGui::Spacing();
+	ImGui::Checkbox("Post Processing", &m_Renderer.PostProcessing);
+	ImGui::Spacing();
+	ImGui::Spacing();
 	ImGui::Text("Samples Per Pixel:");
 	if(ImGui::SliderInt("samples", &m_Renderer.m_SamplesPerPixel, 1, 16))
 		m_Renderer.ResetPathTracingCounter();
