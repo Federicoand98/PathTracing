@@ -393,9 +393,12 @@ void Application::RenderUI(float deltaTime) {
 			//ImGui::SeparatorText(material.Name);
 			if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color))) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::ColorEdit3("Specular Color", glm::value_ptr(material.SpecularColor))) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::ColorEdit3("Refraction Color", glm::value_ptr(material.RefractionColor))) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Specular Probability", &material.SpecularProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.1f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.01f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Refractin Probability", &material.RefractionProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Refractin Roughness", &material.RefractionRoughness, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
 			ImGui::Separator();

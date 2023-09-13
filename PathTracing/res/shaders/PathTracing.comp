@@ -35,6 +35,9 @@ struct Material {
     float EmissiveStrenght;
     vec4 EmissiveColor;
 	vec4 SpecularColor;
+	float RefractionProbability;
+	float RefractionRoughness;
+	vec4 RefractionColor;
 };
 
 struct HitInfo {
@@ -43,15 +46,18 @@ struct HitInfo {
     vec3 Normal;
     int ObjectIndex;
     int ObjectType;
+    bool Inside;
 };
 
 Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc);
 vec4 PerPixel(vec2 ndc);
+float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive, out bool isSpecular);
 HitInfo TraceRay(Ray ray);
-HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType);
+HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit);
 HitInfo NoHit();
-float HitSphere(Ray ray, Sphere sphere);
+bool HitSphere(Ray ray, Sphere sphere, out float t1, out float t2);
 float HitQuad(Ray ray, Cuboid cuboid);
+float FresnelSchlick(float n1, float n2, vec3 normal, vec3 incident, float f0, float f90);
 float Schlick(float cosine, float ratio);
 vec3 GetNormal(Cuboid cuboid, vec3 surfacePosition);
 uint GetPCGHash(inout uint seed);
@@ -112,6 +118,9 @@ vec4 PerPixel(vec2 ndc) {
     Material material;
     vec3 light = vec3(0.0);
     vec3 contribution = vec3(1.0);
+    float rayProbability;
+    bool isRefractive;
+    bool isSpecular;
 
     for(int i = 0; i < rayDepth; i++) {
         HitInfo hit = TraceRay(ray);
@@ -126,81 +135,161 @@ vec4 PerPixel(vec2 ndc) {
         else if(hit.ObjectType == 1)
             material = Materials[int(Cuboids[hit.ObjectIndex].MaterialIndex)];
 
-
-        if(material.RefractionRatio > 1.0) {
-            // vec3 unitDirection = normalize(ray.Direction);
-            // float ni_over_nt = dot(unitDirection, hit.Normal) > 0 ? material.RefractionRatio : 1.0 / material.RefractionRatio;
-            // vec3 refractedDir = refract(unitDirection, hit.Normal, ni_over_nt);
-
-            // if(length(refractedDir) > 0.0) {
-            //     vec3 newRayOrigin = hit.HitPosition + refractedDir * 0.0001;
-            //     vec3 newRayDir = refractedDir;
-
-            //     ray = Ray(newRayOrigin, newRayDir);
-            // } else {
-            //     // total internal reflection
-            //     vec3 reflectedDirection = reflect(unitDirection, hit.Normal);
-            //     vec3 newRayOrigin = hit.HitPosition + reflectedDirection * 0.0001;
-            //     vec3 newRayDir = refractedDir;
-
-            //     ray = Ray(newRayOrigin, newRayDir);
-            // }
-
-            vec3 unitDirection = normalize(ray.Direction);
-            float ni_over_nt = dot(unitDirection, hit.Normal) > 0 ? material.RefractionRatio : 1.0 / material.RefractionRatio;
-            float cosTheta = min(dot(-unitDirection, hit.Normal), 1.0);
-            float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-
-            bool cannotRefract = ni_over_nt * sinTheta > 1.0;
-            vec3 newRayDir, newRayOrigin;
-
-            if(cannotRefract || Schlick(cosTheta, ni_over_nt) > GetRandomFloat())
-                newRayDir = reflect(unitDirection, hit.Normal);
-            else
-                newRayDir = refract(unitDirection, hit.Normal, ni_over_nt);
-
-            newRayOrigin = hit.HitPosition + newRayOrigin * 0.0001;
-
-            ray = Ray(newRayOrigin, newRayDir);
-
-            light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
-            contribution *= vec3(material.Color);
-        } else {
-            float doSpecular = (GetRandomFloat() < material.SpecularProbability) ? 1.0 : 0.0;
-
-            vec3 diffuse = normalize(hit.Normal + GetRandomVector(rndSeed));
-            vec3 specular = reflect(ray.Direction, hit.Normal);
-            specular = normalize(mix(specular, diffuse, material.Roughness * material.Roughness));
-
-            vec3 newRayOrigin = hit.HitPosition + hit.Normal * 0.0001;
-            vec3 newRayDir = normalize(mix(diffuse, specular, doSpecular));
-
-            ray = Ray(newRayOrigin, newRayDir);
-
-            light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
-            contribution *= mix(vec3(material.Color), vec3(material.SpecularColor), doSpecular);
+        if(hit.Inside) {
+            hit.Normal *= -1.0;
+            contribution *= exp(-vec3(material.RefractionColor) * hit.HitDistance);
         }
+
+        rayProbability = BSDF(ray, hit, material, isRefractive, isSpecular);
+
+        light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
+
+        if(!isRefractive) {
+            contribution *= mix(vec3(material.Color), vec3(material.SpecularColor), isSpecular ? 1.0 : 0.0);
+        }
+
+        contribution /= rayProbability;
+
+        // if(material.RefractionRatio > 1.0) {
+        //     // vec3 unitDirection = normalize(ray.Direction);
+        //     // float ni_over_nt = dot(unitDirection, hit.Normal) > 0 ? material.RefractionRatio : 1.0 / material.RefractionRatio;
+        //     // vec3 refractedDir = refract(unitDirection, hit.Normal, ni_over_nt);
+
+        //     // if(length(refractedDir) > 0.0) {
+        //     //     vec3 newRayOrigin = hit.HitPosition + refractedDir * 0.0001;
+        //     //     vec3 newRayDir = refractedDir;
+
+        //     //     ray = Ray(newRayOrigin, newRayDir);
+        //     // } else {
+        //     //     // total internal reflection
+        //     //     vec3 reflectedDirection = reflect(unitDirection, hit.Normal);
+        //     //     vec3 newRayOrigin = hit.HitPosition + reflectedDirection * 0.0001;
+        //     //     vec3 newRayDir = refractedDir;
+
+        //     //     ray = Ray(newRayOrigin, newRayDir);
+        //     // }
+
+        //     vec3 unitDirection = normalize(ray.Direction);
+        //     float ni_over_nt = dot(unitDirection, hit.Normal) > 0 ? material.RefractionRatio : 1.0 / material.RefractionRatio;
+        //     float cosTheta = min(dot(-unitDirection, hit.Normal), 1.0);
+        //     float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+        //     bool cannotRefract = ni_over_nt * sinTheta > 1.0;
+        //     vec3 newRayDir, newRayOrigin;
+
+        //     if(cannotRefract || Schlick(cosTheta, ni_over_nt) > GetRandomFloat())
+        //         newRayDir = reflect(unitDirection, hit.Normal);
+        //     else
+        //         newRayDir = refract(unitDirection, hit.Normal, ni_over_nt);
+
+        //     newRayOrigin = hit.HitPosition + newRayOrigin * 0.0001;
+
+        //     ray = Ray(newRayOrigin, newRayDir);
+
+        //     light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
+        //     contribution *= vec3(material.Color);
+        // } else {
+        //     float doSpecular = (GetRandomFloat() < material.SpecularProbability) ? 1.0 : 0.0;
+
+        //     vec3 diffuse = normalize(hit.Normal + GetRandomVector(rndSeed));
+        //     vec3 specular = reflect(ray.Direction, hit.Normal);
+        //     specular = normalize(mix(specular, diffuse, material.Roughness * material.Roughness));
+
+        //     vec3 newRayOrigin = hit.HitPosition + hit.Normal * 0.0001;
+        //     vec3 newRayDir = normalize(mix(diffuse, specular, doSpecular));
+
+        //     ray = Ray(newRayOrigin, newRayDir);
+
+        //     light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
+        //     contribution *= mix(vec3(material.Color), vec3(material.SpecularColor), doSpecular);
+        // }
 
     }
 
     return vec4(light, 1.0);
 }
 
+float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive, out bool isSpecular) {
+    isRefractive = false;
+    isSpecular = false;
+
+    float rayProbability = 1.0;
+    float specularProbability = material.SpecularProbability;
+    float refractionProbability = material.RefractionProbability;
+
+    if(specularProbability > 0.0) {
+        specularProbability = FresnelSchlick(
+        hit.Inside ? material.RefractionRatio : 1.0,
+        !hit.Inside ? material.RefractionRatio : 1.0,
+        ray.Direction, hit.Normal, material.SpecularProbability, 1.0
+        );
+
+        float probabilityMultiplier = (1.0 - specularProbability) / (1.0 - material.SpecularProbability);
+        refractionProbability *= probabilityMultiplier;
+    }
+
+    float doSpecular = 0.0;
+    float doRefraction = 0.0;
+    float raySelectRoll = GetRandomFloat();
+
+    if(specularProbability > 0.0 && raySelectRoll < specularProbability) {
+        doSpecular = 1.0;
+        isSpecular = true;
+        rayProbability = specularProbability;
+    } else if(refractionProbability > 0.0 && raySelectRoll < specularProbability + refractionProbability) {
+        doRefraction = 1.0;
+        isRefractive = true;
+        rayProbability = refractionProbability;
+    } else {
+        rayProbability = 1.0 - (specularProbability + refractionProbability);
+    }
+
+    rayProbability = max(rayProbability, 0.001);
+
+    if(doRefraction == 1.0) {
+        ray.Origin = (ray.Origin + ray.Direction * hit.HitDistance) - hit.Normal * 0.001;
+    } else {
+        ray.Origin = (ray.Origin + ray.Direction * hit.HitDistance) + hit.Normal * 0.001;
+    }
+
+    vec3 diffuseDirection = normalize(hit.Normal + GetRandomVector(rndSeed));
+
+    vec3 specularDirection = reflect(ray.Direction, hit.Normal);
+    specularDirection = normalize(mix(specularDirection, diffuseDirection, material.Roughness * material.Roughness));
+
+    vec3 refractionDirection = refract(ray.Direction, hit.Normal, hit.Inside ? material.RefractionRatio : 1.0 / material.RefractionRatio);
+    refractionDirection = normalize(mix(refractionDirection, normalize(-hit.Normal + GetRandomVector(rndSeed)), material.RefractionRoughness * material.RefractionRoughness));
+
+    ray.Direction = mix(diffuseDirection, specularDirection, doSpecular);
+    ray.Direction = mix(ray.Direction, refractionDirection, doRefraction);
+
+    return rayProbability;
+}
+
 HitInfo TraceRay(Ray ray) {
     float hitDistance = 100000.0;
     int index = -1;
     int objType = -1; // 0 Sphere, 1 Cuboid
+    float t1, t2;
+    bool inside;
 
     for(int i = 0; i < Spheres.length(); i++) {
         Sphere sphere = Spheres[i];
 
-        float distance = HitSphere(ray, sphere);
-
-        if(distance >= 0 && distance < hitDistance) {
-            hitDistance = distance;
+        if(HitSphere(ray, sphere, t1, t2) && t2 > 0.0 && t1 < hitDistance) {
+            hitDistance = t1 < 0 ? t2 : t1;
             index = i;
+            inside = hitDistance == t2;
             objType = 0;
         }
+
+        // float distance = HitSphere(ray, sphere, t1, t2);
+
+        // if(distance >= 0 && distance < hitDistance) {
+        //     hitDistance = distance;
+        //     index = i;
+        //     objType = 0;
+        // }
     }
 
     for(int i = 0; i < Cuboids.length(); i++) {
@@ -212,6 +301,7 @@ HitInfo TraceRay(Ray ray) {
             hitDistance = distance;
             index = i;
             objType = 1;
+            inside = false;
         }
     }
 
@@ -220,11 +310,10 @@ HitInfo TraceRay(Ray ray) {
         return result;
     }
 
-    HitInfo result = HandleHit(ray, hitDistance, index, objType);
-    return result;
+    return HandleHit(ray, hitDistance, index, objType, inside);
 }
 
-HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType) {
+HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit) {
     HitInfo hit;
 
     if(objType == 0) { // SPHERE
@@ -236,7 +325,7 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType) {
         vec3 normal = normalize(hitPosition);
         hitPosition += closestPosition;
 
-        hit = HitInfo(hitDistance, hitPosition, normal, index, 0);
+        hit = HitInfo(hitDistance, hitPosition, normal, index, 0, insideHit);
     } else if(objType == 1) { // CUBOID
         vec3 origin = ray.Origin - vec3(Cuboids[index].PositionLLC);
         vec3 closestPosition = vec3(Cuboids[index].PositionLLC);
@@ -244,17 +333,17 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType) {
         vec3 normal = GetNormal(Cuboids[index], hitPosition);
         hitPosition += closestPosition;
 
-        hit = HitInfo(hitDistance, hitPosition, normal, index, 1);
+        hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit);
     }
 
     return hit;
 }
 
 HitInfo NoHit() {
-    return HitInfo(-1.0, vec3(0.0), vec3(0.0), -1, -1);
+    return HitInfo(-1.0, vec3(0.0), vec3(0.0), -1, -1, false);
 }
 
-float HitSphere(Ray ray, Sphere sphere) {
+bool HitSphere(Ray ray, Sphere sphere, out float t1, out float t2) {
     vec3 spherePos = vec3(sphere.Position);
     float radius = sphere.Position.w;
 
@@ -265,11 +354,12 @@ float HitSphere(Ray ray, Sphere sphere) {
     float discriminant = b * b - 4.0 * a * c;
 
     if(discriminant < 0.0)
-        return -1.0;
+        return false;
 
-    float closestT = (-b - sqrt(discriminant)) / (2.0 * a);
+    t1 = (-b - sqrt(discriminant)) / (2.0 * a);
+    t2 = (-b + sqrt(discriminant)) / (2.0 * a);
 
-    return closestT;
+    return t1 <= t2;
 }
 
 float HitQuad(Ray ray, Cuboid cuboid) {
@@ -297,6 +387,26 @@ float HitQuad(Ray ray, Cuboid cuboid) {
         return -1;
 
     return t;
+}
+
+float FresnelSchlick(float n1, float n2, vec3 normal, vec3 incident, float f0, float f90) {
+        // Schlick aproximation
+        float r0 = (n1-n2) / (n1+n2);
+        r0 *= r0;
+        float cosX = -dot(normal, incident);
+        if (n1 > n2) {
+            float n = n1/n2;
+            float sinT2 = n*n*(1.0-cosX*cosX);
+            // Total internal reflection
+            if (sinT2 > 1.0)
+                return f90;
+            cosX = sqrt(1.0-sinT2);
+        }
+        float x = 1.0-cosX;
+        float ret = r0+(1.0-r0)*x*x*x*x*x;
+
+        // adjust reflect multiplier for object reflectivity
+        return mix(f0, f90, ret);
 }
 
 float Schlick(float cosine, float ratio) {

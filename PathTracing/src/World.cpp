@@ -41,20 +41,27 @@ void World::DestroyScene() {
 void World::PrepareMaterials() {
 	Material redMaterial, blueMaterial, metal, lightMaterial, greenMaterial, whiteMaterial, glassMaterial;
 	redMaterial.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
+	redMaterial.SpecularColor = redMaterial.Color;
 	redMaterial.Roughness = 0.5f;
 	blueMaterial.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
+	blueMaterial.SpecularColor = redMaterial.SpecularColor;
 	blueMaterial.Roughness = 0.0f;
 	metal.Color = { 0.3294f, 0.7019f, 0.6118f, 1.0f };
+	metal.SpecularColor = metal.Color;
 	metal.Roughness = 0.0f;
 	lightMaterial.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
+	lightMaterial.SpecularColor = lightMaterial.Color;
 	lightMaterial.Roughness = 1.0f;
 	lightMaterial.EmissiveColor = lightMaterial.Color;
 	lightMaterial.EmissiveStrenght = 1.0f;
 	greenMaterial.Color = { 0.0f, 1.0f, 0.0f, 1.0f };
+	greenMaterial.SpecularColor = greenMaterial.Color;
 	greenMaterial.Roughness = 1.0f;
 	whiteMaterial.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+	whiteMaterial.SpecularColor = whiteMaterial.Color;
 	whiteMaterial.Roughness = 1.0f;
 	glassMaterial.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+	glassMaterial.SpecularColor = glassMaterial.Color;
 	glassMaterial.RefractionRatio = 1.7f;
 
 	Materials.push_back(redMaterial);
@@ -201,6 +208,7 @@ void World::PrepareRandomSpheres() {
 	diffuse = CreateDefaultDiffuse();
 	baseMat.Color = { 0.5f, 0.5f, 0.5f, 1.0f };
 	baseMat.Roughness = 0.8f;
+	baseMat.SpecularColor = baseMat.Color;
 
 	Materials.push_back(dielectric);
 	Materials.push_back(metal);
