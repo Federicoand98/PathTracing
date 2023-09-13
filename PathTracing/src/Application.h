@@ -41,6 +41,7 @@ private:
 	World m_World;
 	bool m_IsRunning;
 	bool m_Vsync = true;
+	bool m_LinkColors = true;
 	float m_Timer = 0.0f;
 	float m_DeltaTime = 0.0f;
 	float m_ResetTimer = 0.0f;

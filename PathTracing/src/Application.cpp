@@ -266,6 +266,7 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::SeparatorText("SCENE CONFIGURATIONS");
 	ImGui::PopStyleColor();	
 
+
 	ImGui::Separator();
 	ImGui::Spacing();
 	ImGui::Text("Background");
@@ -286,39 +287,8 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Spacing();
 	ImGui::Spacing();
 
+	ImGui::PushItemWidth(200.0);
 	ImGui::Text("Objects:");
-
-	// if (ImGui::TreeNode("Spheres") && m_World.Spheres.size() > 0) {
-	// 	for (size_t i = 0; i < m_World.Spheres.size(); i++) {
-	// 		Sphere& sphere = m_World.Spheres.at(i);
-
-	// 		ImGui::PushID(i);
-	// 		ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f);
-	// 		ImGui::DragFloat("Radius", &sphere.Radius, 0.1f, 0.0f, 10.0f);
-	// 		ImGui::DragInt("Material", &sphere.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1);
-	// 		/*
-	// 		if (ImGui::BeginCombo("Material", m_World.Materials.at(sphere.MaterialIndex).Name, 0 << 1)) {
-	// 			for (int i = 0; i < m_World.Materials.size(); i++) {
-	// 				const bool isSelected = sphere.MaterialIndex == i;
-
-	// 				if (ImGui::Selectable(m_World.Materials.at(i).Name, isSelected)) {
-	// 					m_Renderer.ResetPathTracingCounter();
-	// 					sphere.MaterialIndex = i;
-	// 				}
-
-	// 				if (isSelected)
-	// 					ImGui::SetItemDefaultFocus();
-	// 			}
-
-	// 			ImGui::EndCombo();
-	// 		}
-	// 		*/
-	// 		ImGui::Separator();
-	// 		ImGui::PopID();
-	// 	}
-
-	// 	ImGui::TreePop();
-	// }
 
 	if (ImGui::TreeNode("Spheres") && m_World.Spheres.size() > 0) {
 		for (size_t i = 0; i < m_World.Spheres.size(); i++) {
@@ -328,23 +298,7 @@ void Application::RenderUI(float deltaTime) {
 			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, 0.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Material", &sphere.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
-			/*
-			if (ImGui::BeginCombo("Material", m_World.Materials.at(sphere.MaterialIndex).Name, 0 << 1)) {
-				for (int i = 0; i < m_World.Materials.size(); i++) {
-					const bool isSelected = sphere.MaterialIndex == i;
 
-					if (ImGui::Selectable(m_World.Materials.at(i).Name, isSelected)) {
-						m_Renderer.ResetPathTracingCounter();
-						sphere.MaterialIndex = i;
-					}
-
-					if (isSelected)
-						ImGui::SetItemDefaultFocus();
-				}
-
-				ImGui::EndCombo();
-			}
-			*/
 			ImGui::Separator();
 			ImGui::PopID();
 		}
@@ -387,27 +341,48 @@ void Application::RenderUI(float deltaTime) {
 
 	ImGui::Spacing();
 	ImGui::Spacing();
+	ImGui::Text("Materials List:");
 
-	if (ImGui::CollapsingHeader("Materials")) {
-		for (size_t i = 0; i < m_World.Materials.size(); i++) {
+	if(ImGui::TreeNode("Materials") && m_World.Materials.size() > 0) {
+		ImGui::Checkbox("Linked Colors", &m_LinkColors);
+		ImGui::Spacing();
+
+		for(size_t i = 0; i < m_World.Materials.size(); i++) {
 			Material& material = m_World.Materials.at(i);
 
 			ImGui::PushID(i);
-			//ImGui::SeparatorText(material.Name);
-			if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color))) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::ColorEdit3("Specular Color", glm::value_ptr(material.SpecularColor))) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::ColorEdit3("Refraction Color", glm::value_ptr(material.RefractionColor))) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Specular Probability", &material.SpecularProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.01f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Refractin Probability", &material.RefractionProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Refractin Roughness", &material.RefractionRoughness, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
-			ImGui::Separator();
+
+			if(ImGui::TreeNode(("Material " + std::to_string(i)).c_str())) {
+				if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color))) {
+					if(m_LinkColors) {
+						material.RefractionColor = material.Color;
+						material.SpecularColor = material.Color;
+					}
+
+					m_Renderer.ResetPathTracingCounter();
+				}
+				if(!m_LinkColors) {
+					if (ImGui::ColorEdit3("Specular Color", glm::value_ptr(material.SpecularColor))) m_Renderer.ResetPathTracingCounter();
+					if (ImGui::ColorEdit3("Refraction Color", glm::value_ptr(material.RefractionColor))) m_Renderer.ResetPathTracingCounter();
+				}
+
+				if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Specular Probability", &material.SpecularProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.01f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Refractin Probability", &material.RefractionProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Refractin Roughness", &material.RefractionRoughness, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
+
+				ImGui::TreePop();
+			}
 			ImGui::PopID();
 		}
+
+		ImGui::TreePop();
 	}
+
+	ImGui::PopItemWidth();
 
 	ImGui::End();
 

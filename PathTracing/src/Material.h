@@ -12,7 +12,7 @@ struct Material {
 	float SpecularProbability = 1.0f;
 	float RefractionRatio = 1.0f;
 	float EmissiveStrenght = 0.0f;
-	glm::vec4 EmissiveColor{ 0.0f };
+	glm::vec4 EmissiveColor{ 1.0f };
 	glm::vec4 SpecularColor{0.0f};
 	float RefractionProbability = 0.0f;
 	float RefractionRoughness = 1.0f;
