@@ -93,7 +93,12 @@ void World::PrepareSimpleScene() {
 		Spheres.push_back(s);
 	}
 
-	CreateBox({ 0,0,0 }, { 3,1,1 }, 1);
+	//CreateBox({ 0,0,0 }, { 3,1,1 }, 1);
+
+	Model m;
+	m.LoadObj("models/suzanne.obj");
+
+	UploadModel(m, 1);
 }
 
 void World::PrepareCornellBox() {
@@ -285,6 +290,22 @@ void World::PrepareRandomBoxes() {
 			CreateBox({ x, y, z }, { x + 1, y + 1, z + 1 }, Random::GetInt(5, Materials.size() - 1));
 		}
 	}
+}
+
+void World::UploadModel(const Model& model, int material) {
+	MeshInfo m;
+
+	m.FirstTriangle = Triangles.size();
+	m.NumTriangles = model.GetTriangles().size();
+	m.MaterialIndex = material;
+	m.BoundsMin = model.GetBoundsMin();
+	m.BoundsMax = model.GetBoundsMax();
+
+	for (const Triangle* triangle : model.GetTriangles()) {
+		Triangles.push_back(*triangle);
+	}
+
+	Meshes.push_back(m);
 }
 
 void World::CreateBox(const glm::vec3 &a, const glm::vec3 &b, float MaterialIndex) {

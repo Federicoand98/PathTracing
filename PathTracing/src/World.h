@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <cmath>
 #include "Material.h"
+#include "Model.h"
 
 enum class ObjectType {
 	SPHERE,
@@ -15,8 +16,17 @@ enum class ObjectType {
 	BACKGROUND
 };
 
+struct MeshInfo {
+	int FirstTriangle;
+	int NumTriangles;
+	int MaterialIndex = 0;
+	glm::vec4 BoundsMin;
+	glm::vec4 BoundsMax;
+	float paddind = 0.0f;
+};
+
 struct Sphere {
-	glm::vec4 Position{0.0f};
+	glm::vec4 Position{0.0f}; // (x, y, z, RADIUS)
 	float MaterialIndex = 0;
 	glm::vec3 padding{ 0.0f };
 };
@@ -138,14 +148,18 @@ public:
 	std::vector<Quad> Quads;
 	std::vector<Box> Boxes;
 	std::vector<Material> Materials;
+	std::vector<MeshInfo> Meshes;
+	std::vector<Triangle> Triangles;
 	float AmbientOcclusionIntensity = 1.0f;
-	int CurrentScene = 3;
+	int CurrentScene = 0;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();
 	void PrepareCornellBox();
 	void PrepareRandomSpheres();
 	void PrepareRandomBoxes();
+
+	void UploadModel(const Model& model, int material);
 
 	void CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex);
 };
