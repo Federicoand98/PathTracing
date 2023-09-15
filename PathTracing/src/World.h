@@ -151,7 +151,7 @@ public:
 	std::vector<MeshInfo> Meshes;
 	std::vector<Triangle> Triangles;
 	float AmbientOcclusionIntensity = 1.0f;
-	int CurrentScene = 0;
+	int CurrentScene = 3;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();

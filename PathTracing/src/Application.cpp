@@ -296,7 +296,7 @@ void Application::RenderUI(float deltaTime) {
 
 			ImGui::PushID(i);
 			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, 0.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, -10.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Material", &sphere.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
 
 			ImGui::Separator();

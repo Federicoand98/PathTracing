@@ -103,6 +103,9 @@ void Model::CalculateBoundingBox() {
 		m_BoundsMax = glm::max(m_BoundsMax, triangle->B);
 		m_BoundsMax = glm::max(m_BoundsMax, triangle->C);
 	}
+
+	std::cout << "Min: " << glm::to_string(m_BoundsMin) << std::endl;
+	std::cout << "Min: " << glm::to_string(m_BoundsMax) << std::endl;
 }
 
 void Model::CleanTrash() {

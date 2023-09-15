@@ -9,6 +9,7 @@
 #include <sstream>
 #include <vector>
 #include <glm/glm.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 struct Triangle {
 	glm::vec4 A;

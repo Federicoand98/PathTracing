@@ -18,13 +18,18 @@ struct Sphere {
     float Mat;
 };
 
-struct Cuboid {
+struct Quad {
 	vec4 PositionLLC;
 	vec4 U;
 	vec4 V;
 	float MaterialIndex;
 	float Width;
 	float Height;
+};
+
+struct Cube {
+    vec4 BoundsMin;
+    vec4 BoundsMax;
 };
 
 struct MeshInfo {
@@ -73,11 +78,11 @@ HitInfo TraceRay(Ray ray);
 HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit);
 HitInfo NoHit();
 bool HitSphere(Ray ray, Sphere sphere, out float t1, out float t2);
-float HitQuad(Ray ray, Cuboid cuboid);
+float HitQuad(Ray ray, Quad quad);
 float HitTriangle(Ray ray, Triangle triangle, out float u, out float v);
 bool HitBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax);
 float FresnelSchlick(float n1, float n2, vec3 normal, vec3 incident, float f0, float f90);
-vec3 GetNormal(Cuboid cuboid, vec3 surfacePosition);
+vec3 GetNormal(Quad quad, vec3 surfacePosition);
 uint GetPCGHash(inout uint seed);
 float GetRandomFloat();
 vec3 GetRandomVector(uint seed);
@@ -100,8 +105,8 @@ layout(std430, binding = 1) buffer MaterialsBuffer {
     Material Materials[];
 };
 
-layout(std430, binding = 2) buffer CuboidsBuffer {
-    Cuboid Cuboids[];
+layout(std430, binding = 2) buffer QuadsBuffer {
+    Quad Quads[];
 };
 
 layout(std430, binding = 3) buffer TrianglesBuffer {
@@ -162,7 +167,7 @@ vec4 PerPixel(vec2 ndc) {
         if(hit.ObjectType == 0)
             material = Materials[int(Spheres[hit.ObjectIndex].Mat)];
         else if(hit.ObjectType == 1)
-            material = Materials[int(Cuboids[hit.ObjectIndex].MaterialIndex)];
+            material = Materials[int(Quads[hit.ObjectIndex].MaterialIndex)];
         else if(hit.ObjectType == 2)
             material = Materials[int(Meshes[hit.ObjectIndex].MaterialIndex)];
 
@@ -254,7 +259,7 @@ float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive,
 HitInfo TraceRay(Ray ray) {
     float hitDistance = 100000.0;
     int index = -1;
-    int objType = -1; // 0 Sphere, 1 Cuboid
+    int objType = -1; // 0 Sphere, 1 Quad
     float t1, t2;
     // float u, v;
     bool inside;
@@ -270,10 +275,10 @@ HitInfo TraceRay(Ray ray) {
         }
     }
 
-    for(int i = 0; i < Cuboids.length(); i++) {
-        Cuboid cuboid = Cuboids[i];
+    for(int i = 0; i < Quads.length(); i++) {
+        Quad quad = Quads[i];
 
-        float distance = HitQuad(ray, cuboid);
+        float distance = HitQuad(ray, quad);
 
         if(distance >= 0 && distance < hitDistance) {
             hitDistance = distance;
@@ -286,9 +291,9 @@ HitInfo TraceRay(Ray ray) {
     for(int i = 0; i < Meshes.length(); i++) {
         MeshInfo mesh = Meshes[i];
 
-        // if(!HitBoundingBox(ray, vec3(mesh.BoundsMin), vec3(mesh.BoundsMax))) {
-        //     continue;
-        // }
+        if(!HitBoundingBox(ray, vec3(mesh.BoundsMin), vec3(mesh.BoundsMax))) {
+            continue;
+        }
 
         for(int j = mesh.FirstTriangle; j < mesh.FirstTriangle + mesh.NumTriangles; j++) {
             Triangle triangle = Triangles[j];
@@ -326,11 +331,11 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
 
         hit = HitInfo(hitDistance, hitPosition, normal, index, 0, insideHit);
     } 
-    else if(objType == 1) { // CUBOID
-        vec3 origin = ray.Origin - vec3(Cuboids[index].PositionLLC);
-        vec3 closestPosition = vec3(Cuboids[index].PositionLLC);
+    else if(objType == 1) { // QUAD
+        vec3 origin = ray.Origin - vec3(Quads[index].PositionLLC);
+        vec3 closestPosition = vec3(Quads[index].PositionLLC);
         vec3 hitPosition = origin + ray.Direction * hitDistance;
-        vec3 normal = GetNormal(Cuboids[index], hitPosition);
+        vec3 normal = GetNormal(Quads[index], hitPosition);
         hitPosition += closestPosition;
 
         hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit);
@@ -374,9 +379,9 @@ bool HitSphere(Ray ray, Sphere sphere, out float t1, out float t2) {
     return t1 <= t2;
 }
 
-float HitQuad(Ray ray, Cuboid cuboid) {
-    vec3 normal = normalize(cross(vec3(cuboid.U), vec3(cuboid.V)));
-    float d = dot(normal, vec3(cuboid.PositionLLC));
+float HitQuad(Ray ray, Quad quad) {
+    vec3 normal = normalize(cross(vec3(quad.U), vec3(quad.V)));
+    float d = dot(normal, vec3(quad.PositionLLC));
     vec3 w = normal / (dot(normal, normal) + 0.0001);
 
     float denom = dot(normal, ray.Direction);
@@ -390,12 +395,12 @@ float HitQuad(Ray ray, Cuboid cuboid) {
         return -1.0;
 
     vec3 intersection = ray.Origin + (t * ray.Direction);
-    vec3 planar_hitpt_vector = intersection - vec3(cuboid.PositionLLC);
-    float alpha = dot(w, cross(planar_hitpt_vector, vec3(cuboid.V)));
-    float beta = dot(w, cross(vec3(cuboid.U), planar_hitpt_vector));
+    vec3 planar_hitpt_vector = intersection - vec3(quad.PositionLLC);
+    float alpha = dot(w, cross(planar_hitpt_vector, vec3(quad.V)));
+    float beta = dot(w, cross(vec3(quad.U), planar_hitpt_vector));
 
     // is not interior
-    if ((alpha < 0) || (cuboid.Width < alpha) || (beta < 0) || (cuboid.Height < beta))
+    if ((alpha < 0) || (quad.Width < alpha) || (beta < 0) || (quad.Height < beta))
         return -1;
 
     return t;
@@ -455,8 +460,8 @@ float FresnelSchlick(float n1, float n2, vec3 normal, vec3 incident, float f0, f
         return mix(f0, f90, ret);
 }
 
-vec3 GetNormal(Cuboid cuboid, vec3 surfacePosition) {
-    return normalize(cross(vec3(cuboid.U), vec3(cuboid.V)));
+vec3 GetNormal(Quad quad, vec3 surfacePosition) {
+    return normalize(cross(vec3(quad.U), vec3(quad.V)));
 }
 
 Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc) {
