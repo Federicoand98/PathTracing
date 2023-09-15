@@ -96,7 +96,7 @@ void World::PrepareSimpleScene() {
 	//CreateBox({ 0,0,0 }, { 3,1,1 }, 1);
 
 	Model m;
-	m.LoadObj("models/pawn.obj");
+	m.LoadObj("models/suzanne.obj");
 
 	UploadModel(m, 5);
 }

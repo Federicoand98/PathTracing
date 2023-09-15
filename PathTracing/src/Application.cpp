@@ -344,6 +344,7 @@ void Application::RenderUI(float deltaTime) {
 			MeshInfo& mesh = m_World.Meshes.at(i);
 
 			ImGui::PushID(i);
+			if (ImGui::DragFloat3("Position", glm::value_ptr(mesh.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Material", &mesh.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); }
 			ImGui::Separator();
 			ImGui::PopID();

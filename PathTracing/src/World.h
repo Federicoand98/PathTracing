@@ -17,13 +17,13 @@ enum class ObjectType {
 };
 
 struct MeshInfo {
+	glm::vec4 Position{0.0f};
 	glm::vec4 BoundsMin;
 	glm::vec4 BoundsMax;
 	float FirstTriangle;
 	float NumTriangles;
 	float MaterialIndex = 0;
 	float paddind = 0.0f;
-	glm::vec4 padding4{0.0f};
 };
 
 struct Sphere {

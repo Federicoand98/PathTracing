@@ -33,6 +33,7 @@ struct Cube {
 };
 
 struct MeshInfo {
+    vec4 Position;
     vec4 BoundsMin;
     vec4 BoundsMax;
     float FirstTriangle;
@@ -79,8 +80,8 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
 HitInfo NoHit();
 bool HitSphere(Ray ray, Sphere sphere, out float t1, out float t2);
 float HitQuad(Ray ray, Quad quad);
-float HitTriangle(Ray ray, Triangle triangle, out float u, out float v);
-bool HitBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax);
+float HitTriangle(Ray ray, Triangle triangle, vec3 position, out float u, out float v);
+bool HitBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax, vec3 position);
 float FresnelSchlick(float n1, float n2, vec3 normal, vec3 incident, float f0, float f90);
 vec3 GetNormal(Quad quad, vec3 surfacePosition);
 uint GetPCGHash(inout uint seed);
@@ -289,14 +290,14 @@ HitInfo TraceRay(Ray ray) {
     for(int i = 0; i < Meshes.length(); i++) {
         MeshInfo mesh = Meshes[i];
 
-        if(!HitBoundingBox(ray, vec3(mesh.BoundsMin), vec3(mesh.BoundsMax))) {
+        if(!HitBoundingBox(ray, vec3(mesh.BoundsMin), vec3(mesh.BoundsMax), vec3(mesh.Position))) {
             continue;
         }
 
         for(int j = int(mesh.FirstTriangle); j < mesh.FirstTriangle + mesh.NumTriangles; j++) {
             Triangle triangle = Triangles[j];
 
-            float distance = HitTriangle(ray, triangle, u, v);
+            float distance = HitTriangle(ray, triangle, vec3(mesh.Position), u, v);
 
             if(distance >= 0 && distance < hitDistance) {
                 hitDistance = distance;
@@ -339,7 +340,11 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit);
     } 
     else if(objType == 2) { // MESH
-        vec3 hitPosition = ray.Origin + ray.Direction * hitDistance;
+        vec3 meshPos = vec3(Meshes[index].Position);
+        vec3 origin = ray.Origin - meshPos;
+        vec3 closestPosition = meshPos;
+        vec3 hitPosition = origin + ray.Direction * hitDistance;
+        hitPosition += closestPosition;
         float w = 1 - u - v;
         vec4 normal = normalize(Triangles[index].NormalA * w + Triangles[index].NormalB * u + Triangles[index].NormalC * v);
 
@@ -399,11 +404,15 @@ float HitQuad(Ray ray, Quad quad) {
     return t;
 }
 
-float HitTriangle(Ray ray, Triangle triangle, out float u, out float v) {
-    vec3 edgeAB = vec3(triangle.B) - vec3(triangle.A);
-    vec3 edgeAC = vec3(triangle.C) - vec3(triangle.A);
+float HitTriangle(Ray ray, Triangle triangle, vec3 position, out float u, out float v) {
+    vec3 A = vec3(triangle.A) + position;
+    vec3 B = vec3(triangle.B) + position;
+    vec3 C = vec3(triangle.C) + position;
+
+    vec3 edgeAB = vec3(B) - vec3(A);
+    vec3 edgeAC = vec3(C) - vec3(A);
     vec3 normalVector = cross(edgeAB, edgeAC);
-    vec3 ao = ray.Origin - vec3(triangle.A);
+    vec3 ao = ray.Origin - vec3(A);
     vec3 dao = cross(ao, ray.Direction);
 
     float determinant = -dot(ray.Direction, normalVector);
@@ -421,10 +430,12 @@ float HitTriangle(Ray ray, Triangle triangle, out float u, out float v) {
     return -1.0;
 }
 
-bool HitBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax) {
+bool HitBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax, vec3 position) {
+    vec3 origin = ray.Origin - position;
+
     vec3 invDir = 1 / ray.Direction;
-    vec3 tMin = (boxMin - ray.Origin) * invDir;
-    vec3 tMax = (boxMax - ray.Origin) * invDir;
+    vec3 tMin = (boxMin - origin) * invDir;
+    vec3 tMax = (boxMax - origin) * invDir;
     vec3 t1 = min(tMin, tMax);
     vec3 t2 = max(tMin, tMax);
     float tNear = max(max(t1.x, t1.y), t1.z);
