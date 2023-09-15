@@ -17,12 +17,13 @@ enum class ObjectType {
 };
 
 struct MeshInfo {
-	int FirstTriangle;
-	int NumTriangles;
-	int MaterialIndex = 0;
 	glm::vec4 BoundsMin;
 	glm::vec4 BoundsMax;
+	float FirstTriangle;
+	float NumTriangles;
+	float MaterialIndex = 0;
 	float paddind = 0.0f;
+	glm::vec4 padding4{0.0f};
 };
 
 struct Sphere {
@@ -151,7 +152,7 @@ public:
 	std::vector<MeshInfo> Meshes;
 	std::vector<Triangle> Triangles;
 	float AmbientOcclusionIntensity = 1.0f;
-	int CurrentScene = 3;
+	int CurrentScene = 0;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();

@@ -98,7 +98,7 @@ void World::PrepareSimpleScene() {
 	Model m;
 	m.LoadObj("models/pawn.obj");
 
-	UploadModel(m, 1);
+	UploadModel(m, 5);
 }
 
 void World::PrepareCornellBox() {

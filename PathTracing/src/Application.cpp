@@ -339,6 +339,19 @@ void Application::RenderUI(float deltaTime) {
 		ImGui::TreePop();
 	}
 
+	if (ImGui::TreeNode("Meshes") && m_World.Meshes.size() > 0) {
+		for (size_t i = 0; i < m_World.Meshes.size(); i++) {
+			MeshInfo& mesh = m_World.Meshes.at(i);
+
+			ImGui::PushID(i);
+			if (ImGui::DragFloat("Material", &mesh.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); }
+			ImGui::Separator();
+			ImGui::PopID();
+		}
+
+		ImGui::TreePop();
+	}
+
 	ImGui::Spacing();
 	ImGui::Spacing();
 	ImGui::Text("Materials List:");

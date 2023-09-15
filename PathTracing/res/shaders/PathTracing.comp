@@ -33,11 +33,11 @@ struct Cube {
 };
 
 struct MeshInfo {
-    int FirstTriangle;
-    int NumTriangles;
-    int MaterialIndex;
     vec4 BoundsMin;
     vec4 BoundsMax;
+    float FirstTriangle;
+    float NumTriangles;
+    float MaterialIndex;
 };
 
 struct Triangle {
@@ -140,8 +140,6 @@ void main() {
     // accumulazione path tracing
     vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
     value = mix(lastFrameColor, value, 1.0 / (rendererFrame));
-
-    //value = vec4(Meshes.length(), 0.0, 0.0, 1.0);
 
     imageStore(imgOutput, texelCoord, value);
 }
@@ -295,14 +293,14 @@ HitInfo TraceRay(Ray ray) {
             continue;
         }
 
-        for(int j = mesh.FirstTriangle; j < mesh.FirstTriangle + mesh.NumTriangles; j++) {
+        for(int j = int(mesh.FirstTriangle); j < mesh.FirstTriangle + mesh.NumTriangles; j++) {
             Triangle triangle = Triangles[j];
 
             float distance = HitTriangle(ray, triangle, u, v);
 
             if(distance >= 0 && distance < hitDistance) {
                 hitDistance = distance;
-                index = j;
+                index = i;
                 objType = 2;
                 inside = false;
             }
@@ -341,16 +339,11 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit);
     } 
     else if(objType == 2) { // MESH
-  // HitInfo hitInfo;
-    // hitInfo.didHit = determinant >= 1E-6 && dst >= 0 && u >= 0 && v >= 0 && w >= 0;
-    // hitInfo.hitPoint = ray.origin + ray.dir * dst;
-    // hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
-    // hitInfo.dst = dst;
         vec3 hitPosition = ray.Origin + ray.Direction * hitDistance;
         float w = 1 - u - v;
         vec4 normal = normalize(Triangles[index].NormalA * w + Triangles[index].NormalB * u + Triangles[index].NormalC * v);
 
-        hit = HitInfo(hitDistance, hitPosition, vec3(normal), index, 1, insideHit);
+        hit = HitInfo(hitDistance, hitPosition, vec3(normal), index, 2, insideHit);
     }
 
     return hit;
