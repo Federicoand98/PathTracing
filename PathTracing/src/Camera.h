@@ -21,6 +21,7 @@ public:
 
     bool OnUpdate(float ts);
     void OnResize(uint32_t width, uint32_t height);
+    void RecalculateProjection();
 
     const glm::mat4& GetProjection() const { return m_Projection; }
     const glm::mat4& GetInverseProjection() const { return m_InverseProjection; }
@@ -40,16 +41,16 @@ public:
 
     float GetRotationSpeed();
 private:
-    void RecalculateProjection();
     void RecalculateView();
     void RecalculateRayDirections();
+public:
+    float m_VerticalFOV = 45.0f;
 private:
     glm::mat4 m_Projection{ 1.0f };
     glm::mat4 m_View{ 1.0f };
     glm::mat4 m_InverseProjection{ 1.0f };
     glm::mat4 m_InverseView{ 1.0f };
 
-    float m_VerticalFOV = 45.0f;
     float m_NearClip = 0.1f;
     float m_FarClip = 100.0f;
 

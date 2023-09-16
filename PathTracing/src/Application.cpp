@@ -263,6 +263,19 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Separator();
 
 	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
+	ImGui::SeparatorText("CAMERA CONFIGURATIONS");
+	ImGui::PopStyleColor();
+
+	if (ImGui::SliderFloat("Camera FOV", &m_Camera.m_VerticalFOV, 30.0f, 140.0f)) {
+		m_Camera.RecalculateProjection();
+		m_Renderer.ResetPathTracingCounter();
+	}
+
+	ImGui::Spacing();
+	ImGui::Spacing();
+	ImGui::Separator();
+
+	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
 	ImGui::SeparatorText("SCENE CONFIGURATIONS");
 	ImGui::PopStyleColor();	
 
