@@ -19,7 +19,7 @@ public:
     void Initialize(const Camera& camera, const World& world);
     void Render(const Camera& camera, const World& world);
     void OnResize(uint32_t width, uint32_t height);
-    void ResetPathTracingCounter() { m_PTCounter = 1; }
+    void ResetPathTracingCounter(bool sceneReset = false) { m_PTCounter = 1; m_sceneReset = sceneReset; }
     std::shared_ptr<Image> GetRenderedImage() const { return m_RenderedImage; }
 public:
     bool PathTracing = true;
@@ -55,6 +55,7 @@ private:
     uint32_t m_Width = 0, m_Height = 0;
     unsigned char* m_ImageData;
     int m_PTCounter = 1;
+    bool m_sceneReset = false;
 };
 
 #endif // RENDERER_H

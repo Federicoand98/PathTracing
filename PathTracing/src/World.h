@@ -43,10 +43,11 @@ struct Quad {
 };
 
 struct Box {
-	glm::vec3 Min{ 0.0f };
-	glm::vec3 Max{ 0.0f };
+	glm::vec4 Min{ 0.0f };
+	glm::vec4 Max{ 0.0f };
+	float index = 0;
 	float MaterialIndex = 0;
-	int index = 0;
+	glm::vec2 padding{ 0.0f };
 
 	void UpdateBox(std::vector<Quad> &Quads) {
 		glm::vec3 dx = glm::vec3(Max.x - Min.x, 0, 0);
@@ -152,7 +153,7 @@ public:
 	std::vector<MeshInfo> Meshes;
 	std::vector<Triangle> Triangles;
 	float AmbientOcclusionIntensity = 1.0f;
-	int CurrentScene = 0;
+	int CurrentScene = 2;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();

@@ -16,9 +16,10 @@ public:
 	unsigned int ID;
     unsigned int ssbo_s;
     unsigned int ssbo_m;
-    unsigned int ssbo_c;
+    unsigned int ssbo_q;
     unsigned int ssbo_t;
     unsigned int ssbo_mesh;
+    unsigned int ssbo_cubes;
 
 	ComputeShader(const char* path) {
         std::string computeCode;
@@ -82,40 +83,47 @@ public:
     void SetWorld() {
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo_s);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, ssbo_m);
-        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbo_c);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbo_q);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbo_t);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssbo_mesh);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, ssbo_cubes);
     }
 
-    void UpdateWorldBuffer(const World& world) {
-        if (world.Spheres.size() > 0) {
+    void UpdateWorldBuffer(const World& world, bool fullReset = false) {
+        if (world.Spheres.size() > 0 || fullReset) {
 			glGenBuffers(1, &ssbo_s);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_s);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Sphere) * world.Spheres.size(), world.Spheres.data(), GL_STATIC_DRAW);
         }
 
-        if (world.Materials.size() > 0) {
+        if (world.Materials.size() > 0 || fullReset) {
 			glGenBuffers(1, &ssbo_m);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_m);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Material) * world.Materials.size(), world.Materials.data(), GL_STATIC_DRAW);
         }
 
-        if (world.Quads.size() > 0) {
-			glGenBuffers(1, &ssbo_c);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_c);
+        if (world.Quads.size() > 0 || fullReset) {
+			glGenBuffers(1, &ssbo_q);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_q);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Quad) * world.Quads.size(), world.Quads.data(), GL_STATIC_DRAW);
         }
 
-        if (world.Triangles.size() > 0) {
+        if (world.Triangles.size() > 0 || fullReset) {
 			glGenBuffers(1, &ssbo_t);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_t);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Triangle) * world.Triangles.size(), world.Triangles.data(), GL_STATIC_DRAW);
         }
 
-        if (world.Meshes.size() > 0) {
+        if (world.Meshes.size() > 0 || fullReset) {
 			glGenBuffers(1, &ssbo_mesh);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_mesh);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(MeshInfo) * world.Meshes.size(), world.Meshes.data(), GL_STATIC_DRAW);
+        }
+
+        if (world.Boxes.size() > 0 || fullReset) {
+            glGenBuffers(1, &ssbo_cubes);
+            glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_cubes);
+            glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Box) * world.Boxes.size(), world.Boxes.data(), GL_STATIC_DRAW);
         }
     }
 

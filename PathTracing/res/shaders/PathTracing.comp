@@ -27,9 +27,10 @@ struct Quad {
 	float Height;
 };
 
-struct Cube {
+struct CubeInfo {
     vec4 BoundsMin;
     vec4 BoundsMax;
+    float FirstQuad;
 };
 
 struct MeshInfo {
@@ -116,6 +117,10 @@ layout(std430, binding = 3) buffer TrianglesBuffer {
 
 layout(std430, binding = 4) buffer MeshBuffer {
     MeshInfo Meshes[];
+};
+
+layout(std430, binding = 5) buffer CubeBuffer {
+    CubeInfo Cubes[];
 };
 
 uint rndSeed;
@@ -258,10 +263,11 @@ float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive,
 HitInfo TraceRay(Ray ray) {
     float hitDistance = 100000.0;
     int index = -1;
-    int objType = -1; // 0 Sphere, 1 Quad
+    int objType = -1; // 0 Sphere, 1 Quad, 2 Mesh
     float t1, t2;
     // float u, v;
     bool inside;
+    bool cubesPres = Cubes.length() > 0;
 
     for(int i = 0; i < Spheres.length(); i++) {
         Sphere sphere = Spheres[i];
@@ -274,7 +280,16 @@ HitInfo TraceRay(Ray ray) {
         }
     }
 
+    int j = 0;
     for(int i = 0; i < Quads.length(); i++) {
+        if (cubesPres && j < Cubes.length() && Cubes[j].FirstQuad == i){
+            bool hit = HitBoundingBox(ray, vec3(Cubes[j].BoundsMin), vec3(Cubes[j].BoundsMax), vec3(0));
+            j++;
+            if (!hit) {
+                i+=5;
+                continue;
+            }
+        }
         Quad quad = Quads[i];
 
         float distance = HitQuad(ray, quad);

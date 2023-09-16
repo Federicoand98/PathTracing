@@ -36,6 +36,9 @@ void World::DestroyScene() {
     Spheres.clear();
 	Quads.clear();
     Materials.clear();
+	Triangles.clear();
+	Meshes.clear();
+	Boxes.clear();
 }
 
 void World::PrepareMaterials() {
@@ -310,8 +313,8 @@ void World::UploadModel(const Model& model, int material) {
 
 void World::CreateBox(const glm::vec3 &a, const glm::vec3 &b, float MaterialIndex) {
 	Box box;
-	box.Min = glm::vec3(fmin(a.x, b.x), fmin(a.y, b.y), fmin(a.z, b.z));
-	box.Max = glm::vec3(fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z));
+	box.Min = glm::vec4(fmin(a.x, b.x), fmin(a.y, b.y), fmin(a.z, b.z), 0.0f);
+	box.Max = glm::vec4(fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z), 0.0f);
 
 	glm::vec3 dx = glm::vec3(box.Max.x - box.Min.x, 0, 0);
 	glm::vec3 dy = glm::vec3(0, box.Max.y - box.Min.y, 0);

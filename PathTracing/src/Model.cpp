@@ -7,6 +7,7 @@ Model::~Model() {
 	for (auto t : m_Triangles) {
 		delete t;
 	}
+	m_Triangles.clear();
 }
 
 void Model::LoadObj(const char* filePath) {
