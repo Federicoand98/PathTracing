@@ -266,7 +266,7 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::SeparatorText("CAMERA CONFIGURATIONS");
 	ImGui::PopStyleColor();
 
-	if (ImGui::SliderFloat("Camera FOV", &m_Camera.m_VerticalFOV, 30.0f, 140.0f)) {
+	if (ImGui::SliderFloat("Camera FOV (Vertical)", &m_Camera.m_VerticalFOV, 30.0f, 140.0f)) {
 		m_Camera.RecalculateProjection();
 		m_Renderer.ResetPathTracingCounter();
 	}
@@ -284,8 +284,6 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Spacing();
 	ImGui::Text("Background");
 	if(ImGui::ColorEdit3("Background Color", glm::value_ptr(m_World.BackgroundColor)))
-		m_Renderer.ResetPathTracingCounter();
-	if(ImGui::DragFloat("Ambient Occlusion Intensity",&m_World.AmbientOcclusionIntensity, 0.1f, 0.0f, 1.0f))
 		m_Renderer.ResetPathTracingCounter();
 
 	ImGui::Spacing();
