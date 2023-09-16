@@ -27,23 +27,7 @@ public:
     int m_SamplesPerPixel = 1;
     int m_RayDepth = 5;
 private:
-    struct Color {
-        float R, G, B, A;
-    };
-
-    struct HitInfo {
-        float HitDistance;
-        glm::vec3 HitPosition;
-        glm::vec3 Normal;
-        int ObjectIndex;
-        ObjectType Type;
-    };
-
-    void DrawQuad();
-    glm::vec4 PerPixel(uint32_t x, uint32_t y);
-    HitInfo TraceRay(const Ray& ray);
-    HitInfo HandleHit(const Ray& ray, HitInfo& hit);
-    HitInfo NoHit();
+    void DrawSceneQuad();
 private:
     const Camera* m_Camera = nullptr;
     const World* m_World = nullptr;
@@ -53,7 +37,6 @@ private:
     unsigned int m_QuadVAO = 0;
     unsigned int m_QuadVBO = 0;
     uint32_t m_Width = 0, m_Height = 0;
-    unsigned char* m_ImageData;
     int m_PTCounter = 1;
     bool m_sceneReset = false;
 };

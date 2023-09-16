@@ -4,14 +4,6 @@
 
 #include "Renderer.h"
 #include "Random.h"
-#include <algorithm>
-#include <execution>
-
-namespace Utils {
-    static unsigned char ConvertToRGBA(float value) {
-        return (unsigned char)(value * 255.0f);
-    }
-}
 
 void Renderer::OnResize(uint32_t width, uint32_t height) {
     if(m_RenderedImage) {
@@ -64,7 +56,7 @@ void Renderer::Render(const Camera& camera, const World& world) {
     m_Shader->use();
     m_Shader->setBool("PostProcessing", PostProcessing);
 
-    DrawQuad();
+    DrawSceneQuad();
 
     if (PathTracing)
         m_PTCounter++;
@@ -72,7 +64,7 @@ void Renderer::Render(const Camera& camera, const World& world) {
         m_PTCounter = 1;
 }
 
-void Renderer::DrawQuad() {
+void Renderer::DrawSceneQuad() {
     if (m_QuadVAO == 0) {
         float quadVertices[] = {
             // positions        // texture Coords
@@ -95,41 +87,4 @@ void Renderer::DrawQuad() {
     glBindVertexArray(m_QuadVAO);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     glBindVertexArray(0);
-}
-
-glm::vec4 Renderer::PerPixel(uint32_t x, uint32_t y) {
-    Ray ray;
-    ray.Origin = m_Camera->GetPosition();
-    ray.Direction = m_Camera->GetRayDirections()[x + y * m_RenderedImage->GetWidth()];
-    glm::vec4 pixelColor(0.0f);
-    bool shouldRefract = false;
-
-    int depth = 5;
-    glm::vec4 light(0.0f);
-    glm::vec4 contribution(1.0f);
-
-    return light;
-}
-
-Renderer::HitInfo Renderer::TraceRay(const Ray &ray) {
-    HitInfo hitInfo;
-    hitInfo.Type = ObjectType::BACKGROUND;
-    hitInfo.HitDistance = std::numeric_limits<float>::max();
-    hitInfo.ObjectIndex = -1;
-
-    if (hitInfo.HitDistance == std::numeric_limits<float>::max())
-       return NoHit();
-
-    return HandleHit(ray, hitInfo);
-}
-
-Renderer::HitInfo Renderer::HandleHit(const Ray &ray, HitInfo& hit) {
-    glm::vec3 origin;
-    glm::vec3 closestPosition;
-
-    return hit;
-}
-
-Renderer::HitInfo Renderer::NoHit() {
-    return { -1.0f, glm::vec3(0.0f), glm::vec3(0.0f), -1, ObjectType::BACKGROUND};
 }
