@@ -1,5 +1,5 @@
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include "stb_image_write.h"
 #include "Application.h"
 #include <glm/gtc/type_ptr.hpp>
 #include "Random.h"
@@ -230,8 +230,17 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Text("Renderer: %s", glGetString(GL_RENDERER));
 	ImGui::Text("Version: %s", glGetString(GL_VERSION));
 	ImGui::Separator();
-
+	
 	ImGui::Spacing();
+
+	/*
+	if (ImGui::Button("Salva immagine")) {
+		// Work In Progress
+	}
+
+	ImGui::Separator();
+	ImGui::Spacing();
+	*/
 
 	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
 	ImGui::SeparatorText("ENGINE CONFIGURATIONS");

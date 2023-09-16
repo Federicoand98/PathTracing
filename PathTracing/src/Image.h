@@ -14,6 +14,7 @@ public:
 	~Image();
 
 	void SetData(const void* data);
+	void* GetData() const {};
 	void Resize(uint32_t width, uint32_t height, const void* data = nullptr);
 
 	uint32_t GetWidth() const { return m_Width; }
