@@ -24,6 +24,10 @@ void World::LoadScene() {
 			PrepareMaterials();
 			PrepareCornellBox();
 			break;
+		case SceneType::CORNELL_BOX_MESH:
+			PrepareMaterials();
+			PrepareCornellBoxMesh();
+			break;
 		case SceneType::RANDOM_BOXES:
 			PrepareRandomBoxes();
 			break;
@@ -45,10 +49,10 @@ void World::PrepareMaterials() {
 	Material redMaterial, blueMaterial, metal, lightMaterial, greenMaterial, whiteMaterial, glassMaterial;
 	redMaterial.Color = { 1.0f, 0.0f, 0.0f, 1.0f };
 	redMaterial.SpecularColor = redMaterial.Color;
-	redMaterial.Roughness = 0.5f;
-	blueMaterial.Color = { 0.0f, 0.0f, 1.0f, 1.0f };
-	blueMaterial.SpecularColor = redMaterial.SpecularColor;
-	blueMaterial.Roughness = 0.0f;
+	redMaterial.Roughness = 1.0f;
+	blueMaterial.Color = { 0.5f, 0.5f, 1.0f, 1.0f };
+	blueMaterial.SpecularColor = blueMaterial.Color;
+	blueMaterial.Roughness = 1.0f;
 	metal.Color = { 0.3294f, 0.7019f, 0.6118f, 1.0f };
 	metal.SpecularColor = metal.Color;
 	metal.Roughness = 0.0f;
@@ -99,9 +103,9 @@ void World::PrepareSimpleScene() {
 	//CreateBox({ 0,0,0 }, { 3,1,1 }, 1);
 
 	Model m;
-	m.LoadObj("models/suzanne.obj");
+	m.LoadObj("models/bunny.obj");
 
-	UploadModel(m, 5);
+	UploadModel(m, {0.0, 0.0, 0.0}, 5);
 }
 
 void World::PrepareCornellBox() {
@@ -123,83 +127,19 @@ void World::PrepareCornellBox() {
 		s.MaterialIndex = 2;
 		Spheres.push_back(s);
 	}
-	// left green
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
-		quad.U = { 0.0f, 0.0f, -1.0f, 0.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 5;
 
-		Quads.push_back(quad);
-	}
+	CreateCornellBox();
+}
 
-	// back white
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 0.0f, 0.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 4;
+void World::PrepareCornellBoxMesh() {
+	CreateCornellBox();
 
-		Quads.push_back(quad);
-	}
+	Model suzanne, pawn;
+	suzanne.LoadObj("models/suzanne.obj");
+	pawn.LoadObj("models/pawn.obj");
 
-	// right red
-	{
-		Quad quad;
-		quad.PositionLLC = { 2.0f, -2.0f, 0.0f, 0.0f };
-		quad.U = { 0.0f, 0.0f, 1.0f, 0.0f };
-		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 0;
-
-		Quads.push_back(quad);
-	}
-
-	// top white
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, 2.0f, 0.0f, 0.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 4;
-
-		Quads.push_back(quad);
-	}
-
-	// bot white
-	{
-		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 0.0f, -1.0f, 0.0f };
-		quad.Width = 4.0f;
-		quad.Height = 4.0f;
-		quad.MaterialIndex = 4;
-
-		Quads.push_back(quad);
-	}
-
-	// top light
-	{
-		Quad quad;
-		quad.PositionLLC = { -0.25f, 1.95f, 2.00f, 0.0f };
-		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
-		quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
-		quad.Width = 0.5f;
-		quad.Height = 0.5f;
-		quad.MaterialIndex = 3;
-
-		Quads.push_back(quad);
-	}
+	UploadModel(suzanne, {0.7, -2.1, 2.0}, 1);
+	UploadModel(pawn, {-1.2, -2, 1.6}, 1);
 }
 
 void World::PrepareRandomSpheres() {
@@ -295,7 +235,7 @@ void World::PrepareRandomBoxes() {
 	}
 }
 
-void World::UploadModel(const Model& model, int material) {
+void World::UploadModel(const Model& model, const glm::vec3& Position, int material) {
 	MeshInfo m;
 
 	m.FirstTriangle = Triangles.size();
@@ -303,6 +243,7 @@ void World::UploadModel(const Model& model, int material) {
 	m.MaterialIndex = material;
 	m.BoundsMin = model.GetBoundsMin();
 	m.BoundsMax = model.GetBoundsMax();
+	m.Position = glm::vec4(Position, 0.0);
 
 	for (const Triangle* triangle : model.GetTriangles()) {
 		Triangles.push_back(*triangle);
@@ -398,4 +339,84 @@ void World::CreateBox(const glm::vec3 &a, const glm::vec3 &b, float MaterialInde
 	}
 
 	Boxes.push_back(box);
+}
+
+void World::CreateCornellBox() {
+	// left green
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
+		quad.U = { 0.0f, 0.0f, -1.0f, 0.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 5;
+
+		Quads.push_back(quad);
+	}
+
+	// back white
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 0.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 4;
+
+		Quads.push_back(quad);
+	}
+
+	// right red
+	{
+		Quad quad;
+		quad.PositionLLC = { 2.0f, -2.0f, 0.0f, 0.0f };
+		quad.U = { 0.0f, 0.0f, 1.0f, 0.0f };
+		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 0;
+
+		Quads.push_back(quad);
+	}
+
+	// top white
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, 2.0f, 0.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 4;
+
+		Quads.push_back(quad);
+	}
+
+	// bot white
+	{
+		Quad quad;
+		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, -1.0f, 0.0f };
+		quad.Width = 4.0f;
+		quad.Height = 4.0f;
+		quad.MaterialIndex = 4;
+
+		Quads.push_back(quad);
+	}
+
+	// top light
+	{
+		Quad quad;
+		quad.PositionLLC = { -0.25f, 1.95f, 2.00f, 0.0f };
+		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
+		quad.Width = 0.5f;
+		quad.Height = 0.5f;
+		quad.MaterialIndex = 3;
+
+		Quads.push_back(quad);
+	}
 }

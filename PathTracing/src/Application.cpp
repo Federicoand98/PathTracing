@@ -298,7 +298,7 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::Spacing();
 	ImGui::Spacing();
 	ImGui::Text("Select the scene");
-	if (ImGui::Combo("Current Scene", &m_World.CurrentScene, "TWO SPHERES\0RANDOM SPHERES\0CORNELL BOX\0RANDOM BOXES\0\0")) {
+	if (ImGui::Combo("Current Scene", &m_World.CurrentScene, "TWO SPHERES\0RANDOM SPHERES\0CORNELL BOX\0RANDOM BOXES\0CORNELL BOW WITH MESHES\0\0")) {
 		m_World.DestroyScene();
 		m_Renderer.ResetPathTracingCounter(true);
 		m_World.LoadScene();
