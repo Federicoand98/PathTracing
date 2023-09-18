@@ -415,6 +415,9 @@ float HitQuad(Ray ray, Quad quad) {
     if ((alpha < 0) || (quad.Width < alpha) || (beta < 0) || (quad.Height < beta))
         return -1;
 
+    if (dot(ray.Direction, normal) > 0)
+        normal = -normal;
+
     return t;
 }
 

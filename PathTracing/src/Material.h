@@ -25,6 +25,8 @@ static Material CreateDefaultDiffuse() {
 	Material m;
 	m.Color = { 0.4f, 0.2, 0.1f, 1.0f };
 	m.SpecularColor = m.Color;
+	m.EmissiveColor = m.Color;
+	m.RefractionColor = m.Color;
 	m.Roughness = 1.0f;
 	return m;
 }
@@ -33,6 +35,8 @@ static Material CreateDefaultMetal() {
 	Material m;
 	m.Color = { 0.7f, 0.6f, 0.1f, 1.0f };
 	m.SpecularColor = m.Color;
+	m.EmissiveColor = m.Color;
+	m.RefractionColor = m.Color;
 	m.Roughness = 0.0f;
 	return m;
 }
@@ -41,6 +45,8 @@ static Material CreateDefaultDielectric() {
 	Material m;
 	m.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	m.SpecularColor = m.Color;
+	m.EmissiveColor = m.Color;
+	m.RefractionColor = m.Color;
 	m.RefractionRatio = 1.02f;
 	m.RefractionProbability = 1.0f;
 	m.SpecularProbability = 0.0f;
@@ -52,8 +58,9 @@ static Material CreateDefaultLight() {
 	Material m;
 	m.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
 	m.SpecularColor = m.Color;
-	m.Roughness = 1.0f;
 	m.EmissiveColor = m.Color;
+	m.RefractionColor = m.Color;
+	m.Roughness = 1.0f;
 	m.EmissiveStrenght = 1.0f;
 	return m;
 }
@@ -66,12 +73,16 @@ static Material CreateRandom(const char* name) {
 		// Diffuse
 		m.Color = glm::vec4(Random::GetVec3(0, 1), 1.0f);
 		m.SpecularColor = m.Color;
+		m.RefractionColor = m.Color;
+		m.EmissiveColor = m.Color;
 		m.Roughness = Random::GetFloat(0.5, 1);
 	}
 	else if (rnd < 0.55) {
 		// Metal
 		m.Color = glm::vec4(Random::GetVec3(0.5, 1), 1.0f);
 		m.SpecularColor = m.Color;
+		m.RefractionColor = m.Color;
+		m.EmissiveColor = m.Color;
 		m.Roughness = 0.0f;
 	}
 	else if (rnd < 0.75) {
@@ -80,6 +91,8 @@ static Material CreateRandom(const char* name) {
 		m.Roughness = Random::GetFloat(0.2, 0.35);
 		m.SpecularProbability = Random::GetFloat(0.01, 0.07);
 		m.SpecularColor = m.Color;
+		m.RefractionColor = m.Color;
+		m.EmissiveColor = m.Color;
 	}
 	else if(rnd < 0.9) {
 		// Glass transparent

@@ -193,6 +193,8 @@ void World::PrepareRandomBoxes() {
 	metal = CreateDefaultMetal();
 	diffuse = CreateDefaultDiffuse();
 	baseMat.Color = { 0.5f, 0.5f, 0.5f, 1.0f };
+	baseMat.SpecularColor = { 0.5f, 0.5f, 0.5f, 1.0f };
+	baseMat.RefractionColor = { 0.5f, 0.5f, 0.5f, 1.0f };
 	baseMat.Roughness = 0.8f;
 
 	lightMaterial.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
