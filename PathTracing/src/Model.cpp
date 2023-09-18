@@ -106,6 +106,18 @@ void Model::CalculateBoundingBox() {
 	}
 }
 
+void Model::ScaleMesh(float scaleFactor) {
+	float scaleMultip = scaleFactor / currentScaleFactor;
+	for (auto& triangle : m_Triangles) {
+		triangle->A = triangle->A * scaleMultip;
+		triangle->B = triangle->B * scaleMultip;
+		triangle->C = triangle->C * scaleMultip;
+	}
+	currentScaleFactor = scaleFactor;
+
+	CalculateBoundingBox();
+}
+
 void Model::CleanTrash() {
 	for (auto v : m_Vertices)
 		delete v;

@@ -31,11 +31,14 @@ public:
 	~Model();
 
 	void LoadObj(const char* filePath);
+	void ScaleMesh(float scaleFactor);
 
 	std::vector<Triangle*> GetTriangles() const { return m_Triangles; }
 	int GetTrianglesCount() const { return m_TriangleCount; }
 	glm::vec4 GetBoundsMin() const { return m_BoundsMin; }
 	glm::vec4 GetBoundsMax() const { return m_BoundsMax; }
+public:
+	float currentScaleFactor = 1.0f;
 private:
 	void MakeTriangles();
 	void CalculateBoundingBox();

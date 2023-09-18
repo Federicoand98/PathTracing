@@ -24,6 +24,7 @@ struct MeshInfo {
 	float NumTriangles;
 	float MaterialIndex = 0;
 	float paddind = 0.0f;
+
 };
 
 struct Sphere {
@@ -156,7 +157,7 @@ public:
 	std::vector<Material> Materials;
 	std::vector<MeshInfo> Meshes;
 	std::vector<Triangle> Triangles;
-	int CurrentScene = 6;
+	int CurrentScene = 0;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();

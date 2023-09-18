@@ -113,6 +113,7 @@ void World::PrepareSimpleScene() {
 
 	Model m;
 	m.LoadObj("models/bunny.obj");
+	m.ScaleMesh(5);
 
 	UploadModel(m, {0.0, 0.0, 0.0}, 5);
 }
