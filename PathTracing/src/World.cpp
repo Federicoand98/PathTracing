@@ -31,6 +31,9 @@ void World::LoadScene() {
 		case SceneType::RANDOM_BOXES:
 			PrepareRandomBoxes();
 			break;
+		case SceneType::SETUP_1:
+			PrepareSetup1();
+			break;
         default:
             break;
     }
@@ -173,18 +176,22 @@ void World::PrepareRandomSpheres() {
 
 			if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
 				Material mat;
-				mat = CreateRandom("material");
-				Sphere s = { {center, 0.2f}, 0.0 };
-
+				mat = CreateRandom(true);
 				Materials.push_back(mat);
+
+				Sphere s = { {center, 0.2f}, 0.0 };
+				s.MaterialIndex = Materials.size() - 1;
+
 				Spheres.push_back(s);
 			}
 		}
 	}
 
+	/*
 	for (int i = 4; i < Spheres.size(); i++) {
 		Spheres.at(i).MaterialIndex = Random::GetFloat(3, Materials.size() - 1);
 	}
+	*/
 }
 
 void World::PrepareRandomBoxes() {
@@ -223,7 +230,7 @@ void World::PrepareRandomBoxes() {
 
 	for (int a = 0; a < 10; a++) {
 		Material mat;
-		mat = CreateRandom("material");
+		mat = CreateRandom(false);
 
 		Materials.push_back(mat);
 	}
@@ -235,6 +242,126 @@ void World::PrepareRandomBoxes() {
 			CreateBox({ x, y, z }, { x + 1, y + 1, z + 1 }, Random::GetInt(5, Materials.size() - 1));
 		}
 	}
+}
+
+void World::PrepareSetup1() {
+	BackgroundColor = { 0.0, 0.0, 0.0 };
+
+	Material white_diffuse = CreateDefaultDiffuse({1.0, 1.0, 1.0, 1.0});
+	Material white_metal = CreateDefaultMetal({ 1.0, 1.0, 1.0, 1.0 });
+	Material white_glossy = CreateDefaultGlossy({ 1.0, 1.0, 1.0, 1.0 }, 0.2, 0.2);
+	Material metal = CreateDefaultMetal();
+	Material light = CreateDefaultLight({1.0, 1.0, 1.0, 1.0}, 8.0);
+	Material red, blue, green;
+	red = CreateDefaultDiffuse({1.0, 0.0, 0.0, 1.0});
+	blue = CreateDefaultDiffuse({0.0, 0.0, 1.0, 1.0});
+	green = CreateDefaultDiffuse({0.0, 1.0, 0.0, 1.0});
+
+	Materials.push_back(white_diffuse);	
+	Materials.push_back(metal);
+	Materials.push_back(red);
+	Materials.push_back(blue);
+	Materials.push_back(green);
+	Materials.push_back(white_metal);
+	Materials.push_back(white_glossy);
+	Materials.push_back(light);
+
+	{
+		Sphere left, middle, right;
+		left.Position = { -3.5f, -0.5f, -4.5f, 1.0f };
+		left.MaterialIndex = 0;
+
+		middle.Position = { 0.0f, -0.5f, -4.5f, 1.0f };
+		middle.MaterialIndex = 6;
+
+		right.Position = { 3.5f, -0.5f, -4.5f, 1.0f };
+		right.MaterialIndex = 5;
+
+		Spheres.push_back(left);
+		Spheres.push_back(middle);
+		Spheres.push_back(right);
+	}
+
+	{
+		Sphere left, middle, right;
+		left.Position = { -3.5f, -1.0f, -2.0f, 0.5f };
+		left.MaterialIndex = 2;
+
+		middle.Position = { 0.0f, -1.0f, -2.0f, 0.5f };
+		middle.MaterialIndex = 3;
+
+		right.Position = { 3.5f, -1.0f, -2.0f, 0.5f };
+		right.MaterialIndex = 4;
+
+		Spheres.push_back(left);
+		Spheres.push_back(middle);
+		Spheres.push_back(right);
+	}
+
+	{
+		Sphere left, middle, right;
+		left.Position = { -3.5f, 2.2f, -5.5f, 0.5f };
+		left.MaterialIndex = 0;
+
+		middle.Position = { 0.0f, 2.2f, -5.5f, 0.5f };
+		middle.MaterialIndex = 0;
+
+		right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
+		right.MaterialIndex = 0;
+
+		Spheres.push_back(left);
+		Spheres.push_back(middle);
+		Spheres.push_back(right);
+	}
+
+	{
+		Sphere left, right;
+		left.Position = { -1.75f, -0.9f, -2.75f, 0.4f };
+		left.MaterialIndex = 0;
+
+		right.Position = { 1.75f, -0.9f, -2.75f, 0.4f };
+		right.MaterialIndex = 0;
+
+		Spheres.push_back(left);
+		Spheres.push_back(right);
+	}
+
+
+	{
+		Quad bot, back, panelLight;
+		bot.PositionLLC = { -5.0f, -1.5f, 2.5f, 0.0f };
+		bot.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		bot.V = { 0.0f, 0.0f, -1.0f, 0.0f };
+		bot.Width = 10.0f;
+		bot.Height = 12.5f;
+		bot.MaterialIndex = 0;
+
+		back.PositionLLC = { -5.0f, -1.5f, -10.0f, 0.0f };
+		back.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		back.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		back.Width = 10.0f;
+		back.Height = 8.0f;
+		back.MaterialIndex = 0;
+
+		panelLight.PositionLLC = { -9.5f, -1.5f, -0.1f, 0.0f };
+		panelLight.U = { 1.0f, 0.0f, 1.0f, 0.0f };
+		panelLight.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		panelLight.Width = 10.0f;
+		panelLight.Height = 8.0f;
+		panelLight.MaterialIndex = 7;
+
+		Quads.push_back(bot);
+		Quads.push_back(back);
+		Quads.push_back(panelLight);
+	}
+
+	// SLAB
+	CreateBox({ -2.5, -1.5f, -3.5 }, { -1.0, -1.3f, -2.0 }, 1);
+	CreateBox({ 1.0, -1.5f, -3.5 }, { 2.5, -1.3f, -2.0 }, 1);
+
+	// MONOLITH
+	CreateBox({ -3.5, -1.5f, -7.3 }, { -2.0, 3.2f, -7.0 }, 0);
+	CreateBox({ 2.0, -1.5f, -7.3 }, { 3.5, 3.2f, -7.0 }, 0);
 }
 
 void World::UploadModel(const Model& model, const glm::vec3& Position, int material) {

@@ -21,9 +21,9 @@ struct Material {
 	glm::vec2 padding{0.0f};
 };
 
-static Material CreateDefaultDiffuse() {
+static Material CreateDefaultDiffuse(glm::vec4 color = {0.4f, 0.2, 0.1f, 1.0f}) {
 	Material m;
-	m.Color = { 0.4f, 0.2, 0.1f, 1.0f };
+	m.Color = color;
 	m.SpecularColor = m.Color;
 	m.EmissiveColor = m.Color;
 	m.RefractionColor = m.Color;
@@ -31,13 +31,24 @@ static Material CreateDefaultDiffuse() {
 	return m;
 }
 
-static Material CreateDefaultMetal() {
+static Material CreateDefaultMetal(glm::vec4 color = {0.7f, 0.6f, 0.1f, 1.0f}) {
 	Material m;
-	m.Color = { 0.7f, 0.6f, 0.1f, 1.0f };
+	m.Color = color;
 	m.SpecularColor = m.Color;
 	m.EmissiveColor = m.Color;
 	m.RefractionColor = m.Color;
 	m.Roughness = 0.0f;
+	return m;
+}
+
+static Material CreateDefaultGlossy(glm::vec4 color = {0.7f, 0.6f, 0.1f, 1.0f}, float roughness = 0.3, float probability = 0.05) {
+	Material m;
+	m.Color = color;
+	m.SpecularColor = m.Color;
+	m.EmissiveColor = m.Color;
+	m.RefractionColor = m.Color;
+	m.Roughness = roughness;
+	m.SpecularProbability = probability;
 	return m;
 }
 
@@ -54,30 +65,37 @@ static Material CreateDefaultDielectric() {
 	return m;
 }
 
-static Material CreateDefaultLight() {
+static Material CreateDefaultLight(glm::vec4 color = {0.88f, 0.83f, 0.3f, 1.0f}, float strength = 1.0) {
 	Material m;
-	m.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
+	m.Color = color;
 	m.SpecularColor = m.Color;
 	m.EmissiveColor = m.Color;
 	m.RefractionColor = m.Color;
 	m.Roughness = 1.0f;
-	m.EmissiveStrenght = 1.0f;
+	m.EmissiveStrenght = strength;
 	return m;
 }
 
-static Material CreateRandom(const char* name) {
+static void SetColor(Material& material, const glm::vec4& color) {
+	material.Color = color;
+	material.EmissiveColor = color;
+	material.RefractionColor = color;
+	material.SpecularColor = color;
+}
+
+static Material CreateRandom(bool withRefraction) {
 	float rnd = Random::GetFloat(0, 1);
 	Material m;
 
-	if (rnd < 0.4) {
-		// Diffuse
-		m.Color = glm::vec4(Random::GetVec3(0, 1), 1.0f);
+	if (rnd < 0.03) {
+		// Light
+		m.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
 		m.SpecularColor = m.Color;
-		m.RefractionColor = m.Color;
+		m.Roughness = 1.0f;
 		m.EmissiveColor = m.Color;
-		m.Roughness = Random::GetFloat(0.5, 1);
+		m.EmissiveStrenght = 1.0f;
 	}
-	else if (rnd < 0.55) {
+	else if (rnd < 0.30) {
 		// Metal
 		m.Color = glm::vec4(Random::GetVec3(0.5, 1), 1.0f);
 		m.SpecularColor = m.Color;
@@ -85,7 +103,7 @@ static Material CreateRandom(const char* name) {
 		m.EmissiveColor = m.Color;
 		m.Roughness = 0.0f;
 	}
-	else if (rnd < 0.75) {
+	else if (rnd < 0.5) {
 		// Glossy
 		m.Color = glm::vec4(Random::GetVec3(0, 1), 1.0f);
 		m.Roughness = Random::GetFloat(0.2, 0.35);
@@ -94,7 +112,7 @@ static Material CreateRandom(const char* name) {
 		m.RefractionColor = m.Color;
 		m.EmissiveColor = m.Color;
 	}
-	else if(rnd < 0.9) {
+	else if(rnd < 0.65 && withRefraction) {
 		// Glass transparent
 		m.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 		m.SpecularColor = m.Color;
@@ -104,7 +122,7 @@ static Material CreateRandom(const char* name) {
 		m.RefractionProbability = 1.0f;
 		m.RefractionRoughness = 0.0f;
 	}
-	else if (rnd < 0.95) {
+	else if (rnd < 0.68 && withRefraction) {
 		// glass color
 		m.Color = glm::vec4(Random::GetVec3(0, 1), 1.0f);
 		m.SpecularColor = m.Color;
@@ -115,12 +133,12 @@ static Material CreateRandom(const char* name) {
 		m.RefractionRoughness = Random::GetFloat(0, 0.15);
 	}
 	else {
-		// Light
-		m.Color = { 0.88f, 0.83f, 0.3f, 1.0f };
+		// Diffuse
+		m.Color = glm::vec4(Random::GetVec3(0, 1), 1.0f);
 		m.SpecularColor = m.Color;
-		m.Roughness = 1.0f;
+		m.RefractionColor = m.Color;
 		m.EmissiveColor = m.Color;
-		m.EmissiveStrenght = 1.0f;
+		m.Roughness = Random::GetFloat(0.5, 1);
 	}
 
 	return m;
