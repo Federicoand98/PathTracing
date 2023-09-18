@@ -77,7 +77,7 @@ Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, v
 vec4 PerPixel(vec2 ndc);
 float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive, out bool isSpecular);
 HitInfo TraceRay(Ray ray);
-HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit);
+HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit, float u, float v);
 HitInfo NoHit();
 bool HitSphere(Ray ray, Sphere sphere, out float t1, out float t2);
 float HitQuad(Ray ray, Quad quad);
@@ -124,7 +124,6 @@ layout(std430, binding = 5) buffer CubeBuffer {
 };
 
 uint rndSeed;
-float u, v;
 
 void main() {
     ivec2 imageResultSize = imageSize(imgOutput);
@@ -265,7 +264,7 @@ HitInfo TraceRay(Ray ray) {
     int index = -1;
     int objType = -1; // 0 Sphere, 1 Quad, 2 Mesh
     float t1, t2;
-    // float u, v;
+    float u = 0, v = 0;
     bool inside;
     bool cubesPres = Cubes.length() > 0;
 
@@ -328,10 +327,10 @@ HitInfo TraceRay(Ray ray) {
         return result;
     }
 
-    return HandleHit(ray, hitDistance, index, objType, inside);
+    return HandleHit(ray, hitDistance, index, objType, inside, u, v);
 }
 
-HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit) {
+HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit, float u, float v) {
     HitInfo hit;
 
     if(objType == 0) { // SPHERE
