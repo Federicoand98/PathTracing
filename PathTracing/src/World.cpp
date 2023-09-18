@@ -37,6 +37,9 @@ void World::LoadScene() {
 		case SceneType::SETUP_2:
 			PrepareSetup2();
 			break;
+		case SceneType::SETUP_3:
+			PrepareSetup3();
+			break;
         default:
             break;
     }
@@ -141,8 +144,8 @@ void World::PrepareCornellBoxMesh() {
 	CreateCornellBox();
 
 	Model suzanne, pawn;
-	suzanne.LoadObj("models/suzanne.obj");
-	pawn.LoadObj("models/pawn.obj");
+	suzanne.LoadObj("models/queen.obj");
+	pawn.LoadObj("models/king.obj");
 
 	UploadModel(suzanne, {0.7, -2.1, 2.0}, 1);
 	UploadModel(pawn, {-1.2, -2, 1.6}, 1);
@@ -534,6 +537,150 @@ void World::PrepareSetup2() {
 	// MONOLITH
 	CreateBox({ -3.5, -1.5f, -7.3 }, { -2.0, 3.2f, -7.0 }, 1);
 	CreateBox({ 2.0, -1.5f, -7.3 }, { 3.5, 3.2f, -7.0 }, 1);
+}
+
+void World::PrepareSetup3() {
+	BackgroundColor = { 0.0, 0.0, 0.0 };
+
+	Material white_diffuse = CreateDefaultDiffuse({1.0, 1.0, 1.0, 1.0});
+	Material white_metal = CreateDefaultMetal({ 1.0, 1.0, 1.0, 1.0 });
+	Material white_glossy = CreateDefaultGlossy({ 1.0, 1.0, 1.0, 1.0 }, 0.2, 0.2);
+	Material metal = CreateDefaultMetal({ .75, .75, .75, 1 });
+	Material light = CreateDefaultLight({1.0, 1.0, 1.0, 1.0}, 8.0);
+	Material red, blue, green;
+	red = CreateDefaultDiffuse({1.0, 0.0, 0.0, 1.0});
+	blue = CreateDefaultDiffuse({0.0, 0.0, 1.0, 1.0});
+	green = CreateDefaultDiffuse({0.0, 1.0, 0.0, 1.0});
+	Material glass1 = CreateDefaultGlass(glm::vec4{1.0}, 1.45f);
+	Material glass2 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.01f);
+
+	Materials.push_back(white_diffuse);	
+	Materials.push_back(metal);
+	Materials.push_back(red);
+	Materials.push_back(blue);
+	Materials.push_back(green);
+	Materials.push_back(white_metal);
+	Materials.push_back(white_glossy);
+	Materials.push_back(glass1);
+	Materials.push_back(glass2);
+	Materials.push_back(light);
+
+	{
+		Sphere left, middle, right;
+		left.Position = { -3.5f, -0.5f, -4.5f, 1.0f };
+		left.MaterialIndex = 0;
+
+		middle.Position = { 0.0f, -0.5f, -4.5f, 1.0f };
+		middle.MaterialIndex = 6;
+
+		right.Position = { 3.5f, -0.5f, -4.5f, 1.0f };
+		right.MaterialIndex = 5;
+
+		Spheres.push_back(left);
+		Spheres.push_back(middle);
+		Spheres.push_back(right);
+	}
+
+	{
+		Sphere left, middle, right;
+		left.Position = { -3.5f, -1.0f, -2.0f, 0.5f };
+		left.MaterialIndex = 2;
+
+		middle.Position = { 0.0f, -1.0f, -2.0f, 0.5f };
+		middle.MaterialIndex = 3;
+
+		right.Position = { 3.5f, -1.0f, -2.0f, 0.5f };
+		right.MaterialIndex = 4;
+
+		Spheres.push_back(left);
+		Spheres.push_back(middle);
+		Spheres.push_back(right);
+	}
+
+	{
+		Sphere left, middle, right;
+		left.Position = { -3.5f, 2.2f, -5.5f, 0.5f };
+		left.MaterialIndex = 0;
+
+		middle.Position = { 0.0f, 2.2f, -5.5f, 0.5f };
+		middle.MaterialIndex = 0;
+
+		right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
+		right.MaterialIndex = 0;
+
+		Spheres.push_back(left);
+		Spheres.push_back(middle);
+		Spheres.push_back(right);
+	}
+
+	{
+		Sphere left, right;
+		left.Position = { -1.75f, -0.9f, -2.75f, 0.4f };
+		left.MaterialIndex = 8;
+
+		right.Position = { 1.75f, -0.9f, -2.75f, 0.4f };
+		right.MaterialIndex = 7;
+
+		//Spheres.push_back(left);
+		//Spheres.push_back(right);
+	}
+
+	Model left, right;
+	left.LoadObj("models/king.obj");
+	right.LoadObj("models/queen.obj");
+
+	UploadModel(left, { -1.75, -0.9, -2.75 }, 3);
+	UploadModel(right, { 1.75, -0.9, -2.75 }, 3);
+
+
+	{
+		Quad bot, back;
+		bot.PositionLLC = { -5.0f, -1.5f, 2.5f, 0.0f };
+		bot.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		bot.V = { 0.0f, 0.0f, -1.0f, 0.0f };
+		bot.Width = 10.0f;
+		bot.Height = 12.5f;
+		bot.MaterialIndex = 0;
+
+		back.PositionLLC = { -5.0f, -1.5f, -10.0f, 0.0f };
+		back.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+		back.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		back.Width = 10.0f;
+		back.Height = 8.0f;
+		back.MaterialIndex = 0;
+
+		Quads.push_back(bot);
+		Quads.push_back(back);
+	}
+
+	{
+		Quad panelLight1, panelLight2;
+		
+		panelLight1.PositionLLC = { -9.5f, -1.5f, -0.1f, 0.0f };
+		panelLight1.U = { 1.0f, 0.0f, 1.0f, 0.0f };
+		panelLight1.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		panelLight1.Width = 10.0f;
+		panelLight1.Height = 8.0f;
+		panelLight1.MaterialIndex = 9;
+
+		panelLight2.PositionLLC = { -9.5f, 4.5f, -0.1f, 0.0f };
+		panelLight2.U = { 1.0f, 0.0f, 1.0f, 0.0f };
+		panelLight2.V = { 0.0f, 1.0f, -1.0f, 0.0f };
+		panelLight2.Width = 10.0f;
+		panelLight2.Height = 8.0f;
+		panelLight2.MaterialIndex = 9;
+
+		Quads.push_back(panelLight2);
+	}
+
+	// SLAB
+	CreateBox({ -2.5, -1.5f, -3.5 }, { -1.0, -1.3f, -2.0 }, 1);
+	CreateBox({ 1.0, -1.5f, -3.5 }, { 2.5, -1.3f, -2.0 }, 1);
+
+	// MONOLITH
+	CreateBox({ -3.5, -1.5f, -7.3 }, { -2.0, 3.2f, -7.0 }, 1);
+	CreateBox({ 2.0, -1.5f, -7.3 }, { 3.5, 3.2f, -7.0 }, 1);
+
 }
 
 void World::UploadModel(const Model& model, const glm::vec3& Position, int material) {

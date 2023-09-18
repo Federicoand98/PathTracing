@@ -138,6 +138,7 @@ enum class SceneType {
 	CORNELL_BOX_MESH = 4,
 	SETUP_1 = 5,
 	SETUP_2 = 6,
+	SETUP_3 = 7
 };
 
 class World {
@@ -165,6 +166,7 @@ private:
 	void PrepareRandomBoxes();
 	void PrepareSetup1();
 	void PrepareSetup2();
+	void PrepareSetup3();
 
 	void UploadModel(const Model& model, const glm::vec3& Position, int material);
 
