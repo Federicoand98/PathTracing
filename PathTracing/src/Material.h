@@ -57,7 +57,7 @@ static Material CreateDefaultDielectric() {
 	m.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 	m.SpecularColor = m.Color;
 	m.EmissiveColor = m.Color;
-	m.RefractionColor = m.Color;
+	//m.RefractionColor = m.Color;
 	m.RefractionRatio = 1.02f;
 	m.RefractionProbability = 1.0f;
 	m.SpecularProbability = 0.0f;
@@ -81,7 +81,6 @@ static Material CreateDefaultGlass(glm::vec4 color = { 1.0f,1.0f, 1.0f, 1.0f }, 
 	m.Color = color;
 	m.Roughness = 0.0f;
 	m.SpecularColor = m.Color;
-	m.RefractionColor = m.Color;
 	m.SpecularProbability = 0.0f;
 	m.RefractionRatio = refrIndex;
 	m.RefractionProbability = refrProb;

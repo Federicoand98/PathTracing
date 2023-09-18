@@ -22,6 +22,7 @@ public:
     bool OnUpdate(float ts);
     void OnResize(uint32_t width, uint32_t height);
     void RecalculateProjection();
+    void ResetPosition();
 
     const glm::mat4& GetProjection() const { return m_Projection; }
     const glm::mat4& GetInverseProjection() const { return m_InverseProjection; }

@@ -137,6 +137,7 @@ enum class SceneType {
 	RANDOM_BOXES = 3,
 	CORNELL_BOX_MESH = 4,
 	SETUP_1 = 5,
+	SETUP_2 = 6,
 };
 
 class World {
@@ -154,7 +155,7 @@ public:
 	std::vector<Material> Materials;
 	std::vector<MeshInfo> Meshes;
 	std::vector<Triangle> Triangles;
-	int CurrentScene = 5;
+	int CurrentScene = 6;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();
@@ -163,6 +164,7 @@ private:
 	void PrepareRandomSpheres();
 	void PrepareRandomBoxes();
 	void PrepareSetup1();
+	void PrepareSetup2();
 
 	void UploadModel(const Model& model, const glm::vec3& Position, int material);
 
