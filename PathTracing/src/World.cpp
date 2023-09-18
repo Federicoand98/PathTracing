@@ -250,12 +250,13 @@ void World::PrepareSetup1() {
 	Material white_diffuse = CreateDefaultDiffuse({1.0, 1.0, 1.0, 1.0});
 	Material white_metal = CreateDefaultMetal({ 1.0, 1.0, 1.0, 1.0 });
 	Material white_glossy = CreateDefaultGlossy({ 1.0, 1.0, 1.0, 1.0 }, 0.2, 0.2);
-	Material metal = CreateDefaultMetal();
+	Material metal = CreateDefaultMetal({ .75, .75, .75, 1 });
 	Material light = CreateDefaultLight({1.0, 1.0, 1.0, 1.0}, 8.0);
 	Material red, blue, green;
 	red = CreateDefaultDiffuse({1.0, 0.0, 0.0, 1.0});
 	blue = CreateDefaultDiffuse({0.0, 0.0, 1.0, 1.0});
 	green = CreateDefaultDiffuse({0.0, 1.0, 0.0, 1.0});
+	Material glass1 = CreateDefaultGlass(glm::vec4{1.0}, 1.02f);
 
 	Materials.push_back(white_diffuse);	
 	Materials.push_back(metal);
@@ -264,6 +265,7 @@ void World::PrepareSetup1() {
 	Materials.push_back(green);
 	Materials.push_back(white_metal);
 	Materials.push_back(white_glossy);
+	Materials.push_back(glass1);
 	Materials.push_back(light);
 
 	{
@@ -320,7 +322,7 @@ void World::PrepareSetup1() {
 		left.MaterialIndex = 0;
 
 		right.Position = { 1.75f, -0.9f, -2.75f, 0.4f };
-		right.MaterialIndex = 0;
+		right.MaterialIndex = 7;
 
 		Spheres.push_back(left);
 		Spheres.push_back(right);
@@ -328,7 +330,7 @@ void World::PrepareSetup1() {
 
 
 	{
-		Quad bot, back, panelLight;
+		Quad bot, back;
 		bot.PositionLLC = { -5.0f, -1.5f, 2.5f, 0.0f };
 		bot.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		bot.V = { 0.0f, 0.0f, -1.0f, 0.0f };
@@ -343,16 +345,28 @@ void World::PrepareSetup1() {
 		back.Height = 8.0f;
 		back.MaterialIndex = 0;
 
-		panelLight.PositionLLC = { -9.5f, -1.5f, -0.1f, 0.0f };
-		panelLight.U = { 1.0f, 0.0f, 1.0f, 0.0f };
-		panelLight.V = { 0.0f, 1.0f, 0.0f, 0.0f };
-		panelLight.Width = 10.0f;
-		panelLight.Height = 8.0f;
-		panelLight.MaterialIndex = 7;
-
 		Quads.push_back(bot);
 		Quads.push_back(back);
-		Quads.push_back(panelLight);
+	}
+
+	{
+		Quad panelLight1, panelLight2;
+		
+		panelLight1.PositionLLC = { -9.5f, -1.5f, -0.1f, 0.0f };
+		panelLight1.U = { 1.0f, 0.0f, 1.0f, 0.0f };
+		panelLight1.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+		panelLight1.Width = 10.0f;
+		panelLight1.Height = 8.0f;
+		panelLight1.MaterialIndex = 8;
+
+		panelLight2.PositionLLC = { -9.5f, 4.5f, -0.1f, 0.0f };
+		panelLight2.U = { 1.0f, 0.0f, 1.0f, 0.0f };
+		panelLight2.V = { 0.0f, 1.0f, -1.0f, 0.0f };
+		panelLight2.Width = 10.0f;
+		panelLight2.Height = 8.0f;
+		panelLight2.MaterialIndex = 8;
+
+		Quads.push_back(panelLight2);
 	}
 
 	// SLAB

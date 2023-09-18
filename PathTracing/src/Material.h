@@ -76,6 +76,19 @@ static Material CreateDefaultLight(glm::vec4 color = {0.88f, 0.83f, 0.3f, 1.0f},
 	return m;
 }
 
+static Material CreateDefaultGlass(glm::vec4 color = { 1.0f,1.0f, 1.0f, 1.0f }, float refrIndex = 1.2, float refrProb = 1.0, float refrRough = 0.0) {
+	Material m;
+	m.Color = color;
+	m.Roughness = 0.0f;
+	m.SpecularColor = m.Color;
+	m.RefractionColor = m.Color;
+	m.SpecularProbability = 0.0f;
+	m.RefractionRatio = refrIndex;
+	m.RefractionProbability = refrProb;
+	m.RefractionRoughness = refrRough;
+	return m;
+}
+
 static void SetColor(Material& material, const glm::vec4& color) {
 	material.Color = color;
 	material.EmissiveColor = color;
