@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef Application_h__
-#define Application_h__
+#ifndef APPLICATION_H
+#define APPLICATION_H
 
 #include <iostream>
 #include <GL/glew.h>
@@ -18,8 +18,17 @@
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 #include "Image.h"
 #include "Renderer.h"
-#include "World.h"
 
+/*
+* @Class Application
+* @brief The Application class is the main entry poiny for the application.
+* 
+* This class is responsible for initializating, running, and shutting down the application.
+* 
+* @member m_Renderer: An instance of the Renderer ckass that handles all rendering tasks.
+* @member m_Camera: An instace of the Camera class that represents the camera in the 3D world.
+* @member m_World: An instance of the World class that represents the 3D world.
+*/
 class Application {
 public:
 	Application();
@@ -36,14 +45,13 @@ private:
 	void CalculateTime();
 	void RenderUI(float deltaTime);
 	void Render(float deltaTime);
-
-	void InitializeMaterials();
-	void InitializeScene();
 private:
     Renderer m_Renderer;
     Camera m_Camera;
 	World m_World;
 	bool m_IsRunning;
+	bool m_Vsync = true;
+	bool m_LinkColors = true;
 	float m_Timer = 0.0f;
 	float m_DeltaTime = 0.0f;
 	float m_ResetTimer = 0.0f;
@@ -57,4 +65,4 @@ private:
 	GLFWwindow* m_Window;
 };
 
-#endif // Application_h__
+#endif // APPLICATION_H

@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef Random_h__
-#define Random_h__
+#ifndef RANDOM_H
+#define RANDOM_H
 
 #include <random>
 #include <glm/glm.hpp>
@@ -37,5 +37,5 @@ public:
 	}
 };
 
-#endif
+#endif // RANDOM_H
 

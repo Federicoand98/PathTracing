@@ -9,8 +9,13 @@
 #include <glm/gtx/quaternion.hpp>
 
 Camera::Camera(float verticalFOV, float nearClip, float farClip) : m_VerticalFOV(verticalFOV), m_NearClip(nearClip), m_FarClip(farClip) {
+    ResetPosition();
+}
+
+void Camera::ResetPosition() {
     m_ForwardDirection = glm::vec3(0, 0, -1);
     m_Position = glm::vec3(0, 0, 6);
+    RecalculateView();
 }
 
 bool Camera::OnUpdate(float ts) {
@@ -63,7 +68,7 @@ bool Camera::OnUpdate(float ts) {
 
     if (moved){
         RecalculateView();
-        RecalculateRayDirections();
+        // RecalculateRayDirections();
     }
 
     return moved;
@@ -77,7 +82,7 @@ void Camera::OnResize(uint32_t width, uint32_t height) {
     m_ViewportHeight = height;
 
     RecalculateProjection();
-    RecalculateRayDirections();
+    //RecalculateRayDirections();
 }
 
 float Camera::GetRotationSpeed() {

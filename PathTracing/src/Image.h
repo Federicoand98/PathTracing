@@ -1,9 +1,10 @@
 #pragma once
 
-#ifndef Image_h__
-#define Image_h__
+#ifndef IMAGE_H
+#define IMAGE_H
 
 #include <string>
+#include <GL/glew.h>
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 
 class Image {
@@ -13,6 +14,7 @@ public:
 	~Image();
 
 	void SetData(const void* data);
+	void* GetData() const {};
 	void Resize(uint32_t width, uint32_t height, const void* data = nullptr);
 
 	uint32_t GetWidth() const { return m_Width; }
@@ -26,4 +28,4 @@ private:
 	GLuint m_Texture;
 };
 
-#endif // Image_h__
+#endif // IMAGE_H

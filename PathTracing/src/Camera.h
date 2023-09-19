@@ -1,12 +1,19 @@
 //
 // Created by Federico Andrucci on 22/08/23.
 //
+#pragma once
 
-#ifndef PATHTRACING_CAMERA_H
-#define PATHTRACING_CAMERA_H
+#ifndef CAMERA_H
+#define CAMERA_H
 
 #include <glm/glm.hpp>
 #include <vector>
+
+struct CameraUBO {
+    glm::mat4 InverseProj;
+    glm::mat4 InverseView;
+    glm::vec3 CameraPosition;
+};
 
 class Camera {
 public:
@@ -14,6 +21,8 @@ public:
 
     bool OnUpdate(float ts);
     void OnResize(uint32_t width, uint32_t height);
+    void RecalculateProjection();
+    void ResetPosition();
 
     const glm::mat4& GetProjection() const { return m_Projection; }
     const glm::mat4& GetInverseProjection() const { return m_InverseProjection; }
@@ -22,18 +31,27 @@ public:
     const glm::vec3& GetPosition() const { return m_Position; }
     const glm::vec3& GetDirection() const { return m_ForwardDirection; }
     const std::vector<glm::vec3>& GetRayDirections() const { return m_RayDirections; }
+
+    const CameraUBO GetCameraUBO() const {
+        return {
+            GetInverseProjection(),
+            GetInverseView(),
+            GetPosition()
+        };
+    }
+
     float GetRotationSpeed();
 private:
-    void RecalculateProjection();
     void RecalculateView();
     void RecalculateRayDirections();
+public:
+    float m_VerticalFOV = 45.0f;
 private:
     glm::mat4 m_Projection{ 1.0f };
     glm::mat4 m_View{ 1.0f };
     glm::mat4 m_InverseProjection{ 1.0f };
     glm::mat4 m_InverseView{ 1.0f };
 
-    float m_VerticalFOV = 45.0f;
     float m_NearClip = 0.1f;
     float m_FarClip = 100.0f;
 
@@ -48,4 +66,4 @@ private:
     uint32_t m_ViewportWidth = 0, m_ViewportHeight = 0;
 };
 
-#endif //PATHTRACING_CAMERA_H
+#endif // CAMERA_H
