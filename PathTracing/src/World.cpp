@@ -141,14 +141,17 @@ void World::PrepareCornellBox() {
 }
 
 void World::PrepareCornellBoxMesh() {
+	BackgroundColor = { 0.54f, 0.73f, 0.95f };
 	CreateCornellBox();
 
-	Model suzanne, pawn;
-	suzanne.LoadObj("models/queen.obj");
-	pawn.LoadObj("models/king.obj");
+	Model queen, king, knight;
+	queen.LoadObj("models/queen.obj");
+	king.LoadObj("models/king.obj");
+	knight.LoadObj("models/knight.obj");
 
-	UploadModel(suzanne, {0.7, -2.1, 2.0}, 1);
-	UploadModel(pawn, {-1.2, -2, 1.6}, 1);
+	UploadModel(queen, {0.7, -2.1, 2.0}, 1);
+	UploadModel(king, {-1.2, -2, 1.6}, 1);
+	UploadModel(knight, {-1.2, -2, 1.6}, 1);
 }
 
 void World::PrepareRandomSpheres() {
@@ -264,6 +267,9 @@ void World::PrepareSetup1() {
 	green = CreateDefaultDiffuse({0.0, 1.0, 0.0, 1.0});
 	Material glass1 = CreateDefaultGlass(glm::vec4{1.0}, 1.45f);
 	Material glass2 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.01f);
+	Material metal1 = CreateDefaultGlossy({ 0.8549, 0.5490, 0.4, 1.0 }, 0.5, 0.3);
+	Material metal2 = CreateDefaultGlossy({ 0.8549, 0.5490, 0.4, 1.0 }, 0.5, 0.6);
+	Material metal3 = CreateDefaultGlossy({ 0.8549, 0.5490, 0.4, 1.0 }, 0.5, 1);
 
 	Materials.push_back(white_diffuse);	
 	Materials.push_back(metal);
@@ -275,6 +281,9 @@ void World::PrepareSetup1() {
 	Materials.push_back(glass1);
 	Materials.push_back(glass2);
 	Materials.push_back(light);
+	Materials.push_back(metal1);
+	Materials.push_back(metal2);
+	Materials.push_back(metal3);
 
 	{
 		Sphere left, middle, right;
@@ -311,13 +320,13 @@ void World::PrepareSetup1() {
 	{
 		Sphere left, middle, right;
 		left.Position = { -3.5f, 2.2f, -5.5f, 0.5f };
-		left.MaterialIndex = 0;
+		left.MaterialIndex = 10;
 
 		middle.Position = { 0.0f, 2.2f, -5.5f, 0.5f };
-		middle.MaterialIndex = 0;
+		middle.MaterialIndex = 11;
 
 		right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
-		right.MaterialIndex = 0;
+		right.MaterialIndex = 12;
 
 		Spheres.push_back(left);
 		Spheres.push_back(middle);
@@ -336,20 +345,19 @@ void World::PrepareSetup1() {
 		Spheres.push_back(right);
 	}
 
-
 	{
 		Quad bot, back;
-		bot.PositionLLC = { -5.0f, -1.5f, 2.5f, 0.0f };
+		bot.PositionLLC = { -10.0f, -1.5f, 2.5f, 0.0f };
 		bot.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		bot.V = { 0.0f, 0.0f, -1.0f, 0.0f };
-		bot.Width = 10.0f;
+		bot.Width = 20.0f;
 		bot.Height = 12.5f;
 		bot.MaterialIndex = 0;
 
-		back.PositionLLC = { -5.0f, -1.5f, -10.0f, 0.0f };
+		back.PositionLLC = { -10.0f, -1.5f, -10.0f, 0.0f };
 		back.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		back.V = { 0.0f, 1.0f, 0.0f, 0.0f };
-		back.Width = 10.0f;
+		back.Width = 20.0f;
 		back.Height = 8.0f;
 		back.MaterialIndex = 0;
 
@@ -470,13 +478,13 @@ void World::PrepareSetup2() {
 
 	{
 		Sphere left, middle, right;
-		left.Position = { -3.5f, 2.2f, -5.5f, 0.5f };
+		left.Position = { -3.5f, 2.2f, -3.0f, 0.5f };
 		left.MaterialIndex = 10;
 
-		middle.Position = { 0.0f, 2.2f, -5.5f, 0.5f };
+		middle.Position = { 0.0f, 2.2f, -3.0f, 0.5f };
 		middle.MaterialIndex = 12;
 
-		right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
+		right.Position = { 3.5f, 2.2f, -3.0f, 0.5f };
 		right.MaterialIndex = 11;
 
 		Spheres.push_back(left);
@@ -499,17 +507,17 @@ void World::PrepareSetup2() {
 
 	{
 		Quad bot, back;
-		bot.PositionLLC = { -5.0f, -1.5f, 2.5f, 0.0f };
+		bot.PositionLLC = { -10.0f, -1.5f, 2.5f, 0.0f };
 		bot.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		bot.V = { 0.0f, 0.0f, -1.0f, 0.0f };
-		bot.Width = 10.0f;
+		bot.Width = 20.0f;
 		bot.Height = 12.5f;
 		bot.MaterialIndex = 0;
 
-		back.PositionLLC = { -5.0f, -1.5f, -10.0f, 0.0f };
+		back.PositionLLC = { -10.0f, -1.5f, -10.0f, 0.0f };
 		back.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		back.V = { 0.0f, 1.0f, 0.0f, 0.0f };
-		back.Width = 10.0f;
+		back.Width = 20.0f;
 		back.Height = 8.0f;
 		back.MaterialIndex = 0;
 
@@ -793,10 +801,10 @@ void World::CreateCornellBox() {
 	// left green
 	{
 		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
+		quad.PositionLLC = { -2.0f, -2.0f, 6.0f, 0.0f };
 		quad.U = { 0.0f, 0.0f, -1.0f, 0.0f };
 		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
-		quad.Width = 4.0f;
+		quad.Width = 6.0f;
 		quad.Height = 4.0f;
 		quad.MaterialIndex = 5;
 
@@ -822,7 +830,7 @@ void World::CreateCornellBox() {
 		quad.PositionLLC = { 2.0f, -2.0f, 0.0f, 0.0f };
 		quad.U = { 0.0f, 0.0f, 1.0f, 0.0f };
 		quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
-		quad.Width = 4.0f;
+		quad.Width = 6.0f;
 		quad.Height = 4.0f;
 		quad.MaterialIndex = 0;
 
@@ -836,7 +844,7 @@ void World::CreateCornellBox() {
 		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
 		quad.Width = 4.0f;
-		quad.Height = 4.0f;
+		quad.Height = 6.0f;
 		quad.MaterialIndex = 4;
 
 		Quads.push_back(quad);
@@ -845,11 +853,11 @@ void World::CreateCornellBox() {
 	// bot white
 	{
 		Quad quad;
-		quad.PositionLLC = { -2.0f, -2.0f, 4.0f, 0.0f };
+		quad.PositionLLC = { -2.0f, -2.0f, 6.0f, 0.0f };
 		quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 		quad.V = { 0.0f, 0.0f, -1.0f, 0.0f };
 		quad.Width = 4.0f;
-		quad.Height = 4.0f;
+		quad.Height = 6.0f;
 		quad.MaterialIndex = 4;
 
 		Quads.push_back(quad);

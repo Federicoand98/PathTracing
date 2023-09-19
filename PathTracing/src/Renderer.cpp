@@ -54,6 +54,7 @@ void Renderer::Render(const Camera& camera, const World& world) {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     m_Shader->use();
+    m_Shader->setInt("tex", 0);
     m_Shader->setBool("PostProcessing", PostProcessing);
 
     DrawSceneQuad();

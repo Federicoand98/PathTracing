@@ -156,7 +156,7 @@ public:
 	std::vector<Material> Materials;
 	std::vector<MeshInfo> Meshes;
 	std::vector<Triangle> Triangles;
-	int CurrentScene = 6;
+	int CurrentScene = 5;
 private:
 	void PrepareMaterials();
 	void PrepareSimpleScene();

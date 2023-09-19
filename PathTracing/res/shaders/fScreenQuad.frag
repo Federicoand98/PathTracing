@@ -17,7 +17,8 @@ void main() {
         texCol = LinearToInverseGamma(texCol, 2.4);
     }
 
-    FragColor = vec4(texCol, 1.0);
+    //FragColor = vec4(texCol, 1.0);
+    FragColor = vec4(1.0);
 }
 
 vec3 LinearToInverseGamma(vec3 rgb, float gamma) {
