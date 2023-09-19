@@ -79,7 +79,7 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-This project is a full GPU-based PathTracing Renderer written in C++ and OpenGL 4.3.
+This project is a full GPU-based RayTracing with PathTracing Renderer written in C++ and OpenGL 4.3.
 
 ![Product Name Screen Shot][product-screenshot]
 
