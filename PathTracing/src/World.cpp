@@ -621,24 +621,12 @@ void World::PrepareSetup3() {
 		Spheres.push_back(right);
 	}
 
-	{
-		Sphere left, right;
-		left.Position = { -1.75f, -0.9f, -2.75f, 0.4f };
-		left.MaterialIndex = 8;
-
-		right.Position = { 1.75f, -0.9f, -2.75f, 0.4f };
-		right.MaterialIndex = 7;
-
-		//Spheres.push_back(left);
-		//Spheres.push_back(right);
-	}
-
 	Model left, right;
 	left.LoadObj("models/king.obj");
 	right.LoadObj("models/queen.obj");
 
-	UploadModel(left, { -1.75, -0.9, -2.75 }, 3);
-	UploadModel(right, { 1.75, -0.9, -2.75 }, 3);
+	UploadModel(left, { -1.75, -1.4, -2.75 }, 3);
+	UploadModel(right, { 1.75, -1.4, -2.75 }, 3);
 
 
 	{
