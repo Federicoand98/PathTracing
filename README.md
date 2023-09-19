@@ -104,6 +104,14 @@ This section should list any major frameworks/libraries used to bootstrap your p
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
+## Some Renders
+![scene-1][scene-1]
+![scene-2][scene-2]
+![cb][cb]
+![cb-2][cb-2]
+![app-1][app-1]
+
+
 <!-- CONTRIBUTING -->
 ## Contributing
 
@@ -121,12 +129,6 @@ Don't forget to give the project a star! Thanks again!
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
-## Some Renders
-![scene-1][scene-1]
-![scene-2][scene-2]
-![cb][cb]
-![cb-2][cb-2]
-![app-1][app-1]
 
 <!-- LICENSE -->
 ## License
