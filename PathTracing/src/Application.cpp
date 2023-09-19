@@ -315,67 +315,76 @@ void Application::RenderUI(float deltaTime) {
 	ImGui::PushItemWidth(200.0);
 	ImGui::Text("Objects:");
 
-	if (ImGui::TreeNode("Spheres") && m_World.Spheres.size() > 0) {
-		for (size_t i = 0; i < m_World.Spheres.size(); i++) {
-			Sphere& sphere = m_World.Spheres.at(i);
+	if (m_World.Spheres.size() > 0) {
+		if (ImGui::TreeNode("Spheres")) {
+			for (size_t i = 0; i < m_World.Spheres.size(); i++) {
+				Sphere& sphere = m_World.Spheres.at(i);
 
-			ImGui::PushID(i);
-			if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, -10.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Material", &sphere.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
+				ImGui::PushID(i);
+				if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, -10.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Material", &sphere.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
 
-			ImGui::Separator();
-			ImGui::PopID();
+				ImGui::Separator();
+				ImGui::PopID();
+			}
+
+			ImGui::TreePop();
 		}
-
-		ImGui::TreePop();
 	}
 
-	if (ImGui::TreeNode("Quads") && m_World.Quads.size() > 0) {
-		for (size_t i = 0; i < m_World.Quads.size(); i++) {
-			Quad& quad = m_World.Quads.at(i);
+	if (m_World.Quads.size() > 0) {
+		if (ImGui::TreeNode("Quads")) {
+			for (size_t i = 0; i < m_World.Quads.size(); i++) {
+				Quad& quad = m_World.Quads.at(i);
 
-			ImGui::PushID(i);
-			if (ImGui::DragFloat3("Position", glm::value_ptr(quad.PositionLLC), 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Width", &quad.Width, 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Height", &quad.Height, 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Material", &quad.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
-			ImGui::Separator();
-			ImGui::PopID();
+				ImGui::PushID(i);
+				if (ImGui::DragFloat3("Position", glm::value_ptr(quad.PositionLLC), 0.1f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Width", &quad.Width, 0.1f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Height", &quad.Height, 0.1f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Material", &quad.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
+				ImGui::Separator();
+				ImGui::PopID();
+			}
+
+			ImGui::TreePop();
 		}
-
-		ImGui::TreePop();
 	}
 
-	if (ImGui::TreeNode("Boxes") && m_World.Boxes.size() > 0) {
-		for (size_t i = 0; i < m_World.Boxes.size(); i++) {
-			Box& box = m_World.Boxes.at(i);
 
-			ImGui::PushID(i);
-			if (ImGui::DragFloat3("Min", glm::value_ptr(box.Min), 0.1f)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
-			if (ImGui::DragFloat3("Max", glm::value_ptr(box.Max), 0.1f)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
-			if (ImGui::DragFloat("Material", &box.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
-			ImGui::Separator();
-			ImGui::PopID();
+	if (m_World.Boxes.size() > 0) {
+		if (ImGui::TreeNode("Boxes")) {
+			for (size_t i = 0; i < m_World.Boxes.size(); i++) {
+				Box& box = m_World.Boxes.at(i);
+
+				ImGui::PushID(i);
+				if (ImGui::DragFloat3("Min", glm::value_ptr(box.Min), 0.1f)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
+				if (ImGui::DragFloat3("Max", glm::value_ptr(box.Max), 0.1f)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
+				if (ImGui::DragFloat("Material", &box.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
+				ImGui::Separator();
+				ImGui::PopID();
+			}
+
+			ImGui::TreePop();
 		}
-
-		ImGui::TreePop();
 	}
 
-	if (ImGui::TreeNode("Meshes") && m_World.Meshes.size() > 0) {
-		for (size_t i = 0; i < m_World.Meshes.size(); i++) {
-			MeshInfo& mesh = m_World.Meshes.at(i);
+	if (m_World.Meshes.size() > 0) {
+		if (ImGui::TreeNode("Meshes")) {
+			for (size_t i = 0; i < m_World.Meshes.size(); i++) {
+				MeshInfo& mesh = m_World.Meshes.at(i);
 
-			ImGui::PushID(i);
-			if (ImGui::DragFloat3("Position", glm::value_ptr(mesh.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Material", &mesh.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); }
-			ImGui::Separator();
-			ImGui::PopID();
+				ImGui::PushID(i);
+				if (ImGui::DragFloat3("Position", glm::value_ptr(mesh.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
+				if (ImGui::DragFloat("Material", &mesh.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); }
+				ImGui::Separator();
+				ImGui::PopID();
+			}
+
+			ImGui::TreePop();
 		}
-
-		ImGui::TreePop();
 	}
 
 	ImGui::Spacing();

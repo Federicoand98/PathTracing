@@ -90,6 +90,7 @@ void World::PrepareMaterials() {
 }
 
 void World::PrepareSimpleScene() {
+	BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
 	{
 		Sphere s;
 		s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
@@ -118,6 +119,7 @@ void World::PrepareSimpleScene() {
 }
 
 void World::PrepareCornellBox() {
+	BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
 	{
 		Sphere s;
 		s.Position = { -0.9f, -1.2f, 1.5f, 0.8f };
@@ -204,6 +206,7 @@ void World::PrepareRandomSpheres() {
 }
 
 void World::PrepareRandomBoxes() {
+	BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
 	Material dielectric, metal, diffuse, lightMaterial, baseMat;
 	dielectric = CreateDefaultDielectric();
 	metal = CreateDefaultMetal();
