@@ -15,6 +15,13 @@ struct CameraUBO {
     glm::vec3 CameraPosition;
 };
 
+/**
+ * @class Camera
+ * @brief The Camera class represents a camera in the 3D world.
+ *
+ * This class is responsible for updating the camera's position and orientation, recalculating the projection matrix when the window is resized, 
+ * and providing access to various camera properties.
+ */
 class Camera {
 public:
     Camera(float verticalFOV, float nearClip, float farClip);

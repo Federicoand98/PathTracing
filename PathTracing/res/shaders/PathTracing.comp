@@ -153,8 +153,8 @@ vec4 PerPixel(vec2 ndc) {
     Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
 
     Material material;
-    vec3 light = vec3(0.0);
-    vec3 contribution = vec3(1.0);
+    vec3 light = vec3(0.0);         // colore finale del pixel dato dall'accumulazione
+    vec3 contribution = vec3(1.0);  // contributo di ogni intersezione al colore finale
     float rayProbability;
     bool isRefractive;
     bool isSpecular;
@@ -176,6 +176,7 @@ vec4 PerPixel(vec2 ndc) {
 
         if(hit.Inside) {
             hit.Normal *= -1.0;
+            // attenuation, Beer-Lambert law -> intesità di luce diminuisce exp con la distanza percorsa attraverso il materiale
             contribution *= exp(-vec3(material.RefractionColor) * hit.HitDistance);
         }
 
@@ -187,14 +188,17 @@ vec4 PerPixel(vec2 ndc) {
             contribution *= mix(vec3(material.Color), vec3(material.SpecularColor), isSpecular ? 1.0 : 0.0);
         }
 
+        // normalizzazione del colore in base alla probabilità del raggio, in modo da avere una rappresentazione accurata dell'intensità di lice che rggiunge il pixel
         contribution /= rayProbability;
 
         // Russian Roulette
+        // i raggi di luce con un basso contributo al colore vengono scartati
         {
             float p = max(contribution.x, max(contribution.y, contribution.z));
             if(GetRandomFloat() > p)
                 break;
 
+            // se il percorso non viene terminato allora si reintegra l'energia persa dai percorsi terminati
             contribution *= 1.0 / p;
         }
     }
@@ -461,6 +465,12 @@ bool HitBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax, vec3 position) {
     return tNear <= tFar;
 }
 
+/*
+*  n1: indice di rifrazione del materiale da cui proviene il raggio
+*  n2: indice di rifrazione del materiale in cui entra il raggio
+*  f0: valore di riflettanza del materiale ad angolo 0
+*  f90: valore di riflettanza del materiale ad angolo 90
+*/
 float FresnelSchlick(float n1, float n2, vec3 normal, vec3 incident, float f0, float f90) {
         // Schlick aproximation
         float r0 = (n1-n2) / (n1+n2);
