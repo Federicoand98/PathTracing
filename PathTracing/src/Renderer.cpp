@@ -6,15 +6,17 @@
 #include "Random.h"
 
 void Renderer::OnResize(uint32_t width, uint32_t height) {
-    if(m_RenderedImage) {
-        if (m_RenderedImage->GetWidth() == width && m_RenderedImage->GetHeight() == height)
+    if(m_FrameBuffer) {
+        if (m_FrameBuffer->GetWidth() == width && m_FrameBuffer->GetHeight() == height)
             return;
 
         m_Width = width;
         m_Height = height;
         m_RenderedImage->Resize(width, height);
+        m_FrameBuffer->Rescale(width, height);
     } else {
-        m_RenderedImage = std::make_shared<Image>(width, height);
+        m_RenderedImage = std::make_shared<Image>(m_Width, m_Height);
+        m_FrameBuffer = std::make_shared<FrameBuffer>(width, height);
     }
 }
 
@@ -25,12 +27,11 @@ void Renderer::Initialize(const Camera& camera, const World& world) {
     m_Shader = std::make_shared<Shader>("shaders/vScreenQuad.vert", "shaders/fScreenQuad.frag");
     m_ComputeShader = std::make_shared<ComputeShader>("shaders/PathTracing.comp");
     m_ComputeShader->UpdateWorldBuffer(world);
-
-    m_Shader->use();
-    m_Shader->setInt("tex", 0);
 }
 
 void Renderer::Render(const Camera& camera, const World& world) {
+    m_RenderedImage->Bind();
+
     m_ComputeShader->Use();
     m_ComputeShader->SetInt("width", m_Width);
     m_ComputeShader->SetInt("height", m_Height);
@@ -51,13 +52,22 @@ void Renderer::Render(const Camera& camera, const World& world) {
 	glDispatchCompute((unsigned int)m_Width / 8, (unsigned int)m_Height / 8, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(0, 0, m_Width, m_Height);
+
+    m_FrameBuffer->Bind();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     m_Shader->use();
     m_Shader->setInt("tex", 0);
     m_Shader->setBool("PostProcessing", PostProcessing);
 
+    glBindTextureUnit(0, m_RenderedImage->GetTexture());
+
     DrawSceneQuad();
+
+    m_FrameBuffer->Unbind();
+
+    glClear(GL_COLOR_BUFFER_BIT);
 
     if (PathTracing)
         m_PTCounter++;
@@ -74,7 +84,7 @@ void Renderer::DrawSceneQuad() {
              1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
              1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
         };
-        
+
         // setup plane VAO
         glGenVertexArrays(1, &m_QuadVAO);
         glGenBuffers(1, &m_QuadVBO);

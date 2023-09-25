@@ -4,6 +4,118 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "Random.h"
 
+
+const GLint WIDTH = 800;
+const GLint HEIGHT = 600;
+
+GLuint VAO;
+GLuint VBO;
+GLuint FBO;
+GLuint RBO;
+GLuint texture_id;
+GLuint shader;
+
+const char* vertex_shader_code = R"*(
+#version 430
+
+layout (location = 0) in vec3 pos;
+
+void main()
+{
+	gl_Position = vec4(0.9*pos.x, 0.9*pos.y, 0.5*pos.z, 1.0);
+}
+)*";
+
+const char* fragment_shader_code = R"*(
+#version 430
+
+out vec4 color;
+
+void main()
+{
+	color = vec4(0.0, 1.0, 0.0, 1.0);
+}
+)*";
+
+void create_triangle()
+{
+    GLfloat vertices[] = {
+            -1.0f, -1.0f, 0.0f, // 1. vertex x, y, z
+            1.0f, -1.0f, 0.0f, // 2. vertex ...
+            0.0f, 1.0f, 0.0f // etc...
+    };
+
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+    glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+void add_shader(GLuint program, const char* shader_code, GLenum type)
+{
+    GLuint current_shader = glCreateShader(type);
+
+    const GLchar* code[1];
+    code[0] = shader_code;
+
+    GLint code_length[1];
+    code_length[0] = strlen(shader_code);
+
+    glShaderSource(current_shader, 1, code, code_length);
+    glCompileShader(current_shader);
+
+    GLint result = 0;
+    GLchar log[1024] = {0};
+
+    glGetShaderiv(current_shader, GL_COMPILE_STATUS, &result);
+    if (!result) {
+        glGetShaderInfoLog(current_shader, sizeof(log), NULL, log);
+        std::cout << "Error compiling " << type << " shader: " << log << "\n";
+        return;
+    }
+
+    glAttachShader(program, current_shader);
+}
+
+void create_shaders()
+{
+    shader = glCreateProgram();
+    if(!shader) {
+        std::cout << "Error creating shader program!\n";
+        exit(1);
+    }
+
+    add_shader(shader, vertex_shader_code, GL_VERTEX_SHADER);
+    add_shader(shader, fragment_shader_code, GL_FRAGMENT_SHADER);
+
+    GLint result = 0;
+    GLchar log[1024] = {0};
+
+    glLinkProgram(shader);
+    glGetProgramiv(shader, GL_LINK_STATUS, &result);
+    if (!result) {
+        glGetProgramInfoLog(shader, sizeof(log), NULL, log);
+        std::cout << "Error linking program:\n" << log << '\n';
+        return;
+    }
+
+    glValidateProgram(shader);
+    glGetProgramiv(shader, GL_VALIDATE_STATUS, &result);
+    if (!result) {
+        glGetProgramInfoLog(shader, sizeof(log), NULL, log);
+        std::cout << "Error validating program:\n" << log << '\n';
+        return;
+    }
+}
+
 static Application* s_Instance = nullptr;
 
 Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_IsRunning(true),
@@ -46,11 +158,11 @@ bool Application::Initialize(int width, int height) {
 	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
 #else
 	// GL 3.0 + GLSL 130
-	const char* glsl_version = "#version 130";
+	const char* glsl_version = "#version 430";
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-	//glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
 #endif
 
 	// Create window with graphics context
@@ -65,10 +177,19 @@ bool Application::Initialize(int width, int height) {
 	glfwMakeContextCurrent(m_Window);
 	glfwSwapInterval(1); // Enable vsync
 
+    glewExperimental = true;
+
 	if (glewInit() != GLEW_OK) {
 		Shutdown();
 		return false;
 	}
+
+    glViewport(0, 0, bufferW, bufferH);
+
+    create_triangle();
+    create_shaders();
+
+    //m_Framebuffer = new FrameBuffer(bufferW, bufferH);
 
 	std::cout << "" << std::endl;
 	std::cout << "OpenGL Info" << std::endl;
@@ -103,21 +224,16 @@ bool Application::Initialize(int width, int height) {
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
-	//io.ConfigViewportsNoAutoMerge = true;
-	//io.ConfigViewportsNoTaskBarIcon = true;
 
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
-	//ImGui::StyleColorsLight();
 
-	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
 	ImGuiStyle& style = ImGui::GetStyle();
 	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
 		style.WindowRounding = 0.0f;
 		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 	}
 
-	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(m_Window, true);
 	ImGui_ImplOpenGL3_Init(glsl_version);
 
@@ -128,6 +244,7 @@ void Application::RunLoop() {
 	ImGuiIO& io = ImGui::GetIO();
 
 	m_Camera.OnResize(m_Width, m_Height);
+    m_Renderer.OnResize(m_Width, m_Height);
 	m_Renderer.Initialize(m_Camera, m_World);
 
 	while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
@@ -141,6 +258,10 @@ void Application::RunLoop() {
 		// Start the Dear ImGui frame
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
+
+        glClearColor(0.0, 0.0, 0.0, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
+
 		ImGui::NewFrame();
 
 		{
@@ -172,7 +293,7 @@ void Application::RunLoop() {
 			}
 
 			ImGui::End();
-		}
+        }
 
 		// Rendering
 		RenderUI(m_DeltaTime);
@@ -440,10 +561,10 @@ void Application::RenderUI(float deltaTime) {
 	m_ViewportHeight = (uint32_t)ImGui::GetContentRegionAvail().y;
 
 	ImVec2 pos = ImGui::GetCursorScreenPos();
-    auto image = m_Renderer.GetRenderedImage();
-	if(image)
+    auto image = m_Renderer.GetFrameBuffer()->GetTexture();
+	if(image != 0)
 		ImGui::GetWindowDrawList()->AddImage(
-			image->GetTexture(),
+			image,
 			ImVec2(pos.x, pos.y),
 			ImVec2(pos.x + m_ViewportWidth, pos.y + m_ViewportHeight),
 			ImVec2(0, 1),

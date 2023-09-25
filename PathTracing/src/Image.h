@@ -17,6 +17,9 @@ public:
 	void* GetData() const {};
 	void Resize(uint32_t width, uint32_t height, const void* data = nullptr);
 
+    void Bind();
+    void Unbind();
+
 	uint32_t GetWidth() const { return m_Width; }
 	uint32_t GetHeight() const { return m_Height; }
     GLuint GetTexture() const { return m_Texture; }

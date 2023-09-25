@@ -11,6 +11,7 @@
 #include "Camera.h"
 #include "Shader.h"
 #include "ComputeShader.h"
+#include "FrameBuffer.h"
 
 class Renderer {
 public:
@@ -21,9 +22,10 @@ public:
     void OnResize(uint32_t width, uint32_t height);
     void ResetPathTracingCounter(bool sceneReset = false) { m_PTCounter = 1; m_sceneReset = sceneReset; }
     std::shared_ptr<Image> GetRenderedImage() const { return m_RenderedImage; }
+    std::shared_ptr<FrameBuffer> GetFrameBuffer() const { return m_FrameBuffer; }
 public:
     bool PathTracing = true;
-    bool PostProcessing = true;
+    bool PostProcessing = false;
     int m_SamplesPerPixel = 1;
     int m_RayDepth = 5;
 private:
@@ -31,6 +33,7 @@ private:
 private:
     const Camera* m_Camera = nullptr;
     const World* m_World = nullptr;
+    std::shared_ptr<FrameBuffer> m_FrameBuffer;
     std::shared_ptr<Image> m_RenderedImage;
     std::shared_ptr<Shader> m_Shader;
     std::shared_ptr<ComputeShader> m_ComputeShader;

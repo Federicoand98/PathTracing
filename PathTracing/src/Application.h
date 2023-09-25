@@ -18,6 +18,7 @@
 #include <GLFW/glfw3.h> // Will drag system OpenGL headers
 #include "Image.h"
 #include "Renderer.h"
+#include "FrameBuffer.h"
 
 /*
 * @Class Application
@@ -49,6 +50,7 @@ private:
     Renderer m_Renderer;
     Camera m_Camera;
 	World m_World;
+    //FrameBuffer* m_Framebuffer;
 	bool m_IsRunning;
 	bool m_Vsync = true;
 	bool m_LinkColors = true;

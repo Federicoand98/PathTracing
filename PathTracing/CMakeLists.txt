@@ -51,7 +51,9 @@ set(SOURCES
 	"${IMGUI_DIR}/imgui_tables.cpp"
 	"${IMGUI_DIR}/imgui_widgets.cpp"
 	"${IMGUI_DIR}/imgui.cpp"
- "src/Application.h" "src/Application.cpp" "src/Image.h" "src/Image.cpp"    src/Renderer.cpp src/Renderer.h src/Ray.h src/Camera.cpp src/Camera.h src/Input.cpp src/Input.h "src/World.h" "src/Material.h" "src/Random.h" "src/ComputeShader.h" "src/Shader.h" "src/UniformBufferObject.h" "src/World.cpp" "src/Model.h" "src/Model.cpp" "src/stb_image_write.h")
+ "src/Application.h" "src/Application.cpp" "src/Image.h" "src/Image.cpp"    src/Renderer.cpp src/Renderer.h src/Ray.h src/Camera.cpp src/Camera.h src/Input.cpp src/Input.h "src/World.h" "src/Material.h" "src/Random.h" "src/ComputeShader.h" "src/Shader.h" "src/UniformBufferObject.h" "src/World.cpp" "src/Model.h" "src/Model.cpp" "src/stb_image_write.h"
+		src/FrameBuffer.cpp
+		src/FrameBuffer.h)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${RES_DIR})
 add_executable (${PROJECT_NAME} ${SOURCES})
@@ -60,6 +62,8 @@ target_link_libraries(${PROJECT_NAME} ${LIBRARIES})
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DImTextureID=ImU64)
 
 # set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${RES_DIR}")
+
+set(CMAKE_EXE_LINKER_FLAGS "-static")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET PathTracing PROPERTY CXX_STANDARD 20)
