@@ -1,7 +1,7 @@
 ﻿#include "Application.h"
 
 int main(int, char**) {
-	Application application;
+	PathTracer::Application application;
 
 	bool success = application.Initialize(1600, 900);
 

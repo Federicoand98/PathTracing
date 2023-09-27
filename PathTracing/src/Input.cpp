@@ -4,29 +4,32 @@
 
 #include "Input.h"
 
-bool Input::IsKeyDown(KeyCode keycode) {
-    GLFWwindow* window = Application::Get().GetWindow();
-    int state = glfwGetKey(window, (int)keycode);
+namespace PathTracer {
 
-    return state == GLFW_PRESS || state == GLFW_REPEAT;
-}
+	bool Input::IsKeyDown(KeyCode keycode) {
+		GLFWwindow* window = Application::Get().GetWindow();
+		int state = glfwGetKey(window, (int)keycode);
 
-bool Input::IsMouseButtonDown(MouseButton button) {
-    GLFWwindow* window = Application::Get().GetWindow();
-    int state = glfwGetMouseButton(window, (int)button);
+		return state == GLFW_PRESS || state == GLFW_REPEAT;
+	}
 
-    return state == GLFW_PRESS;
-}
+	bool Input::IsMouseButtonDown(MouseButton button) {
+		GLFWwindow* window = Application::Get().GetWindow();
+		int state = glfwGetMouseButton(window, (int)button);
 
-glm::vec2 Input::GetMousePosition() {
-    double xPos, yPos;
-    GLFWwindow* window = Application::Get().GetWindow();
-    glfwGetCursorPos(window, &xPos, &yPos);
+		return state == GLFW_PRESS;
+	}
 
-    return {xPos, yPos};
-}
+	glm::vec2 Input::GetMousePosition() {
+		double xPos, yPos;
+		GLFWwindow* window = Application::Get().GetWindow();
+		glfwGetCursorPos(window, &xPos, &yPos);
 
-void Input::SetCursorMode(CursorMode cursorMode) {
-    GLFWwindow* window = Application::Get().GetWindow();
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL + (int)cursorMode);
+		return {xPos, yPos};
+	}
+
+	void Input::SetCursorMode(CursorMode cursorMode) {
+		GLFWwindow* window = Application::Get().GetWindow();
+		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL + (int)cursorMode);
+	}
 }

@@ -10,35 +10,37 @@
 #include <glm/glm.hpp>
 #include <GLFW/glfw3.h>
 
-enum class KeyCode {
-    Space = 32,
-    Escape = 256,
-    Enter = 257,
-    W = 87,
-    A = 65,
-    S = 83,
-    D = 68,
-};
+namespace PathTracer {
 
-enum class MouseButton {
-    Left = 0,
-    Right = 1,
-    Middle = 2,
-};
+	enum class KeyCode {
+		Space = 32,
+		Escape = 256,
+		Enter = 257,
+		W = 87,
+		A = 65,
+		S = 83,
+		D = 68,
+	};
 
-enum class CursorMode {
-    Normal = 0,
-    Hidden = 1,
-    Locked = 2
-};
+	enum class MouseButton {
+		Left = 0,
+		Right = 1,
+		Middle = 2,
+	};
 
-class Input {
-public:
-    static bool IsKeyDown(KeyCode keycode);
-    static bool IsMouseButtonDown(MouseButton button);
-    static glm::vec2 GetMousePosition();
-    static void SetCursorMode(CursorMode cursorMode);
-};
+	enum class CursorMode {
+		Normal = 0,
+		Hidden = 1,
+		Locked = 2
+	};
 
+	class Input {
+	public:
+		static bool IsKeyDown(KeyCode keycode);
+		static bool IsMouseButtonDown(MouseButton button);
+		static glm::vec2 GetMousePosition();
+		static void SetCursorMode(CursorMode cursorMode);
+	};
+}
 
 #endif // INPUT_H
