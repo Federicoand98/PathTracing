@@ -9,6 +9,16 @@ namespace PathTracer {
 	PathTracer::PathTracer(const class World& world) {
 		m_ComputeShader = std::make_shared<ComputeShader>("shaders/PathTracing.comp");
 		m_ComputeShader->UpdateWorldBuffer(world);
+
+		m_SkyBox = std::make_shared<Texture>(GL_TEXTURE_CUBE_MAP);
+		m_SkyBox->LoadCubeMap({
+				"res/textures/EnvironmentMap/posx.png",
+				"res/textures/EnvironmentMap/negx.png",
+				"res/textures/EnvironmentMap/posy.png",
+				"res/textures/EnvironmentMap/negy.png",
+				"res/textures/EnvironmentMap/posz.png",
+				"res/textures/EnvironmentMap/negz.png"
+			});
 	}
 
 	PathTracer::~PathTracer() {
@@ -17,6 +27,8 @@ namespace PathTracer {
 
 	void PathTracer::Begin() {
 		m_ComputeShader->Bind();
+
+		m_SkyBox->AttachSampler(1);
 	}
 
 	void PathTracer::End() {

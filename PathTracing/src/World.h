@@ -158,7 +158,7 @@ namespace PathTracer {
 		std::vector<Material> Materials;
 		std::vector<MeshInfo> Meshes;
 		std::vector<Triangle> Triangles;
-		int CurrentScene = 5;
+		int CurrentScene = 1;
 	private:
 		void PrepareMaterials();
 		void PrepareSimpleScene();

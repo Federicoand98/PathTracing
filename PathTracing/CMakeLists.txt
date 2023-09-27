@@ -54,7 +54,7 @@ set(SOURCES
  "src/Application.h" "src/Application.cpp" "src/Graphics/Texture.h" "src/Graphics/Texture.cpp"    "src/Renderer/Renderer.cpp" "src/Renderer/Renderer.h" src/Ray.h src/Camera.cpp src/Camera.h src/Input.cpp src/Input.h "src/World.h" "src/Renderer/Material.h" "src/Random.h" "src/Graphics/ComputeShader.h" "src/Graphics/Shader.h" "src/Graphics/UniformBufferObject.h" "src/World.cpp" "src/Graphics/Model.h" "src/Graphics/Model.cpp" "src/stb_image_write.h"
 		"src/Graphics/FrameBuffer.cpp"
 		"src/Renderer/PathTracer.cpp"
-		"src/Graphics/FrameBuffer.h" "src/Renderer/PathTracer.h" "src/Renderer/RenderingUnit.h" "src/Renderer/PostProcesser.h" "src/Renderer/PostProcesser.cpp")
+		"src/Graphics/FrameBuffer.h" "src/Renderer/PathTracer.h" "src/Renderer/RenderingUnit.h" "src/Renderer/PostProcesser.h" "src/Renderer/PostProcesser.cpp" "src/stb_image.h")
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${RES_DIR})
 add_executable (${PROJECT_NAME} ${SOURCES})

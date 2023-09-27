@@ -16,7 +16,9 @@ namespace PathTracer {
 			m_RenderedImage->Resize(width, height);
 			m_FrameBuffer->Rescale(width, height);
 		} else {
-			m_RenderedImage = std::make_shared<Texture>(m_Width, m_Height);
+			m_RenderedImage = std::make_shared<Texture>(GL_TEXTURE_2D);
+			m_RenderedImage->MutableAllocate(m_Width, m_Height);
+
 			m_FrameBuffer = std::make_shared<FrameBuffer>(width, height);
 		}
 	}
@@ -31,6 +33,7 @@ namespace PathTracer {
 
 	void Renderer::Render(const Camera& camera, const World& world) {
 		m_RenderedImage->Bind();
+		m_RenderedImage->AttachImage(0, 0);
 
 		ComputeUniformContainer container = { m_Width, m_Height, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, *m_World, *m_Camera };
 
