@@ -4,6 +4,7 @@ out vec4 FragColor;
 in vec2 TexCoords;
 	
 uniform sampler2D tex;
+uniform float Exposure;
 uniform bool PostProcessing;
 
 vec3 LinearToInverseGamma(vec3 rgb, float gamma);
@@ -11,14 +12,17 @@ vec3 ACESFilm(vec3 x);
 	
 void main() {             
     vec3 texCol = texture(tex, TexCoords).rgb;      
+    const float gamma = 2.2;
     
     if(PostProcessing) {
         texCol = ACESFilm(texCol);
         texCol = LinearToInverseGamma(texCol, 2.4);
     }
 
-    //FragColor = vec4(texCol, 1.0);
-    FragColor = vec4(1.0);
+    vec3 mapped = vec3(1.0) - exp(-texCol * Exposure);
+    mapped = pow(mapped, vec3(1.0 / gamma));
+
+    FragColor = vec4(texCol, 1.0);
 }
 
 vec3 LinearToInverseGamma(vec3 rgb, float gamma) {

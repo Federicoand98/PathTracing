@@ -5,9 +5,12 @@
 
 #include <glm/glm.hpp>
 
-struct Ray {
-    glm::vec3 Origin;
-    glm::vec3 Direction;
-};
+namespace PathTracer {
+
+	struct Ray {
+		glm::vec3 Origin;
+		glm::vec3 Direction;
+	};
+}
 
 #endif // RAY_H
