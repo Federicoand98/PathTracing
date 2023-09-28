@@ -23,8 +23,9 @@ namespace PathTracer {
 		m_Shader->Unbind();
 	}
 
-	void PostProcesser::UploadUniforms(bool enable) {
+	void PostProcesser::UploadUniforms(bool enable, float exposure) {
 		m_Shader->setInt("tex", 0);
 		m_Shader->setBool("PostProcessing", enable);
+		m_Shader->setFloat("Exposure", exposure);
 	}
 }

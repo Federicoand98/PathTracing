@@ -45,10 +45,9 @@ namespace PathTracer {
 		glViewport(0, 0, m_Width, m_Height);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		//glBindTextureUnit(0, m_RenderedImage->GetTexture());
 
 		m_PostProcesser->Begin();
-		m_PostProcesser->UploadUniforms(PostProcessing);
+		m_PostProcesser->UploadUniforms(PostProcessing, Exposure);
 		DrawSceneQuad();
 		m_PostProcesser->End();
 

@@ -259,6 +259,7 @@ namespace PathTracer {
 		ImGui::Spacing();
 		ImGui::Spacing();
 		ImGui::Checkbox("Post Processing", &m_Renderer.PostProcessing);
+		ImGui::DragFloat("HDR", &m_Renderer.Exposure, 0.01f, 0.0f, 10.0f);
 		ImGui::Spacing();
 		ImGui::Spacing();
 		ImGui::Text("Samples Per Pixel:");

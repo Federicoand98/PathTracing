@@ -27,6 +27,7 @@ namespace PathTracer {
 	public:
 		bool PathTracing = true;
 		bool PostProcessing = false;
+		float Exposure = 1.0;
 		int m_SamplesPerPixel = 1;
 		int m_RayDepth = 5;
 	private:

@@ -12,12 +12,12 @@ namespace PathTracer {
 
 		m_SkyBox = std::make_shared<Texture>(GL_TEXTURE_CUBE_MAP);
 		m_SkyBox->LoadCubeMap({
-				"res/textures/EnvironmentMap/posx.png",
-				"res/textures/EnvironmentMap/negx.png",
-				"res/textures/EnvironmentMap/posy.png",
-				"res/textures/EnvironmentMap/negy.png",
-				"res/textures/EnvironmentMap/posz.png",
-				"res/textures/EnvironmentMap/negz.png"
+				"textures/EnvironmentMap/posx.png",
+				"textures/EnvironmentMap/negx.png",
+				"textures/EnvironmentMap/posy.png",
+				"textures/EnvironmentMap/negy.png",
+				"textures/EnvironmentMap/posz.png",
+				"textures/EnvironmentMap/negz.png"
 			});
 	}
 
@@ -27,8 +27,6 @@ namespace PathTracer {
 
 	void PathTracer::Begin() {
 		m_ComputeShader->Bind();
-
-		m_SkyBox->AttachSampler(1);
 	}
 
 	void PathTracer::End() {
@@ -41,6 +39,7 @@ namespace PathTracer {
 	}
 
 	void PathTracer::UploadUniforms(const ComputeUniformContainer& container) {
+		m_ComputeShader->SetInt("SamplerEnvironment", 0);
 		m_ComputeShader->SetInt("width", container.Width);
 		m_ComputeShader->SetInt("height", container.Height);
 		m_ComputeShader->SetInt("rendererFrame", container.NumFrames);
@@ -54,5 +53,7 @@ namespace PathTracer {
 
 		if (container.NumFrames == 1)
 			m_ComputeShader->UpdateWorldBuffer(container.World, container.ResetScene);
+
+		m_SkyBox->Bind();
 	}
 }

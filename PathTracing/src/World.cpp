@@ -117,7 +117,7 @@ namespace PathTracer {
 		Model m;
 		m.LoadObj("models/bunny.obj");
 
-		UploadModel(m, { 0.0, 0.0, 0.0 }, 5);
+		//UploadModel(m, { 0.0, 0.0, 0.0 }, 5);
 	}
 
 	void World::PrepareCornellBox() {

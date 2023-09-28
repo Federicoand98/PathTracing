@@ -19,8 +19,9 @@ namespace PathTracer {
 		~Texture();
 
 		void MutableAllocate(uint32_t width, uint32_t height);
-		void ImmutableAllocate(uint32_t width, uint32_t height, int levels = 1);
+		void ImmutableAllocate(uint32_t width, uint32_t height, int format, int levels = 1);
 		void SubTexture3D(int width, int height, int depth, const void* data, int level = 0, int xOffset = 0, int yOffset = 0, int zOffset = 0);
+		void SubTexture2D(int width, int height, int level, int xOffset, int yOffset, const void* data);
 		void SetData(const void* data);
 		void* GetData() const {};
 		void Resize(uint32_t width, uint32_t height, const void* data = nullptr);

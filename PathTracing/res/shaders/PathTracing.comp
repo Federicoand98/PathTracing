@@ -7,7 +7,8 @@
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
-layout(binding = 1) uniform samplerCube SamplerEnvironment;
+//layout(binding = 1) uniform samplerCube SamplerEnvironment;
+uniform samplerCube SamplerEnvironment;
 
 struct Ray {
     vec3 Origin;
@@ -147,6 +148,8 @@ void main() {
     vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
     value = mix(lastFrameColor, value, 1.0 / (rendererFrame));
 
+    //value = texture(SamplerEnvironment, vec3(1, 1, 1)).rgba;
+
     imageStore(imgOutput, texelCoord, value);
 }
 
@@ -164,8 +167,8 @@ vec4 PerPixel(vec2 ndc) {
         HitInfo hit = TraceRay(ray);
 
         if(hit.HitDistance < 0.0) {
-            light += BackgroundColor * contribution;
-            //light += texture(SamplerEnvironment, ray.Direction).rgb * contribution;
+            //light += BackgroundColor * contribution;
+            light += texture(SamplerEnvironment, ray.Direction).rgb * contribution;
             break;
         }
 

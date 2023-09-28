@@ -13,7 +13,7 @@ namespace PathTracer {
 		void Begin() override;
 		void End() override;
 
-		void UploadUniforms(bool enable);
+		void UploadUniforms(bool enable, float exposure);
 	private:
 		std::shared_ptr<Shader> m_Shader;
 		const class FrameBuffer* m_FrameBuffer = nullptr;
