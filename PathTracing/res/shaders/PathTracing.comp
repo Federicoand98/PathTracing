@@ -7,7 +7,6 @@
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
-//layout(binding = 1) uniform samplerCube SamplerEnvironment;
 uniform samplerCube SamplerEnvironment;
 
 struct Ray {
@@ -100,6 +99,7 @@ uniform vec3 cameraPosition;
 uniform mat4 inverseProjection;
 uniform mat4 inverseView;
 uniform vec3 BackgroundColor;
+uniform bool EnvironmentMapping;
 
 layout(std430, binding = 0) buffer SpheresBuffer {
     Sphere Spheres[];
@@ -167,8 +167,10 @@ vec4 PerPixel(vec2 ndc) {
         HitInfo hit = TraceRay(ray);
 
         if(hit.HitDistance < 0.0) {
-            //light += BackgroundColor * contribution;
-            light += texture(SamplerEnvironment, ray.Direction).rgb * contribution;
+            if(EnvironmentMapping)
+				light += texture(SamplerEnvironment, ray.Direction).rgb * contribution;
+            else
+				light += BackgroundColor * contribution;
             break;
         }
 

@@ -12,6 +12,7 @@ namespace PathTracer {
 		uint32_t SamplesPerPixel;
 		uint32_t RayDepth;
 		bool ResetScene;
+		bool EnvironmentMapping;
 		const class World& World;
 		const class Camera& Camera;
 	};

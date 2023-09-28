@@ -306,8 +306,13 @@ namespace PathTracer {
 		ImGui::Separator();
 		ImGui::Spacing();
 		ImGui::Text("Background");
-		if(ImGui::ColorEdit3("Background Color", glm::value_ptr(m_World.BackgroundColor)))
+		if(ImGui::Checkbox("Environment Mapping", &m_Renderer.EnvironmentMapping)) {
 			m_Renderer.ResetPathTracingCounter();
+		}
+
+		if(!m_Renderer.EnvironmentMapping)
+			if(ImGui::ColorEdit3("Background Color", glm::value_ptr(m_World.BackgroundColor)))
+				m_Renderer.ResetPathTracingCounter();
 
 		ImGui::Spacing();
 		ImGui::Spacing();

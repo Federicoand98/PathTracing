@@ -35,7 +35,7 @@ namespace PathTracer {
 		m_RenderedImage->Bind();
 		m_RenderedImage->AttachImage(0, 0);
 
-		ComputeUniformContainer container = { m_Width, m_Height, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, *m_World, *m_Camera };
+		ComputeUniformContainer container = { m_Width, m_Height, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, *m_World, *m_Camera };
 
 		m_PathTracer->Begin();
 		m_PathTracer->UploadUniforms(container);
