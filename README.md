@@ -87,15 +87,33 @@ This PathTracer project utilizes GPU acceleration through OpenGL Compute Shader 
 It employs global illumination and a BSDF (Bidirectional Scattering Distribution Function) lighting model, incorporating features like Russian roulette for ray termination, 
 optimized ray-object intersections using Bounding Boxes and Axis-Aligned Bounding Boxes (AABB), and the Fresnel-Schlick approximation.
 
-This project aims to provide a fast and efficient path tracing solution for realistic rendering of 3D scenes.
+This PathTracer currently has:
+- GPU acceleration via compute shader
+- Monte Carlo unidirectional integrator
+- BSDF supporting Diffuse, Metal, Glossy, Emissive, and Glass
+- Russian Roulette for path termination
+- Super Sampling Antialiasing (SSAA)
+- Environment mapping with skybox
+- Support for wavefront obj meshes
+- HDR
+- A customizable PostProcessor
+- Support for triangles, squares, cubes, spheres, and meshes
+- AABB for cubes and meshes
+- Every scene element can be modified in real time from GUI
+- Interactive camera
+- A material system that can be modified in every parameter
+
+We are looking to implement:
+- Acceleration structures (BHV)
+- Some boom effects
+- Texture mapping
+- Normal mapping
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
 
 ### Built With
-
-This section should list any major frameworks/libraries used to bootstrap your project. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
 
 * [GLEW][glew-url]
 * [GLFW][glfw-url]
@@ -129,7 +147,6 @@ Don't forget to give the project a star! Thanks again!
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
-
 <!-- LICENSE -->
 ## License
 
@@ -141,6 +158,7 @@ Distributed under the Apache License. See `LICENSE.txt` for more information.
 ## Contact
 
 Federico Andrucci - federico.andrucci@gmail.com
+
 Alex Gianelli - djgiane@yahoo.it
 
 Project Link: [https://github.com/Federicoand98/PathTracing](https://github.com/Federicoand98/PathTracing)

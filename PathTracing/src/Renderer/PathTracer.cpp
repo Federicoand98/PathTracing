@@ -11,13 +11,24 @@ namespace PathTracer {
 		m_ComputeShader->UpdateWorldBuffer(world);
 
 		m_SkyBox = std::make_shared<Texture>(GL_TEXTURE_CUBE_MAP);
+		/*
 		m_SkyBox->LoadCubeMap({
-				"textures/EnvironmentMap/posx.png",
-				"textures/EnvironmentMap/negx.png",
-				"textures/EnvironmentMap/posy.png",
-				"textures/EnvironmentMap/negy.png",
-				"textures/EnvironmentMap/posz.png",
-				"textures/EnvironmentMap/negz.png"
+				"textures/EnvironmentMap/Temple/posx.png",
+				"textures/EnvironmentMap/Temple/negx.png",
+				"textures/EnvironmentMap/Temple/posy.png",
+				"textures/EnvironmentMap/Temple/negy.png",
+				"textures/EnvironmentMap/Temple/posz.png",
+				"textures/EnvironmentMap/Temple/negz.png"
+			});
+		*/
+
+		m_SkyBox->LoadCubeMap({
+				"textures/EnvironmentMap/City/posx.jpg",
+				"textures/EnvironmentMap/City/negx.jpg",
+				"textures/EnvironmentMap/City/posy.jpg",
+				"textures/EnvironmentMap/City/negy.jpg",
+				"textures/EnvironmentMap/City/posz.jpg",
+				"textures/EnvironmentMap/City/negz.jpg"
 			});
 	}
 
