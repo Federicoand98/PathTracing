@@ -97,6 +97,8 @@ This PathTracer currently has:
 - Support for wavefront obj meshes
 - HDR
 - A customizable PostProcessor
+- Support for triangles, squares, cubes, spheres, and meshes
+- AABB for cubes and meshes
 - Every scene element can be modified in real time from GUI
 - Interactive camera
 - A material system that can be modified in every parameter
