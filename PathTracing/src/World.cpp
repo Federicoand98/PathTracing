@@ -4,6 +4,10 @@ namespace PathTracer {
 
 	World::World() {
 		BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
+
+        for(int i = 0; i < 10; i++) {
+            Tests.push_back({glm::vec3(1, 0, 0), glm::vec3(0, 0, 1)});
+        }
 	}
 
 	World::~World() {
@@ -117,7 +121,7 @@ namespace PathTracer {
 		Model m;
 		m.LoadObj("models/bunny.obj");
 
-		//UploadModel(m, { 0.0, 0.0, 0.0 }, 5);
+		UploadModel(m, { 0.0, 0.0, 0.0 }, 5);
 	}
 
 	void World::PrepareCornellBox() {
@@ -686,6 +690,34 @@ namespace PathTracer {
 
 	void World::UploadModel(const Model& model, const glm::vec3& Position, int material) {
 		MeshInfo m;
+
+        BVHNode testNode;
+        testNode.left = 255;
+        testNode.right = 128;
+        testNode.n = 30;
+        testNode.AA = glm::vec3(1, 1, 0);
+        testNode.BB = glm::vec3(0, 1, 0);
+        std::vector<BVHNode> nodes{ testNode };
+
+        std::vector<Triangle> triangles;
+
+        for(int i = 0; i < model.GetTriangles().size(); i++) {
+            Triangle *t = model.GetTriangles().at(i);
+            triangles.push_back(*t);
+        }
+
+        BVHBuilder::BuildBVHWithSAH(triangles, nodes, 0, triangles.size() - 1, 8);
+        int nNodes = nodes.size();
+
+        for(int i = 0; i < nNodes; i++) {
+            BVHNode_encoded n;
+            n.childs = glm::vec3(nodes[i].left, nodes[i].right, 0);
+            n.leafInfo = glm::vec3(nodes[i].n, nodes[i].index, 0);
+            n.AA = nodes[i].AA;
+            n.BB = nodes[i].BB;
+
+            Nodes.push_back(n);
+        }
 
 		m.FirstTriangle = Triangles.size();
 		m.NumTriangles = model.GetTriangles().size();

@@ -40,23 +40,18 @@ set(LIBRARIES "glfw;OpenGL::GL;GLEW::GLEW;glm::glm")
 include_directories(${GLEW_INCLUDE_DIRS})
 include_directories(${GLFW_DIR}/deps)
 
-# Source Files
-set(SOURCES
-	"${SRC_DIR}/Main.cpp"
-	"${IMGUI_DIR}/backends/imgui_impl_glfw.cpp"
-	"${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp"
-	"${IMGUI_DIR}/imgui.cpp"
-	"${IMGUI_DIR}/imgui_draw.cpp"
-	"${IMGUI_DIR}/imgui_demo.cpp"
-	"${IMGUI_DIR}/imgui_tables.cpp"
-	"${IMGUI_DIR}/imgui_widgets.cpp"
-	"${IMGUI_DIR}/imgui.cpp"
- "src/Application.h" "src/Application.cpp" "src/Graphics/Texture.h" "src/Graphics/Texture.cpp"    "src/Renderer/Renderer.cpp" "src/Renderer/Renderer.h" src/Ray.h src/Camera.cpp src/Camera.h src/Input.cpp src/Input.h "src/World.h" "src/Renderer/Material.h" "src/Random.h" "src/Graphics/ComputeShader.h" "src/Graphics/Shader.h" "src/Graphics/UniformBufferObject.h" "src/World.cpp" "src/Graphics/Model.h" "src/Graphics/Model.cpp" "src/stb_image_write.h"
-		"src/Graphics/FrameBuffer.cpp"
-		"src/Renderer/PathTracer.cpp"
-		"src/Graphics/FrameBuffer.h" "src/Renderer/PathTracer.h" "src/Renderer/RenderingUnit.h" "src/Renderer/PostProcesser.h" "src/Renderer/PostProcesser.cpp" "src/stb_image.h")
-
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${RES_DIR})
+
+# Source Files
+file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h" 	"${IMGUI_DIR}/backends/imgui_impl_glfw.cpp"
+		"${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp"
+		"${IMGUI_DIR}/imgui.cpp"
+		"${IMGUI_DIR}/imgui_draw.cpp"
+		"${IMGUI_DIR}/imgui_demo.cpp"
+		"${IMGUI_DIR}/imgui_tables.cpp"
+		"${IMGUI_DIR}/imgui_widgets.cpp"
+		"${IMGUI_DIR}/imgui.cpp")
+
 add_executable (${PROJECT_NAME} ${SOURCES})
 
 target_link_libraries(${PROJECT_NAME} ${LIBRARIES})

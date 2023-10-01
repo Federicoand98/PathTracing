@@ -8,6 +8,7 @@
 #include <glm/gtx/compatibility.hpp>
 #include "../Graphics/Texture.h"
 #include "../Graphics/FrameBuffer.h"
+#include "Primitives.h"
 #include "../Camera.h"
 #include "PathTracer.h"
 #include "PostProcesser.h"
@@ -26,7 +27,7 @@ namespace PathTracer {
 		std::shared_ptr<FrameBuffer> GetFrameBuffer() const { return m_FrameBuffer; }
 	public:
 		bool PathTracing = true;
-		bool PostProcessing = false;
+		bool PostProcessing = true;
 		bool EnvironmentMapping = true;
 		float Exposure = 1.0;
 		int m_SamplesPerPixel = 1;

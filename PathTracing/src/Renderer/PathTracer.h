@@ -1,5 +1,6 @@
 #pragma once
 #include "RenderingUnit.h"
+#include <memory>
 #include "../Graphics/ComputeShader.h"
 #include "../Graphics/Texture.h"
 
@@ -28,6 +29,7 @@ namespace PathTracer {
 		void DispatchCompute(unsigned int numGroupX, unsigned int numGroupY);
 		void UploadUniforms(const ComputeUniformContainer& container);
 	private:
+        unsigned int tbo, trianglesTexture;
 		std::shared_ptr<ComputeShader> m_ComputeShader;
 		std::shared_ptr<Texture> m_SkyBox;
 	};
