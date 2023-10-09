@@ -5,6 +5,8 @@
 #ifndef PATHTRACING_PRIMITIVES_H
 #define PATHTRACING_PRIMITIVES_H
 
+#include <glm/glm.hpp>
+
 namespace PathTracer {
 
     enum class ObjectType {

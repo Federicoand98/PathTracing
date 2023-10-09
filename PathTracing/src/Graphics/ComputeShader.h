@@ -22,6 +22,8 @@ namespace PathTracer {
 		unsigned int ssbo_t;
 		unsigned int ssbo_mesh;
 		unsigned int ssbo_cubes;
+		unsigned int ssbo_idx;
+		unsigned int ssbo_bvh;
 
 		ComputeShader(const char* path) {
 			std::string computeCode;
@@ -93,6 +95,8 @@ namespace PathTracer {
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbo_t);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssbo_mesh);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, ssbo_cubes);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, ssbo_idx);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, ssbo_bvh);
 		}
 
 		void UpdateWorldBuffer(const World& world, bool fullReset = false) {
@@ -130,6 +134,18 @@ namespace PathTracer {
 				glGenBuffers(1, &ssbo_cubes);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_cubes);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Box) * world.Boxes.size(), world.Boxes.data(), GL_STATIC_DRAW);
+			}
+
+			if (world.TriIndex.size() > 0 || fullReset) {
+				glGenBuffers(1, &ssbo_idx);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_idx);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.TriIndex.size(), world.TriIndex.data(), GL_STATIC_DRAW);
+			}
+
+			if (world.Nodes.size() > 0 || fullReset) {
+				glGenBuffers(1, &ssbo_bvh);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_bvh);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVHNode) * world.Nodes.size(), world.Nodes.data(), GL_STATIC_DRAW);
 			}
 		}
 

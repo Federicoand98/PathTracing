@@ -691,6 +691,11 @@ namespace PathTracer {
 	void World::UploadModel(const Model& model, const glm::vec3& Position, int material) {
 		MeshInfo m;
 
+		BVHBuilder builder(model.GetTriangles());
+		Nodes = builder.CalculateBVH(model.GetTriangles());
+		TriIndex = builder.GetTriIndex();
+
+		/*
         BVHNode testNode;
         testNode.left = 255;
         testNode.right = 128;
@@ -718,6 +723,7 @@ namespace PathTracer {
 
             Nodes.push_back(n);
         }
+		*/
 
 		m.FirstTriangle = Triangles.size();
 		m.NumTriangles = model.GetTriangles().size();

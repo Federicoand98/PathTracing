@@ -43,7 +43,8 @@ namespace PathTracer {
 		std::vector<Material> Materials;
 		std::vector<MeshInfo> Meshes;
 		std::vector<Triangle> Triangles;
-        std::vector<BVHNode_encoded> Nodes;
+        std::vector<BVHNode> Nodes;
+		std::vector<int> TriIndex;
 		int CurrentScene = 0;
 	private:
 		void PrepareMaterials();

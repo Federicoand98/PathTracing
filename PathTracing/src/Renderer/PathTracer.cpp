@@ -30,13 +30,6 @@ namespace PathTracer {
 				"textures/EnvironmentMap/City/posz.jpg",
 				"textures/EnvironmentMap/City/negz.jpg"
 			});
-
-        glGenBuffers(1, &tbo);
-        glBindBuffer(GL_TEXTURE_BUFFER, tbo);
-        glBufferData(GL_TEXTURE_BUFFER, world.Nodes.size() * sizeof(BVHNode_encoded), &world.Nodes[0], GL_STATIC_DRAW);
-        glGenTextures(1, &trianglesTexture);
-        glBindTexture(GL_TEXTURE_BUFFER, trianglesTexture);
-        glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo);
 	}
 
 	PathTracer::~PathTracer() {
@@ -75,9 +68,5 @@ namespace PathTracer {
 			m_ComputeShader->UpdateWorldBuffer(container.World, container.ResetScene);
 
 		m_SkyBox->Bind();
-
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_BUFFER, trianglesTexture);
-        m_ComputeShader->SetInt("Nodes", 1);
 	}
 }

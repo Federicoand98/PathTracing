@@ -11,19 +11,19 @@ layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
 uniform samplerCube SamplerEnvironment;
-uniform samplerBuffer Nodes;
 
 struct BVHNode {
-    int left;           // 左子树
-    int right;          // 右子树
-    int n;              // 包含三角形数目
-    int index;          // 三角形索引
-    vec3 AA, BB;        // 碰撞盒
+    vec4 AABBMin;
+    vec4 AABBMax;
+    float LeftNode;
+    float FirstTriIndex;
+    float TriCount;
 };
 
 struct Ray {
     vec3 Origin;
     vec3 Direction;
+    float t;
 };
 
 struct Sphere {
@@ -102,11 +102,9 @@ uint GetPCGHash(inout uint seed);
 float GetRandomFloat();
 vec3 GetRandomVector(uint seed);
 
-BVHNode getBVHNode(int i);
-HitInfo hitBVH(Ray ray);
-HitInfo hitTri(Ray ray, Triangle triangle);
-HitInfo hitArray(Ray ray, int l, int r);
-float hitAABB(Ray r, vec3 AA, vec3 BB);
+void hitBVH(Ray ray);
+void hitTri(out Ray ray, Triangle triangle);
+bool hitAABB(Ray ray, vec4 bmin, vec4 bmax);
 
 uniform int nNodes;
 uniform int width;
@@ -144,6 +142,14 @@ layout(std430, binding = 5) buffer CubeBuffer {
     CubeInfo Cubes[];
 };
 
+layout(std430, binding = 6) buffer TriIndexBuffer {
+    int TriIndex[];
+};
+
+layout(std430, binding = 7) buffer BVHBuffer {
+    BVHNode BVHNodes[];
+};
+
 uint rndSeed;
 
 void main() {
@@ -166,6 +172,8 @@ void main() {
     // accumulazione path tracing
     vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
     value = mix(lastFrameColor, value, 1.0 / (rendererFrame));
+
+    value = vec4(vec3(BVHNodes[0].AABBMax), 1.0);
 
     imageStore(imgOutput, texelCoord, value);
 }
@@ -287,162 +295,73 @@ float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive,
     return rayProbability;
 }
 
-BVHNode getBVHNode(int i) {
-    BVHNode node;
+void hitBVH(Ray ray, int nodeIndex) {
+    uint stack[256];
+    int top = 0;
+    stack[++top] = nodeIndex;
 
-    int offset = i * SIZE_BVHNODE;
-    ivec3 childs = ivec3(texelFetch(Nodes, offset + 0).xyz);
-    ivec3 leafInfo = ivec3(texelFetch(Nodes, offset + 1).xyz);
-    node.left = int(childs.x);
-    node.right = int(childs.y);
-    node.n = int(leafInfo.x);
-    node.index = int(leafInfo.y);
+    while(top >= 0) {
+        uint idx = stack[top--];
+        BVHNode node = BVHNodes[idx];
 
-    node.AA = texelFetch(Nodes, offset + 2).xyz;
-    node.BB = texelFetch(Nodes, offset + 3).xyz;
-
-    return node;
-}
-
-HitInfo hitBVH(Ray ray) {
-    HitInfo res;
-    //res.isHit = false;
-    res.HitDistance = INF;
-
-    // 栈
-    int stack[256];
-    int sp = 0;
-
-    stack[sp++] = 1;
-    while(sp>0) {
-        int top = stack[--sp];
-        BVHNode node = getBVHNode(top);
-
-        // 是叶子节点，遍历三角形，求最近交点
-        if(node.n>0) {
-            int L = node.index;
-            int R = node.index + node.n - 1;
-            HitInfo r = hitArray(ray, L, R);
-            if(/*r.isHit &&*/ r.HitDistance<res.HitDistance) res = r;
+        if(!hitAABB(ray, node.AABBMin, node.AABBMax))
             continue;
-        }
 
-        // 和左右盒子 AABB 求交
-        float d1 = INF; // 左盒子距离
-        float d2 = INF; // 右盒子距离
-        if(node.left>0) {
-            BVHNode leftNode = getBVHNode(node.left);
-            d1 = hitAABB(ray, leftNode.AA, leftNode.BB);
-        }
-        if(node.right>0) {
-            BVHNode rightNode = getBVHNode(node.right);
-            d2 = hitAABB(ray, rightNode.AA, rightNode.BB);
-        }
-
-        // 在最近的盒子中搜索
-        if(d1>0 && d2>0) {
-            if(d1<d2) { // d1<d2, 左边先
-                stack[sp++] = node.right;
-                stack[sp++] = node.left;
-            } else {    // d2<d1, 右边先
-                stack[sp++] = node.left;
-                stack[sp++] = node.right;
-            }
-        } else if(d1>0) {   // 仅命中左边
-            stack[sp++] = node.left;
-        } else if(d2>0) {   // 仅命中右边
-            stack[sp++] = node.right;
+        if(node.TriCount > 0) {
+            for(uint i = 0; i < node.TriCount; i++)
+                hitTri(ray, Triangles[TriIndex[int(node.FirstTriIndex) + i]]);
+        } else {
+            stack[++top] = int(node.LeftNode);
+            stack[++top] = int(node.LeftNode) + 1;
         }
     }
-
-    return res;
 }
 
-HitInfo hitArray(Ray ray, int l, int r) {
-    HitInfo res;
-    //res.isHit = false;
-    res.HitDistance = INF;
+bool hitAABB(Ray ray, vec4 bmin, vec4 bmax) {
+	float tx1 = (bmin.x - ray.Origin.x) / ray.Direction.x;
+    float tx2 = (bmax.x - ray.Origin.x) / ray.Direction.x;
+    float tmin = min(tx1, tx2);
+    float tmax = min(tx1, tx2);
 
-    for(int i=l; i<=r; i++) {
-        Triangle triangle = Triangles[i];
-        HitInfo r = hitTri(ray, triangle);
-        if(r.HitDistance < res.HitDistance) {
-            res = r;
-        }
-    }
+	float ty1 = (bmin.y - ray.Origin.y) / ray.Direction.y;
+    float ty2 = (bmax.y - ray.Origin.y) / ray.Direction.y;
+    tmin = max(tmin, min(ty1, ty2));
+    tmax = min(tmax, max(ty1, ty2));
 
-    return res;
+	float tz1 = (bmin.z - ray.Origin.z) / ray.Direction.z;
+    float tz2 = (bmax.z - ray.Origin.z) / ray.Direction.z;
+    tmin = max(tmin, min(tz1, tz2));
+    tmax = min(tmax, max(tz1, tz2));
+
+    return tmax >= tmin && tmin < ray.t && tmax > 0;
 }
 
-float hitAABB(Ray r, vec3 AA, vec3 BB) {
-    vec3 invdir = 1.0 / r.Direction;
+void hitTri(out Ray ray, Triangle triangle) {
+    vec3 edge1 = vec3(triangle.B) - vec3(triangle.A);
+    vec3 edge2 = vec3(triangle.C) - vec3(triangle.A);
+    vec3 h = cross(ray.Direction, edge2);
+    float a = dot(edge1, h);
 
-    vec3 f = (BB - r.Origin) * invdir;
-    vec3 n = (AA - r.Origin) * invdir;
+    if(a > -0.0001 && a < 0.0001)
+        return;
 
-    vec3 tmax = max(f, n);
-    vec3 tmin = min(f, n);
+    float f = 1 / a;
+    vec3 s = ray.Origin - vec3(triangle.A);
+    float u = f * dot(s, h);
 
-    float t1 = min(tmax.x, min(tmax.y, tmax.z));
-    float t0 = max(tmin.x, max(tmin.y, tmin.z));
+    if(u < 0 || u > 1)
+		return;
 
-    return (t1 >= t0) ? ((t0 > 0.0) ? (t0) : (t1)) : (-1);
-}
+    vec3 q = cross(s, edge1);
+    float v = f * dot(ray.Direction, q);
 
-HitInfo hitTri(Ray ray, Triangle triangle) {
-    HitInfo res;
-    res.HitDistance = INF;
-    //res.isHit = false;
-    res.Inside = false;
+    if(v < 0 || u + v > 1)
+        return;
 
-    vec3 p1 = vec3(triangle.A);
-    vec3 p2 = vec3(triangle.B);
-    vec3 p3 = vec3(triangle.C);
+    float t = f * dot(edge2, q);
 
-    vec3 S = ray.Origin;    // 射线起点
-    vec3 d = ray.Direction;     // 射线方向
-    vec3 N = normalize(cross(p2-p1, p3-p1));    // 法向量
-
-    // 从三角形背后（模型内部）击中
-    if (dot(N, d) > 0.0f) {
-        N = -N;
-        res.Inside = true;
-    }
-
-    // 如果视线和三角形平行
-    if (abs(dot(N, d)) < 0.00001f) return res;
-
-    // 距离
-    float t = (dot(N, p1) - dot(S, N)) / dot(d, N);
-    if (t < 0.0005f) return res;    // 如果三角形在光线背面
-
-    // 交点计算
-    vec3 P = S + d * t;
-
-    // 判断交点是否在三角形中
-    vec3 c1 = cross(p2 - p1, P - p1);
-    vec3 c2 = cross(p3 - p2, P - p2);
-    vec3 c3 = cross(p1 - p3, P - p3);
-    bool r1 = (dot(c1, N) > 0 && dot(c2, N) > 0 && dot(c3, N) > 0);
-    bool r2 = (dot(c1, N) < 0 && dot(c2, N) < 0 && dot(c3, N) < 0);
-
-    // 命中，封装返回结果
-    if (r1 || r2) {
-        //res.isHit = true;
-        res.HitPosition = P;
-        res.HitDistance = t;
-        res.Normal = N;
-        //res.viewDir = d;
-        // 根据交点位置插值顶点法线
-        float alpha = (-(P.x-p2.x)*(p3.y-p2.y) + (P.y-p2.y)*(p3.x-p2.x)) / (-(p1.x-p2.x-0.00005)*(p3.y-p2.y+0.00005) + (p1.y-p2.y+0.00005)*(p3.x-p2.x+0.00005));
-        float beta  = (-(P.x-p3.x)*(p1.y-p3.y) + (P.y-p3.y)*(p1.x-p3.x)) / (-(p2.x-p3.x-0.00005)*(p1.y-p3.y+0.00005) + (p2.y-p3.y+0.00005)*(p1.x-p3.x+0.00005));
-        float gama  = 1.0 - alpha - beta;
-        vec3 Nsmooth = alpha * vec3(triangle.NormalA) + beta * vec3(triangle.NormalB) + gama * vec3(triangle.NormalC);
-        Nsmooth = normalize(Nsmooth);
-        res.Normal = (res.Inside) ? (-Nsmooth) : (Nsmooth);
-    }
-
-    return res;
+    if(t > 0.0001)
+        ray.t = min(ray.t, t);
 }
 
 
@@ -488,6 +407,7 @@ HitInfo TraceRay(Ray ray) {
         }
     }
 
+    /*
     for(int i = 0; i < Meshes.length(); i++) {
         MeshInfo mesh = Meshes[i];
 
@@ -507,7 +427,20 @@ HitInfo TraceRay(Ray ray) {
                 inside = false;
             }
         }
+
+
+        hitBVH(ray, 0);
+        float distance = ray.t;
+
+        if(distance >= 0 && distance < hitDistance) {
+            hitDistance = distance;
+            index = i;
+            objType = 2;
+            inside = false;
+        }
     }
+    */
+
 
     if(index < 0) {
         HitInfo result = NoHit();
@@ -682,7 +615,7 @@ Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, v
     vec4 target = inverseProj * vec4(ndc, 1.0, 1.0);
     vec3 rayDirection = vec3(inverseView * vec4(normalize(vec3(target) / target.w), 0.0));
 
-    return Ray(cameraPos, rayDirection);
+    return Ray(cameraPos, rayDirection, 0);
 }
 
 uint GetPCGHash(inout uint seed) {

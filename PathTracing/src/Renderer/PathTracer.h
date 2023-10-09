@@ -29,7 +29,6 @@ namespace PathTracer {
 		void DispatchCompute(unsigned int numGroupX, unsigned int numGroupY);
 		void UploadUniforms(const ComputeUniformContainer& container);
 	private:
-        unsigned int tbo, trianglesTexture;
 		std::shared_ptr<ComputeShader> m_ComputeShader;
 		std::shared_ptr<Texture> m_SkyBox;
 	};
