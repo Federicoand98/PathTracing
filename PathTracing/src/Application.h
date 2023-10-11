@@ -8,9 +8,6 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-#include <stdio.h>
-#include <algorithm>
-#include <memory>
 #define GL_SILENCE_DEPRECATION
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
@@ -19,6 +16,7 @@
 #include "Graphics/Texture.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/FrameBuffer.h"
+#include "ptpch.h"
 
 /*
 * @Class Application

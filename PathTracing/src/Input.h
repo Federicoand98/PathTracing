@@ -7,7 +7,7 @@
 #define INPUT_H
 
 #include "Application.h"
-#include <glm/glm.hpp>
+#include "ptpch.h"
 #include <GLFW/glfw3.h>
 
 namespace PathTracer {

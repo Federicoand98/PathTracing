@@ -52,6 +52,7 @@ namespace PathTracer {
 	void PathTracer::UploadUniforms(const ComputeUniformContainer& container) {
 		m_ComputeShader->SetInt("SamplerEnvironment", 0);
 		m_ComputeShader->SetInt("width", container.Width);
+        m_ComputeShader->SetInt("nNodes", container.World.Nodes.size());
 		m_ComputeShader->SetInt("height", container.Height);
 		m_ComputeShader->SetInt("rendererFrame", container.NumFrames);
 		m_ComputeShader->SetInt("samplesPerPixel", container.SamplesPerPixel);

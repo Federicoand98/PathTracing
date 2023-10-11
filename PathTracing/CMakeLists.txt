@@ -8,63 +8,47 @@ endif()
 
 project ("PathTracing")
 
+set(CMAKE_CXX_STANDARD 17)
+
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
 set(LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libs")
 set(RES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/res")
+
+# Source Files
+file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${RES_DIR})
+
+add_executable (${PROJECT_NAME} ${SOURCES})
+target_precompile_headers(${PROJECT_NAME} PRIVATE "src/ptpch.h")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/deps/glfw")
 
 # GLFW
 set(GLFW_DIR "${LIB_DIR}/glfw")
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-add_subdirectory("${GLFW_DIR}" binary_dir EXCLUDE_FROM_ALL)
-include_directories(${GLFW_DIR}/include)
-
-# ImGUI
-set(IMGUI_DIR "${LIB_DIR}/imgui")
-include_directories(${IMGUI_DIR} ${IMGUI_DIR}/backends ..)
-
-# GLM
-set(glm_DIR "${LIB_DIR}/glm/cmake/glm")
-find_package(glm REQUIRED)
-
-# OpenGL
-set(GLEW_DIR "${LIB_DIR}/glew")
-list(APPEND CMAKE_PREFIX_PATH "${GLEW_DIR}")
 
 find_package(OpenGL REQUIRED)
-find_package(GLEW REQUIRED)
 
-set(LIBRARIES "glfw;OpenGL::GL;GLEW::GLEW;glm::glm")
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
+target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
+include_directories(
+		"${LIB_DIR}/glm"
+		"${SRC_DIR}"
+		"${SRC_DIR}/ImGui"
+)
 
-include_directories(${GLEW_INCLUDE_DIRS})
-include_directories(${GLFW_DIR}/deps)
+include_directories("${LIB_DIR}/glew/include")
 
-# Source Files
-set(SOURCES
-	"${SRC_DIR}/Main.cpp"
-	"${IMGUI_DIR}/backends/imgui_impl_glfw.cpp"
-	"${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp"
-	"${IMGUI_DIR}/imgui.cpp"
-	"${IMGUI_DIR}/imgui_draw.cpp"
-	"${IMGUI_DIR}/imgui_demo.cpp"
-	"${IMGUI_DIR}/imgui_tables.cpp"
-	"${IMGUI_DIR}/imgui_widgets.cpp"
-	"${IMGUI_DIR}/imgui.cpp"
- "src/Application.h" "src/Application.cpp" "src/Graphics/Texture.h" "src/Graphics/Texture.cpp"    "src/Renderer/Renderer.cpp" "src/Renderer/Renderer.h" src/Ray.h src/Camera.cpp src/Camera.h src/Input.cpp src/Input.h "src/World.h" "src/Renderer/Material.h" "src/Random.h" "src/Graphics/ComputeShader.h" "src/Graphics/Shader.h" "src/Graphics/UniformBufferObject.h" "src/World.cpp" "src/Graphics/Model.h" "src/Graphics/Model.cpp" "src/stb_image_write.h"
-		"src/Graphics/FrameBuffer.cpp"
-		"src/Renderer/PathTracer.cpp"
-		"src/Graphics/FrameBuffer.h" "src/Renderer/PathTracer.h" "src/Renderer/RenderingUnit.h" "src/Renderer/PostProcesser.h" "src/Renderer/PostProcesser.cpp" "src/stb_image.h")
+target_link_libraries(${PROJECT_NAME} PRIVATE "${LIB_DIR}/glew/lib/Release/x64/glew32.lib")
 
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${RES_DIR})
-add_executable (${PROJECT_NAME} ${SOURCES})
+file(GLOB DLLS "libs/glew/glew32.dll")
+file(COPY ${DLLS} DESTINATION ${RES_DIR})
 
-target_link_libraries(${PROJECT_NAME} ${LIBRARIES})
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DImTextureID=ImU64)
 
-# set_property(TARGET ${PROJECT_NAME} PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${RES_DIR}")
-
 set(CMAKE_EXE_LINKER_FLAGS "-static")
+
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET PathTracing PROPERTY CXX_STANDARD 20)

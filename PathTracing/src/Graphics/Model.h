@@ -3,29 +3,10 @@
 #ifndef MODEL_H
 #define MODEL_H
 
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <vector>
-#include <glm/glm.hpp>
-#include <glm/gtx/string_cast.hpp>
+#include "ptpch.h"
+#include "../Renderer/Primitives.h"
 
 namespace PathTracer {
-
-	struct Triangle {
-		glm::vec4 A;
-		glm::vec4 B;
-		glm::vec4 C;
-		glm::vec4 NormalA;
-		glm::vec4 NormalB;
-		glm::vec4 NormalC;
-	};
-
-	struct Face {
-		int vertex_ins[3];
-		int normal_ins[3];
-	};
 
 	class Model {
 	public:

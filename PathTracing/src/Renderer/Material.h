@@ -3,7 +3,7 @@
 #ifndef MATERIAL_H
 #define MATERIAL_H
 
-#include <glm/glm.hpp>
+#include "ptpch.h"
 #include "../Random.h"
 
 namespace PathTracer {

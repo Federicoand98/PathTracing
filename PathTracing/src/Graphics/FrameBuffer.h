@@ -5,7 +5,7 @@
 #ifndef PATHTRACING_FRAMEBUFFER_H
 #define PATHTRACING_FRAMEBUFFER_H
 
-#include <iostream>
+#include "ptpch.h"
 #include <GL/glew.h>
 
 namespace PathTracer {

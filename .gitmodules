@@ -1,0 +1,3 @@
+[submodule "PathTracing/deps/glfw"]
+	path = PathTracing/deps/glfw
+	url = https://github.com/glfw/glfw.git
