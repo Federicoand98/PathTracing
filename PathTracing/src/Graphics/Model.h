@@ -3,13 +3,7 @@
 #ifndef MODEL_H
 #define MODEL_H
 
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <vector>
-#include <glm/glm.hpp>
-#include <glm/gtx/string_cast.hpp>
+#include "ptpch.h"
 #include "../Renderer/Primitives.h"
 
 namespace PathTracer {

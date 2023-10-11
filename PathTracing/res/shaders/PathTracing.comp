@@ -15,9 +15,17 @@ uniform samplerCube SamplerEnvironment;
 struct BVHNode {
     vec4 AABBMin;
     vec4 AABBMax;
-    float LeftNode;
-    float FirstTriIndex;
+    float LeftFirst;
     float TriCount;
+};
+
+struct BVHNodeAlt {
+	vec4 AA;
+	vec4 BB;
+	float left;
+	float right;
+	float n;
+	float index;
 };
 
 struct Ray {
@@ -102,9 +110,14 @@ uint GetPCGHash(inout uint seed);
 float GetRandomFloat();
 vec3 GetRandomVector(uint seed);
 
-void hitBVH(Ray ray);
-void hitTri(out Ray ray, Triangle triangle);
-bool hitAABB(Ray ray, vec4 bmin, vec4 bmax);
+void hitBVH(inout Ray ray);
+float hitTri(inout Ray ray, Triangle triangle);
+float hitAABB(inout Ray ray, vec4 bmin, vec4 bmax);
+float hitAABBAlt(inout Ray ray, vec3 AA, vec3 BB);
+float hitArray(inout Ray ray, int l, int r);
+float hitBVHAlt(inout Ray ray);
+
+int rootNodeIndex = 0;
 
 uniform int nNodes;
 uniform int width;
@@ -147,7 +160,7 @@ layout(std430, binding = 6) buffer TriIndexBuffer {
 };
 
 layout(std430, binding = 7) buffer BVHBuffer {
-    BVHNode BVHNodes[];
+    BVHNodeAlt BVHNodes[];
 };
 
 uint rndSeed;
@@ -173,7 +186,8 @@ void main() {
     vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
     value = mix(lastFrameColor, value, 1.0 / (rendererFrame));
 
-    value = vec4(vec3(BVHNodes[0].AABBMax), 1.0);
+    //value = vec4(vec3(BVHNodes[0].AABBMax), 1.0);
+    //value = vec4(vec3(BVHNodes[0].AA), 1.0);
 
     imageStore(imgOutput, texelCoord, value);
 }
@@ -295,29 +309,141 @@ float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive,
     return rayProbability;
 }
 
-void hitBVH(Ray ray, int nodeIndex) {
-    uint stack[256];
-    int top = 0;
-    stack[++top] = nodeIndex;
+void hitBVH(inout Ray ray) {
+/*
+    uint nodeIndex = rootNodeIndex;
+    uint stack[64];
+    uint stackPtr = 0;
 
-    while(top >= 0) {
-        uint idx = stack[top--];
-        BVHNode node = BVHNodes[idx];
-
-        if(!hitAABB(ray, node.AABBMin, node.AABBMax))
-            continue;
+    while(true) {
+        BVHNode node = BVHNodes[nodeIndex];
 
         if(node.TriCount > 0) {
-            for(uint i = 0; i < node.TriCount; i++)
-                hitTri(ray, Triangles[TriIndex[int(node.FirstTriIndex) + i]]);
-        } else {
-            stack[++top] = int(node.LeftNode);
-            stack[++top] = int(node.LeftNode) + 1;
+            for(uint i = 0; i < node.TriCount; i++) {
+                hitTri(ray, Triangles[TriIndex[int(node.LeftFirst) + i]]);
+            }
+
+            if(stackPtr == 0)
+                break;
+            else
+                nodeIndex = stack[--stackPtr];
+
+            continue;
+        }
+
+        BVHNode child1 = BVHNodes[int(node.LeftFirst)];
+        BVHNode child2 = BVHNodes[int(node.LeftFirst + 1)];
+
+        float dist1 = hitAABB(ray, child1.AABBMin, child1.AABBMax);
+        float dist2 = hitAABB(ray, child2.AABBMin, child2.AABBMax);
+
+        if(dist1 > dist2) {
+            float tempDist = dist1; 
+            dist1 = dist2; 
+            dist2 = tempDist;
+
+            BVHNode tempNode = child1;
+            child1 = child2; 
+            child2 = tempNode;
+        }
+
+        if(dist1 == 10000000) {
+            if(stackPtr == 0)
+                break;
+            else
+                nodeIndex = stack[--stackPtr];
+        }
+        else {
+            nodeIndex = int(node.LeftFirst);
+            if(dist2 != 10000000)
+                stack[stackPtr++] = int(node.LeftFirst) + 1;
         }
     }
+    */
 }
 
-bool hitAABB(Ray ray, vec4 bmin, vec4 bmax) {
+float hitAABBAlt(inout Ray ray, vec3 AA, vec3 BB) {
+    vec3 invdir = 1.0 / ray.Direction;
+    vec3 f = (BB - ray.Origin) * invdir;
+    vec3 n = (AA - ray.Origin) * invdir;
+    vec3 tmax = max(f, n);
+    vec3 tmin = min(f, n);
+    float t1 = min(tmax.x, min(tmax.y, tmax.z));
+    float t0 = max(tmin.x, max(tmin.y, tmin.z));
+
+    return (t1 >= t0) ? ((t0 > 0.0) ? (t0) : (t1)) : (-1);
+}
+
+
+float hitArray(inout Ray ray, int l, int r) {
+    float hitDist = INF;
+
+    for(int i = l; i <= r; i++) {
+        Triangle triangle = Triangles[i];
+        float distance = hitTri(ray, triangle);
+
+        if(distance < hitDist) {
+            hitDist = distance;
+        }
+    }
+
+    return hitDist;
+}
+
+float hitBVHAlt(inout Ray ray) {
+    float hitDist = INF;
+
+    int stack[256];
+    int sp = 0;
+
+    stack[sp++] = 1;
+
+    while(sp > 0) {
+        int top = stack[--sp];
+        BVHNodeAlt node = BVHNodes[top];
+
+        if(node.n > 0) {
+            int L = int(node.index);
+            int R = int(node.index) + int(node.n) - 1;
+            float distance = hitArray(ray, L, R);
+            if(distance < hitDist) {
+                hitDist = distance;
+            }
+            continue;
+        }
+
+        float d1 = INF;
+        float d2 = INF;
+
+        if(node.left > 0) {
+            BVHNodeAlt leftNode = BVHNodes[int(node.left)];
+            d1 = hitAABBAlt(ray, vec3(leftNode.AA), vec3(leftNode.BB));
+        }
+
+        if(node.right > 0) {
+            BVHNodeAlt rightNode = BVHNodes[int(node.right)];
+            d2 = hitAABBAlt(ray, vec3(rightNode.AA), vec3(rightNode.BB));
+        }
+
+        if(d1 > 0 && d2 < 0) {
+            if(d1 < d2) {
+                stack[sp++] = int(node.right);
+                stack[sp++] = int(node.left);
+            } else {
+                stack[sp++] = int(node.left);
+                stack[sp++] = int(node.right);
+            }
+        } else if(d1 > 0) {
+            stack[sp++] = int(node.left);
+        } else if(d2 > 0) {
+            stack[sp++] = int(node.right);
+        }
+    }
+
+    return hitDist;
+}
+
+float hitAABB(inout Ray ray, vec4 bmin, vec4 bmax) {
 	float tx1 = (bmin.x - ray.Origin.x) / ray.Direction.x;
     float tx2 = (bmax.x - ray.Origin.x) / ray.Direction.x;
     float tmin = min(tx1, tx2);
@@ -333,35 +459,40 @@ bool hitAABB(Ray ray, vec4 bmin, vec4 bmax) {
     tmin = max(tmin, min(tz1, tz2));
     tmax = min(tmax, max(tz1, tz2));
 
-    return tmax >= tmin && tmin < ray.t && tmax > 0;
+    if(tmax >= tmin && tmin < ray.t && tmax > 0)
+        return tmin;
+    else 
+		return 10000000;
 }
 
-void hitTri(out Ray ray, Triangle triangle) {
+float hitTri(inout Ray ray, Triangle triangle) {
     vec3 edge1 = vec3(triangle.B) - vec3(triangle.A);
     vec3 edge2 = vec3(triangle.C) - vec3(triangle.A);
     vec3 h = cross(ray.Direction, edge2);
     float a = dot(edge1, h);
 
     if(a > -0.0001 && a < 0.0001)
-        return;
+        return -1;
 
     float f = 1 / a;
     vec3 s = ray.Origin - vec3(triangle.A);
     float u = f * dot(s, h);
 
     if(u < 0 || u > 1)
-		return;
+		return -1;
 
     vec3 q = cross(s, edge1);
     float v = f * dot(ray.Direction, q);
 
     if(v < 0 || u + v > 1)
-        return;
+        return -1;
 
     float t = f * dot(edge2, q);
 
     if(t > 0.0001)
         ray.t = min(ray.t, t);
+
+	return t;
 }
 
 
@@ -407,8 +538,8 @@ HitInfo TraceRay(Ray ray) {
         }
     }
 
-    /*
     for(int i = 0; i < Meshes.length(); i++) {
+    /*
         MeshInfo mesh = Meshes[i];
 
         if(!HitBoundingBox(ray, vec3(mesh.BoundsMin), vec3(mesh.BoundsMax), vec3(mesh.Position))) {
@@ -419,6 +550,7 @@ HitInfo TraceRay(Ray ray) {
             Triangle triangle = Triangles[j];
 
             float distance = HitTriangle(ray, triangle, vec3(mesh.Position), u, v);
+            //float distance = hitTri(ray, triangle);
 
             if(distance >= 0 && distance < hitDistance) {
                 hitDistance = distance;
@@ -427,9 +559,10 @@ HitInfo TraceRay(Ray ray) {
                 inside = false;
             }
         }
+    */
 
-
-        hitBVH(ray, 0);
+        /*
+        hitBVH(ray);
         float distance = ray.t;
 
         if(distance >= 0 && distance < hitDistance) {
@@ -438,8 +571,16 @@ HitInfo TraceRay(Ray ray) {
             objType = 2;
             inside = false;
         }
+
+        float distance = hitBVHAlt(ray);
+        if(distance >= 0 && distance < hitDistance) {
+            hitDistance = distance;
+            index = i;
+            objType = 2;
+            inside = false;
+        }
+        */
     }
-    */
 
 
     if(index < 0) {

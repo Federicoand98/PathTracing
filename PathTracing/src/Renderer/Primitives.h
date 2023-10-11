@@ -5,7 +5,7 @@
 #ifndef PATHTRACING_PRIMITIVES_H
 #define PATHTRACING_PRIMITIVES_H
 
-#include <glm/glm.hpp>
+#include "ptpch.h"
 
 namespace PathTracer {
 

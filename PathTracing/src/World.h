@@ -3,10 +3,9 @@
 #ifndef WORLD_H
 #define WORLD_H
 
+#include "ptpch.h"
+
 #include "Ray.h"
-#include <vector>
-#include <glm/glm.hpp>
-#include <cmath>
 #include "Renderer/Material.h"
 #include "Renderer/Primitives.h"
 #include "Graphics/Model.h"
@@ -44,6 +43,7 @@ namespace PathTracer {
 		std::vector<MeshInfo> Meshes;
 		std::vector<Triangle> Triangles;
         std::vector<BVHNode> Nodes;
+		std::vector<BVHNodeAlt> NodesAlt;
 		std::vector<int> TriIndex;
 		int CurrentScene = 0;
 	private:

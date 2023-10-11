@@ -3,7 +3,7 @@
 #ifndef RAY_H
 #define RAY_H
 
-#include <glm/glm.hpp>
+#include "ptpch.h"
 
 namespace PathTracer {
 

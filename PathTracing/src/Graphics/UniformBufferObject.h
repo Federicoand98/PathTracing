@@ -3,9 +3,8 @@
 #ifndef UNIFORMBUFFEROBJECT_H
 #define UNIFORMBUFFEROBJECT_H
 
+#include "ptpch.h"
 #include <GL/glew.h>
-#include <glm/glm.hpp>
-#include <vector>
 
 namespace PathTracer {
 

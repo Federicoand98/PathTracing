@@ -3,8 +3,7 @@
 #ifndef RANDOM_H
 #define RANDOM_H
 
-#include <random>
-#include <glm/glm.hpp>
+#include "ptpch.h"
 
 namespace PathTracer {
 

@@ -1,7 +1,7 @@
 #pragma once
 
+#include "ptpch.h"
 #include "RenderingUnit.h"
-#include <memory>
 #include "../Graphics/Shader.h"
 
 namespace PathTracer {

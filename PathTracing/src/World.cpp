@@ -690,40 +690,29 @@ namespace PathTracer {
 
 	void World::UploadModel(const Model& model, const glm::vec3& Position, int material) {
 		MeshInfo m;
+		std::vector<Triangle*> triangles = model.GetTriangles();
 
 		BVHBuilder builder(model.GetTriangles());
-		Nodes = builder.CalculateBVH(model.GetTriangles());
-		TriIndex = builder.GetTriIndex();
-
 		/*
-        BVHNode testNode;
-        testNode.left = 255;
-        testNode.right = 128;
-        testNode.n = 30;
-        testNode.AA = glm::vec3(1, 1, 0);
-        testNode.BB = glm::vec3(0, 1, 0);
-        std::vector<BVHNode> nodes{ testNode };
+		Nodes = builder.CalculateBVH(model.GetTriangles());
 
-        std::vector<Triangle> triangles;
+		for (int i = 0; i < Nodes.size(); i++) {
+			std::cout << "node n" << i << " " << Nodes.at(i).leftFirst << std::endl;
+		}
 
-        for(int i = 0; i < model.GetTriangles().size(); i++) {
-            Triangle *t = model.GetTriangles().at(i);
-            triangles.push_back(*t);
-        }
-
-        BVHBuilder::BuildBVHWithSAH(triangles, nodes, 0, triangles.size() - 1, 8);
-        int nNodes = nodes.size();
-
-        for(int i = 0; i < nNodes; i++) {
-            BVHNode_encoded n;
-            n.childs = glm::vec3(nodes[i].left, nodes[i].right, 0);
-            n.leafInfo = glm::vec3(nodes[i].n, nodes[i].index, 0);
-            n.AA = nodes[i].AA;
-            n.BB = nodes[i].BB;
-
-            Nodes.push_back(n);
-        }
+		TriIndex = builder.GetTriIndex();
 		*/
+
+		BVHNodeAlt test;
+		test.left = 255;
+		test.right = 128;
+		test.n = 30;
+		test.AA = glm::vec4(1, 1, 0, 0);
+		test.BB = glm::vec4(0, 1, 0, 0);
+		std::vector<BVHNodeAlt> nodes{ test };
+		builder.BuildBVHAlt(triangles, nodes, 0, triangles.size() - 1, 8);
+
+		NodesAlt = nodes;
 
 		m.FirstTriangle = Triangles.size();
 		m.NumTriangles = model.GetTriangles().size();
@@ -732,7 +721,13 @@ namespace PathTracer {
 		m.BoundsMax = model.GetBoundsMax();
 		m.Position = glm::vec4(Position, 0.0);
 
+		/*
 		for (const Triangle* triangle : model.GetTriangles()) {
+			Triangles.push_back(*triangle);
+		}
+		*/
+
+		for (const Triangle* triangle : triangles) {
 			Triangles.push_back(*triangle);
 		}
 

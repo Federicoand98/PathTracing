@@ -4,11 +4,7 @@
 #define COMPUTESHADER_H
 
 #include <GL/glew.h>
-#include <string>
-#include <fstream>
-#include <sstream>
-#include <iostream>
-#include <glm/gtc/type_ptr.hpp>
+#include "ptpch.h"
 #include "../World.h"
 
 namespace PathTracer {
@@ -142,10 +138,10 @@ namespace PathTracer {
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.TriIndex.size(), world.TriIndex.data(), GL_STATIC_DRAW);
 			}
 
-			if (world.Nodes.size() > 0 || fullReset) {
+			if (world.NodesAlt.size() > 0 || fullReset) {
 				glGenBuffers(1, &ssbo_bvh);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_bvh);
-				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVHNode) * world.Nodes.size(), world.Nodes.data(), GL_STATIC_DRAW);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVHNodeAlt) * world.NodesAlt.size(), world.NodesAlt.data(), GL_STATIC_DRAW);
 			}
 		}
 

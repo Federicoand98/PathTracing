@@ -3,9 +3,7 @@
 #ifndef RENDERER_H
 #define RENDERER_H
 
-#include <memory>
-#include <iostream>
-#include <glm/gtx/compatibility.hpp>
+#include "ptpch.h"
 #include "../Graphics/Texture.h"
 #include "../Graphics/FrameBuffer.h"
 #include "Primitives.h"
