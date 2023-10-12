@@ -18,7 +18,7 @@ set(RES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/res")
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${RES_DIR})
 
-add_executable (${PROJECT_NAME} ${SOURCES})
+add_executable (${PROJECT_NAME} ${SOURCES} "src/stb_image_write.cpp")
 target_precompile_headers(${PROJECT_NAME} PRIVATE "src/ptpch.h")
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/deps/glfw")
 

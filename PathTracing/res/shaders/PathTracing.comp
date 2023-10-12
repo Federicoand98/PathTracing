@@ -10,6 +10,7 @@
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
+layout(rgba32f, binding = 1) uniform image2D test;
 uniform samplerCube SamplerEnvironment;
 
 struct BVHNode {
@@ -186,10 +187,9 @@ void main() {
     vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
     value = mix(lastFrameColor, value, 1.0 / (rendererFrame));
 
-    //value = vec4(vec3(BVHNodes[0].AABBMax), 1.0);
-    //value = vec4(vec3(BVHNodes[0].AA), 1.0);
-
     imageStore(imgOutput, texelCoord, value);
+
+    imageStore(test, texelCoord, vec4(1, 0, 0, 1));
 }
 
 vec4 PerPixel(vec2 ndc) {
