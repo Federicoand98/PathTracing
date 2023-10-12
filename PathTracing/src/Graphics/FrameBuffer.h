@@ -32,6 +32,7 @@ namespace PathTracer {
 		unsigned int m_RBO;
 		unsigned int m_Texture;
 		int m_Width, m_Height;
+		int screenshotsCount = 0;
 	};
 }
 

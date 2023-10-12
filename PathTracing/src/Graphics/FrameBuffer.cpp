@@ -78,6 +78,10 @@ namespace PathTracer {
 		int outputWidth, outputHeight;
 		outputWidth = m_Width;
 		outputHeight = m_Height;
+		std::string folder = "screenshots/";
+		std::string count = std::to_string(screenshotsCount);
+		std::string ext = ".png";
+		std::string fileName = folder + count + ext;
 
 		int i, j, k;
 		GLubyte* pixels = new GLubyte[outputWidth * outputHeight * 4];
@@ -85,10 +89,11 @@ namespace PathTracer {
 		glReadPixels(0, 0, outputWidth, outputHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 
 		stbi_flip_vertically_on_write(true);
-		stbi_write_bmp("screenshots/output.bmp", outputWidth, outputHeight, 4, pixels);
+		stbi_write_png(fileName.c_str(), outputWidth, outputHeight, 4, pixels, outputWidth * 4);
 
 		delete[] pixels;
 
+		screenshotsCount++;
 		std::cout << "Screenshot done!" << std::endl;
 	}
 }

@@ -54,6 +54,15 @@ namespace PathTracer {
 			checkCompileErrors(ID, "PROGRAM");
 
 			glDeleteShader(compute);
+
+			glGenBuffers(1, &ssbo_s);
+			glGenBuffers(1, &ssbo_m);
+			glGenBuffers(1, &ssbo_q);
+			glGenBuffers(1, &ssbo_t);
+			glGenBuffers(1, &ssbo_mesh);
+			glGenBuffers(1, &ssbo_cubes);
+			glGenBuffers(1, &ssbo_idx);
+			glGenBuffers(1, &ssbo_bvh);
 		}
 		
 		void Bind() {
@@ -97,49 +106,41 @@ namespace PathTracer {
 
 		void UpdateWorldBuffer(const World& world, bool fullReset = false) {
 			if (world.Spheres.size() > 0 || fullReset) {
-				glGenBuffers(1, &ssbo_s);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_s);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Sphere) * world.Spheres.size(), world.Spheres.data(), GL_STATIC_DRAW);
 			}
 
 			if (world.Materials.size() > 0 || fullReset) {
-				glGenBuffers(1, &ssbo_m);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_m);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Material) * world.Materials.size(), world.Materials.data(), GL_STATIC_DRAW);
 			}
 
 			if (world.Quads.size() > 0 || fullReset) {
-				glGenBuffers(1, &ssbo_q);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_q);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Quad) * world.Quads.size(), world.Quads.data(), GL_STATIC_DRAW);
 			}
 
 			if (world.Triangles.size() > 0 || fullReset) {
-				glGenBuffers(1, &ssbo_t);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_t);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Triangle) * world.Triangles.size(), world.Triangles.data(), GL_STATIC_DRAW);
 			}
 
 			if (world.Meshes.size() > 0 || fullReset) {
-				glGenBuffers(1, &ssbo_mesh);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_mesh);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(MeshInfo) * world.Meshes.size(), world.Meshes.data(), GL_STATIC_DRAW);
 			}
 
 			if (world.Boxes.size() > 0 || fullReset) {
-				glGenBuffers(1, &ssbo_cubes);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_cubes);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Box) * world.Boxes.size(), world.Boxes.data(), GL_STATIC_DRAW);
 			}
 
 			if (world.TriIndex.size() > 0 || fullReset) {
-				glGenBuffers(1, &ssbo_idx);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_idx);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.TriIndex.size(), world.TriIndex.data(), GL_STATIC_DRAW);
 			}
 
 			if (world.NodesAlt.size() > 0 || fullReset) {
-				glGenBuffers(1, &ssbo_bvh);
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_bvh);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVHNodeAlt) * world.NodesAlt.size(), world.NodesAlt.data(), GL_STATIC_DRAW);
 			}
