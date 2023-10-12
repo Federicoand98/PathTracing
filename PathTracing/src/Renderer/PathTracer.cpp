@@ -11,6 +11,7 @@ namespace PathTracer {
 		m_ComputeShader->UpdateWorldBuffer(world);
 
 		m_SkyBox = std::make_shared<Texture>(GL_TEXTURE_CUBE_MAP);
+
 		/*
 		m_SkyBox->LoadCubeMap({
 				"textures/EnvironmentMap/Temple/posx.png",
@@ -64,8 +65,9 @@ namespace PathTracer {
 		m_ComputeShader->SetMat4("inverseView", container.Camera.GetInverseView());
 		m_ComputeShader->SetWorld();
 
-		if (container.NumFrames == 1)
-			m_ComputeShader->UpdateWorldBuffer(container.World, container.ResetScene);
+		if (container.ResetScene || container.NumFrames == 1) {
+			m_ComputeShader->UpdateWorldBuffer(container.World);
+		}
 
 		m_SkyBox->Bind();
 	}

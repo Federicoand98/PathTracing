@@ -3,6 +3,8 @@
 //
 
 #include "FrameBuffer.h"
+#include <GL/glew.h>
+#include "../stb_image_write.h"
 
 namespace PathTracer {
 
@@ -65,6 +67,34 @@ namespace PathTracer {
 
 		if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 			std::cout << "ERROR::FRAMEBUFFER::AttachTexture Framebuffer is not complete!\n";
+	}
+
+	void FrameBuffer::SavePPMTexture() {
+		std::cout << "Screenshot" << std::endl;
+
+		Bind();
+
+		FILE* outputImg;
+		int outputWidth, outputHeight;
+		outputWidth = m_Width;
+		outputHeight = m_Height;
+		std::string folder = "screenshots/";
+		std::string count = std::to_string(screenshotsCount);
+		std::string ext = ".png";
+		std::string fileName = folder + count + ext;
+
+		int i, j, k;
+		GLubyte* pixels = new GLubyte[outputWidth * outputHeight * 4];
+
+		glReadPixels(0, 0, outputWidth, outputHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+		stbi_flip_vertically_on_write(true);
+		stbi_write_png(fileName.c_str(), outputWidth, outputHeight, 4, pixels, outputWidth * 4);
+
+		delete[] pixels;
+
+		screenshotsCount++;
+		std::cout << "Screenshot done!" << std::endl;
 	}
 }
 

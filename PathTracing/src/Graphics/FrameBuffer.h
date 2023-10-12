@@ -6,7 +6,6 @@
 #define PATHTRACING_FRAMEBUFFER_H
 
 #include "ptpch.h"
-#include <GL/glew.h>
 
 namespace PathTracer {
 
@@ -22,6 +21,8 @@ namespace PathTracer {
 
 		void AttachTexture(unsigned int texture);
 
+		void SavePPMTexture();
+
 		unsigned int GetTexture() const { return m_Texture; }
 		int GetWidth() const { return m_Width; }
 		int GetHeight() const { return m_Height; }
@@ -31,6 +32,7 @@ namespace PathTracer {
 		unsigned int m_RBO;
 		unsigned int m_Texture;
 		int m_Width, m_Height;
+		int screenshotsCount = 0;
 	};
 }
 

@@ -152,6 +152,7 @@ namespace PathTracer {
 		BackgroundColor = { 0.54f, 0.73f, 0.95f };
 		CreateCornellBox();
 
+		/*
 		Model queen, king, knight;
 		queen.LoadObj("models/queen.obj");
 		king.LoadObj("models/king.obj");
@@ -160,6 +161,7 @@ namespace PathTracer {
 		UploadModel(queen, { 0.7, -2.1, 2.0 }, 1);
 		UploadModel(king, { -1.2, -2, 1.6 }, 1);
 		UploadModel(knight, { -1.2, -2, 1.6 }, 1);
+		*/
 	}
 
 	void World::PrepareRandomSpheres() {

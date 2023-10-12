@@ -241,14 +241,12 @@ namespace PathTracer {
 		
 		ImGui::Spacing();
 
-		/*
-		if (ImGui::Button("Salva immagine")) {
-			// Work In Progress
+		if (ImGui::Button("Screenshot")) {
+			m_Renderer.GetFrameBuffer()->SavePPMTexture();
 		}
 
 		ImGui::Separator();
 		ImGui::Spacing();
-		*/
 
 		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
 		ImGui::SeparatorText("ENGINE CONFIGURATIONS");
