@@ -10,7 +10,6 @@
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
-layout(rgba32f, binding = 1) uniform image2D test;
 uniform samplerCube SamplerEnvironment;
 
 struct BVHNode {
@@ -111,7 +110,6 @@ uint GetPCGHash(inout uint seed);
 float GetRandomFloat();
 vec3 GetRandomVector(uint seed);
 
-void hitBVH(inout Ray ray);
 float hitTri(inout Ray ray, Triangle triangle);
 float hitAABB(inout Ray ray, vec4 bmin, vec4 bmax);
 float hitAABBAlt(inout Ray ray, vec3 AA, vec3 BB);
@@ -188,8 +186,6 @@ void main() {
     value = mix(lastFrameColor, value, 1.0 / (rendererFrame));
 
     imageStore(imgOutput, texelCoord, value);
-
-    imageStore(test, texelCoord, vec4(1, 0, 0, 1));
 }
 
 vec4 PerPixel(vec2 ndc) {
@@ -309,59 +305,6 @@ float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive,
     return rayProbability;
 }
 
-void hitBVH(inout Ray ray) {
-/*
-    uint nodeIndex = rootNodeIndex;
-    uint stack[64];
-    uint stackPtr = 0;
-
-    while(true) {
-        BVHNode node = BVHNodes[nodeIndex];
-
-        if(node.TriCount > 0) {
-            for(uint i = 0; i < node.TriCount; i++) {
-                hitTri(ray, Triangles[TriIndex[int(node.LeftFirst) + i]]);
-            }
-
-            if(stackPtr == 0)
-                break;
-            else
-                nodeIndex = stack[--stackPtr];
-
-            continue;
-        }
-
-        BVHNode child1 = BVHNodes[int(node.LeftFirst)];
-        BVHNode child2 = BVHNodes[int(node.LeftFirst + 1)];
-
-        float dist1 = hitAABB(ray, child1.AABBMin, child1.AABBMax);
-        float dist2 = hitAABB(ray, child2.AABBMin, child2.AABBMax);
-
-        if(dist1 > dist2) {
-            float tempDist = dist1; 
-            dist1 = dist2; 
-            dist2 = tempDist;
-
-            BVHNode tempNode = child1;
-            child1 = child2; 
-            child2 = tempNode;
-        }
-
-        if(dist1 == 10000000) {
-            if(stackPtr == 0)
-                break;
-            else
-                nodeIndex = stack[--stackPtr];
-        }
-        else {
-            nodeIndex = int(node.LeftFirst);
-            if(dist2 != 10000000)
-                stack[stackPtr++] = int(node.LeftFirst) + 1;
-        }
-    }
-    */
-}
-
 float hitAABBAlt(inout Ray ray, vec3 AA, vec3 BB) {
     vec3 invdir = 1.0 / ray.Direction;
     vec3 f = (BB - ray.Origin) * invdir;
@@ -373,7 +316,6 @@ float hitAABBAlt(inout Ray ray, vec3 AA, vec3 BB) {
 
     return (t1 >= t0) ? ((t0 > 0.0) ? (t0) : (t1)) : (-1);
 }
-
 
 float hitArray(inout Ray ray, int l, int r) {
     float hitDist = INF;
@@ -441,28 +383,6 @@ float hitBVHAlt(inout Ray ray) {
     }
 
     return hitDist;
-}
-
-float hitAABB(inout Ray ray, vec4 bmin, vec4 bmax) {
-	float tx1 = (bmin.x - ray.Origin.x) / ray.Direction.x;
-    float tx2 = (bmax.x - ray.Origin.x) / ray.Direction.x;
-    float tmin = min(tx1, tx2);
-    float tmax = min(tx1, tx2);
-
-	float ty1 = (bmin.y - ray.Origin.y) / ray.Direction.y;
-    float ty2 = (bmax.y - ray.Origin.y) / ray.Direction.y;
-    tmin = max(tmin, min(ty1, ty2));
-    tmax = min(tmax, max(ty1, ty2));
-
-	float tz1 = (bmin.z - ray.Origin.z) / ray.Direction.z;
-    float tz2 = (bmax.z - ray.Origin.z) / ray.Direction.z;
-    tmin = max(tmin, min(tz1, tz2));
-    tmax = min(tmax, max(tz1, tz2));
-
-    if(tmax >= tmin && tmin < ray.t && tmax > 0)
-        return tmin;
-    else 
-		return 10000000;
 }
 
 float hitTri(inout Ray ray, Triangle triangle) {
@@ -562,16 +482,6 @@ HitInfo TraceRay(Ray ray) {
     */
 
         /*
-        hitBVH(ray);
-        float distance = ray.t;
-
-        if(distance >= 0 && distance < hitDistance) {
-            hitDistance = distance;
-            index = i;
-            objType = 2;
-            inside = false;
-        }
-
         float distance = hitBVHAlt(ray);
         if(distance >= 0 && distance < hitDistance) {
             hitDistance = distance;

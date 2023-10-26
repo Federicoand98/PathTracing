@@ -36,3 +36,8 @@ PathTracing/res/PathTracing.exe
 PathTracing/res/screenshots
 CNN_Denoiser/training
 CNN-Denoiser/venv
+CNN-Denoiser/new-denoiser/datasets
+CNN-Denoiser/new-denoiser/test_data.pkl
+CNN-Denoiser/new-denoiser/test_path.pkl
+CNN-Denoiser/new-denoiser/train_data.pkl
+CNN-Denoiser/new-denoiser/train_path.pkl
