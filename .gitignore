@@ -46,3 +46,4 @@ CNN-Denoiser/train_path.pkl
 .DS_Store
 CNN-Denoiser/.DS_Store
 CNN-Denoiser/__pycache__/
+BlenderFiles/
