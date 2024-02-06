@@ -36,3 +36,14 @@ PathTracing/res/PathTracing.exe
 PathTracing/res/screenshots
 CNN_Denoiser/training
 CNN-Denoiser/venv
+CNN-Denoiser/datasets
+CNN-Denoiser/models
+CNN-Denoiser/logs
+CNN-Denoiser/test_data.pkl
+CNN-Denoiser/test_path.pkl
+CNN-Denoiser/train_data.pkl
+CNN-Denoiser/train_path.pkl
+.DS_Store
+CNN-Denoiser/.DS_Store
+CNN-Denoiser/__pycache__/
+BlenderFiles/
