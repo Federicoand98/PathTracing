@@ -56,41 +56,7 @@ def prediction_tflite(img, model, input_details, output_details):
     pred_img = np.reshape(pred,(4,4,1,256,256,3))
     pred_img = unpatchify(pred_img, img.shape)
     return pred_img
-     
-#Custom function to plot/visualize noisy, ground truth and predicted images
-def visualize(sample,model):
-    fig,ax = plt.subplots(len(sample),3,figsize=(30,30))
 
-    for i in range(len(sample)):
-        path = sample['Ground Truth Images'].iloc[i]
-        test_img_gt = cv2.imread(path)
-        test_img_gt = cv2.cvtColor(test_img_gt, cv2.COLOR_BGR2RGB)
-        test_img_gt = cv2.resize(test_img_gt,(512,512))
-        test_img_gt = test_img_gt.astype("float32") / 255.0
-
-        path = sample['Noisy Images'].iloc[i]
-        test_img_nsy = cv2.imread(path)
-        pred_img = prediction(test_img_nsy,model)
-        pred_img = cv2.resize(pred_img,(512,512))
-
-        test_img_nsy = cv2.cvtColor(test_img_nsy, cv2.COLOR_BGR2RGB)
-        test_img_nsy = cv2.resize(test_img_nsy,(512,512))
-        test_img_nsy = test_img_nsy.astype("float32") / 255.0
-
-        ax[i][0].imshow(test_img_nsy)
-        ax[i][0].get_xaxis().set_visible(False)
-        ax[i][0].get_yaxis().set_visible(False)
-        ax[i][0].title.set_text("Noisy Image")
-
-        ax[i][1].imshow(test_img_gt)
-        ax[i][1].get_xaxis().set_visible(False)
-        ax[i][1].get_yaxis().set_visible(False)
-        ax[i][1].title.set_text("Ground Truth Image")
-
-        ax[i][2].imshow(pred_img)
-        ax[i][2].get_xaxis().set_visible(False)
-        ax[i][2].get_yaxis().set_visible(False)
-        ax[i][2].title.set_text("Predicted Image")
 
 #Custom function that computes the psnr and ssim values for images
 def psnr_and_ssim(X_test,y_test,model,model_type='Normal'):
