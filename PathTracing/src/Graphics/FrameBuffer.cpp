@@ -94,7 +94,13 @@ namespace PathTracer {
 		delete[] pixels;
 
 		screenshotsCount++;
+		
 		std::cout << "Screenshot done!" << std::endl;
+
+		std::string cmd = "conda run -n tf python scripts/denoise.py";
+		cmd = cmd + " " + fileName;
+
+		system(cmd.c_str());
 	}
 }
 
