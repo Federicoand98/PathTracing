@@ -585,15 +585,22 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
             }
         }
 
-        Triangle tri = Triangles[index];
-        vec3 meshPos = meshIndex >= 0 ? vec3(Meshes[meshIndex].Position) : vec3(0);
+        // i triangoli sono gia' in world space, meshPos e' 0
         vec3 hitPosition = ray.Origin + ray.Direction * hitDistance;
-        vec3 closestPosition = meshPos;
-        hitPosition += closestPosition;
-        float w = 1 - u - v;
-        vec4 normal = normalize(Triangles[index].NormalA * w + Triangles[index].NormalB * u + Triangles[index].NormalC * v);
 
-        hit = HitInfo(hitDistance, hitPosition, vec3(normal), meshIndex, 2, insideHit);
+        // normale liscia interpolata coi pesi baricentrici (w->A, u->B, v->C)
+        float w = 1.0 - u - v;
+        vec3 normal = normalize(vec3(Triangles[index].NormalA) * w
+                              + vec3(Triangles[index].NormalB) * u
+                              + vec3(Triangles[index].NormalC) * v);
+
+        // orienta la normale contro il raggio: senza questo il BSDF riceve una
+        // normale che punta "via" dal raggio (vn invertiti o silhouette) e produce
+        // riflessioni sbagliate, self-intersection e macchie nere sulle mesh.
+        if(dot(ray.Direction, normal) > 0.0)
+            normal = -normal;
+
+        hit = HitInfo(hitDistance, hitPosition, normal, meshIndex, 2, insideHit);
     }
 
     return hit;
