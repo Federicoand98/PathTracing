@@ -15,6 +15,8 @@ namespace PathTracer {
 		uint32_t RayDepth;
 		bool ResetScene;
 		bool EnvironmentMapping;
+		bool BVHDebug;
+		float BVHHeatScale;
 		const class World& World;
 		const class Camera& Camera;
 	};

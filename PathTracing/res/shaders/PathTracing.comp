@@ -116,8 +116,12 @@ bool hitAABBAlt(inout Ray ray, vec3 bmin, vec3 bmax);
 float hitArray(inout Ray ray, int l, int r);
 float hitBVHAlt(inout Ray ray, int nodeIndex, out int hitTriIndex, out float outU, out float outV);
 float intersectTri(inout Ray ray, Triangle triangle, out float outU, out float outV);
+vec3 BvhHeatColor(float t);
 
 int rootNodeIndex = 0;
+
+// contatore di nodi BVH visitati (test AABB) usato dal debugger BVH
+int gNodeVisits = 0;
 
 uniform int nNodes;
 uniform int width;
@@ -130,6 +134,8 @@ uniform mat4 inverseProjection;
 uniform mat4 inverseView;
 uniform vec3 BackgroundColor;
 uniform bool EnvironmentMapping;
+uniform int bvhDebug;         // 0 = off, 1 = heatmap del costo di traversata BVH
+uniform float bvhHeatScale;   // n. di nodi visitati che mappa al colore "caldo" (rosso)
 
 bool debugMode = false;
 
@@ -177,6 +183,25 @@ void main() {
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
 
     rndSeed = gl_GlobalInvocationID.x * 1973 + gl_GlobalInvocationID.y * 9277 + rendererFrame * 2699 | 1;
+
+    // BVH debugger: colora ogni pixel in base a quanti nodi BVH testa il raggio
+    // primario. Bypassa l'accumulazione e scrive direttamente (vista live).
+    if(bvhDebug == 1) {
+        vec2 ndc = (vec2(texelCoord) + 0.5) / vec2(imageResultSize) * 2.0 - 1.0;
+        Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
+        ray.t = FLOAT_MAX;
+
+        gNodeVisits = 0;
+        if(BVHNodes.length() > 0) {
+            int hitTriIndex;
+            float outU, outV;
+            hitBVHAlt(ray, rootNodeIndex, hitTriIndex, outU, outV);
+        }
+
+        vec3 heat = BvhHeatColor(float(gNodeVisits) / max(bvhHeatScale, 1.0));
+        imageStore(imgOutput, texelCoord, vec4(heat, 1.0));
+        return;
+    }
 
     vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
     for(int i = 0; i < samplesPerPixel; i++) {
@@ -407,6 +432,8 @@ float hitBVHAlt(inout Ray ray, int nodeIndex, out int hitTriIndex, out float out
     while(stackPtr > 0) {
         int currentNodeIndex = stack[--stackPtr];
         BVHNodeNew node = BVHNodes[currentNodeIndex];
+
+        gNodeVisits++; // ogni nodo estratto = un test AABB (metrica di costo del BVH)
 
         if(!hitAABBAlt(ray, vec3(node.aabbMin), vec3(node.aabbMax)))
             continue;
@@ -744,6 +771,24 @@ uint GetPCGHash(inout uint seed) {
  
 float GetRandomFloat() {
     return float(GetPCGHash(rndSeed)) / 4294967296.0;
+}
+
+// gradiente freddo->caldo per la heatmap del BVH: nero, blu, ciano, verde, giallo, rosso
+vec3 BvhHeatColor(float t) {
+    t = clamp(t, 0.0, 1.0);
+    const vec3 c0 = vec3(0.0, 0.0, 0.0);
+    const vec3 c1 = vec3(0.0, 0.0, 1.0);
+    const vec3 c2 = vec3(0.0, 1.0, 1.0);
+    const vec3 c3 = vec3(0.0, 1.0, 0.0);
+    const vec3 c4 = vec3(1.0, 1.0, 0.0);
+    const vec3 c5 = vec3(1.0, 0.0, 0.0);
+
+    float s = t * 5.0;
+    if(s < 1.0) return mix(c0, c1, s);
+    if(s < 2.0) return mix(c1, c2, s - 1.0);
+    if(s < 3.0) return mix(c2, c3, s - 2.0);
+    if(s < 4.0) return mix(c3, c4, s - 3.0);
+    return mix(c4, c5, s - 4.0);
 }
 
 vec3 GetRandomVector(uint seed) {

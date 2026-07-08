@@ -58,6 +58,8 @@ namespace PathTracer {
 		m_ComputeShader->SetInt("samplesPerPixel", container.SamplesPerPixel);
 		m_ComputeShader->SetInt("rayDepth", container.RayDepth);
 		m_ComputeShader->SetBool("EnvironmentMapping", container.EnvironmentMapping);
+		m_ComputeShader->SetInt("bvhDebug", container.BVHDebug ? 1 : 0);
+		m_ComputeShader->SetFloat("bvhHeatScale", container.BVHHeatScale);
 		m_ComputeShader->SetVec3("cameraPosition", container.Camera.GetPosition());
 		m_ComputeShader->SetVec3("BackgroundColor", container.World.BackgroundColor);
 		m_ComputeShader->SetMat4("inverseProjection", container.Camera.GetInverseProjection());

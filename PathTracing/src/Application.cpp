@@ -269,6 +269,15 @@ namespace PathTracer {
 			m_Renderer.ResetPathTracingCounter();
 		ImGui::Spacing();
 		ImGui::Spacing();
+		ImGui::Text("BVH Debugger:");
+		if (ImGui::Checkbox("BVH Heatmap", &m_Renderer.BVHDebug))
+			m_Renderer.ResetPathTracingCounter();
+		if (m_Renderer.BVHDebug) {
+			ImGui::TextDisabled("blu = poche ricerche, rosso = molte");
+			ImGui::SliderFloat("heat scale", &m_Renderer.BVHHeatScale, 1.0f, 256.0f);
+		}
+		ImGui::Spacing();
+		ImGui::Spacing();
 		ImGui::Checkbox("Enable Path Tracing", &m_Renderer.PathTracing);
 		if (ImGui::Button("Reset Accumulation"))
 			m_Renderer.ResetPathTracingCounter();
