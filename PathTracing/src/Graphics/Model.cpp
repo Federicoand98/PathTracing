@@ -85,6 +85,29 @@ namespace PathTracer {
 	}
 
 	void Model::MakeTriangles() {
+		// Smooth shading (come "Shade Smooth" di Blender): invece di usare le normali
+		// per-faccia dell'OBJ (che danno lo shading sfaccettato), calcolo una normale
+		// per-vertice mediando le normali geometriche di tutte le facce adiacenti.
+		// Il cross product NON normalizzato pesa ogni contributo per l'area del triangolo.
+		std::vector<glm::vec3> vertexNormals(m_Vertices.size(), glm::vec3(0.0f));
+
+		for (auto& face : m_Faces) {
+			const glm::vec3& a = *m_Vertices[face->vertex_ins[0] - 1];
+			const glm::vec3& b = *m_Vertices[face->vertex_ins[1] - 1];
+			const glm::vec3& c = *m_Vertices[face->vertex_ins[2] - 1];
+
+			glm::vec3 faceNormal = glm::cross(b - a, c - a); // peso implicito per area
+
+			vertexNormals[face->vertex_ins[0] - 1] += faceNormal;
+			vertexNormals[face->vertex_ins[1] - 1] += faceNormal;
+			vertexNormals[face->vertex_ins[2] - 1] += faceNormal;
+		}
+
+		for (glm::vec3& n : vertexNormals) {
+			if (glm::length(n) > 1e-8f)
+				n = glm::normalize(n);
+		}
+
 		for (auto& face : m_Faces) {
 			Triangle* triangle = new Triangle;
 
@@ -92,9 +115,9 @@ namespace PathTracer {
 			triangle->B = glm::vec4(*(m_Vertices[face->vertex_ins[1] - 1]), 0.0f);
 			triangle->C = glm::vec4(*(m_Vertices[face->vertex_ins[2] - 1]), 0.0f);
 
-			triangle->NormalA = glm::vec4(*(m_Normals[face->normal_ins[0] - 1]), 0.0f);
-			triangle->NormalB = glm::vec4(*(m_Normals[face->normal_ins[1] - 1]), 0.0f);
-			triangle->NormalC = glm::vec4(*(m_Normals[face->normal_ins[2] - 1]), 0.0f);
+			triangle->NormalA = glm::vec4(vertexNormals[face->vertex_ins[0] - 1], 0.0f);
+			triangle->NormalB = glm::vec4(vertexNormals[face->vertex_ins[1] - 1], 0.0f);
+			triangle->NormalC = glm::vec4(vertexNormals[face->vertex_ins[2] - 1], 0.0f);
 
 			m_Triangles.push_back(triangle);
 		}
