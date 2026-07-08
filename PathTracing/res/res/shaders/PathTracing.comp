@@ -12,11 +12,11 @@ layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
 uniform samplerCube SamplerEnvironment;
 
-struct BVHNodeNew {
-    vec4 aabbMin;
-    vec4 aabbMax;
-    float left;
-    float triCount;
+struct BVHNode {
+    vec4 AABBMin;
+    vec4 AABBMax;
+    float LeftFirst;
+    float TriCount;
 };
 
 struct BVHNodeAlt {
@@ -112,10 +112,9 @@ vec3 GetRandomVector(uint seed);
 
 float hitTri(inout Ray ray, Triangle triangle);
 float hitAABB(inout Ray ray, vec4 bmin, vec4 bmax);
-bool hitAABBAlt(inout Ray ray, vec3 bmin, vec3 bmax);
+float hitAABBAlt(inout Ray ray, vec3 AA, vec3 BB);
 float hitArray(inout Ray ray, int l, int r);
-float hitBVHAlt(inout Ray ray, int nodeIndex, out int hitTriIndex, out float outU, out float outV);
-float intersectTri(inout Ray ray, Triangle triangle, out float outU, out float outV);
+float hitBVHAlt(inout Ray ray);
 
 int rootNodeIndex = 0;
 
@@ -130,8 +129,6 @@ uniform mat4 inverseProjection;
 uniform mat4 inverseView;
 uniform vec3 BackgroundColor;
 uniform bool EnvironmentMapping;
-
-bool debugMode = false;
 
 layout(std430, binding = 0) buffer SpheresBuffer {
     Sphere Spheres[];
@@ -157,18 +154,13 @@ layout(std430, binding = 5) buffer CubeBuffer {
     CubeInfo Cubes[];
 };
 
-layout(std430, binding = 6) buffer BVHBuffer {
-    BVHNodeNew BVHNodes[];
-};
-
-layout(std430, binding = 7) buffer TriIndexBuffer {
+layout(std430, binding = 6) buffer TriIndexBuffer {
     int TriIndex[];
 };
 
-layout(std430, binding = 8) buffer DebugCounterBuffer {
-    int hitCounter;
+layout(std430, binding = 7) buffer BVHBuffer {
+    BVHNodeAlt BVHNodes[];
 };
-
 
 uint rndSeed;
 
@@ -206,13 +198,11 @@ vec4 PerPixel(vec2 ndc) {
     bool isRefractive;
     bool isSpecular;
 
-    vec4 col = vec4(0.0);
-
     for(int i = 0; i < rayDepth; i++) {
         HitInfo hit = TraceRay(ray);
 
         if(hit.HitDistance < 0.0) {
-            if(!EnvironmentMapping)
+            if(EnvironmentMapping)
 				light += texture(SamplerEnvironment, ray.Direction).rgb * contribution;
             else
 				light += BackgroundColor * contribution;
@@ -225,16 +215,6 @@ vec4 PerPixel(vec2 ndc) {
             material = Materials[int(Quads[hit.ObjectIndex].MaterialIndex)];
         else if(hit.ObjectType == 2)
             material = Materials[int(Meshes[hit.ObjectIndex].MaterialIndex)];
-
-        // if(hit.ObjectType == 0) {
-        //     col = vec4(0.0, 1.0, 0.0, 1.0);
-        //     break;
-        // }
-
-        // if(hit.ObjectType == 2) {
-        //     col = vec4(0.0, 0.0, 1.0, 1.0);
-        //     break;
-        // }
 
         if(hit.Inside) {
             hit.Normal *= -1.0;
@@ -253,10 +233,6 @@ vec4 PerPixel(vec2 ndc) {
         // normalizzazione del colore in base alla probabilità del raggio, in modo da avere una rappresentazione accurata dell'intensità di lice che rggiunge il pixel
         contribution /= rayProbability;
 
-        // if(hit.ObjectType == 5)
-        //     return vec4(1.0, 0.0, 1.0, 1.0);
-
-
         // Russian Roulette
         // i raggi di luce con un basso contributo al colore vengono scartati
         {
@@ -270,7 +246,6 @@ vec4 PerPixel(vec2 ndc) {
     }
 
     return vec4(light, 1.0);
-    // return col;
 }
 
 float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive, out bool isSpecular) {
@@ -330,21 +305,16 @@ float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive,
     return rayProbability;
 }
 
-bool hitAABBAlt(inout Ray ray, vec3 bmin, vec3 bmax) {
-    float tx1 = (bmin.x - ray.Origin.x) / ray.Direction.x;
-    float tx2 = (bmax.x - ray.Origin.x) / ray.Direction.x;
-    float tmin = min(tx1, tx2);
-    float tmax = max(tx1, tx2);
-    float ty1 = (bmin.y - ray.Origin.y) / ray.Direction.y;
-    float ty2 = (bmax.y - ray.Origin.y) / ray.Direction.y;
-    tmin = max(tmin, min(ty1, ty2));
-    tmax = min(tmax, max(ty1, ty2));
-    float tz1 = (bmin.z - ray.Origin.z) / ray.Direction.z;
-    float tz2 = (bmax.z - ray.Origin.z) / ray.Direction.z;
-    tmin = max(tmin, min(tz1, tz2));
-    tmax = min(tmax, max(tz1, tz2));
+float hitAABBAlt(inout Ray ray, vec3 AA, vec3 BB) {
+    vec3 invdir = 1.0 / ray.Direction;
+    vec3 f = (BB - ray.Origin) * invdir;
+    vec3 n = (AA - ray.Origin) * invdir;
+    vec3 tmax = max(f, n);
+    vec3 tmin = min(f, n);
+    float t1 = min(tmax.x, min(tmax.y, tmax.z));
+    float t0 = max(tmin.x, max(tmin.y, tmin.z));
 
-    return tmax >= tmin && tmin < ray.t && tmax > 0;
+    return (t1 >= t0) ? ((t0 > 0.0) ? (t0) : (t1)) : (-1);
 }
 
 float hitArray(inout Ray ray, int l, int r) {
@@ -362,83 +332,57 @@ float hitArray(inout Ray ray, int l, int r) {
     return hitDist;
 }
 
-float intersectTri(inout Ray ray, Triangle triangle, out float outU, out float outV) {
-    vec3 edge1 = vec3(triangle.B) - vec3(triangle.A);
-    vec3 edge2 = vec3(triangle.C) - vec3(triangle.A);
-    vec3 h = cross(ray.Direction, edge2);
-    float a = dot(edge1, h);
+float hitBVHAlt(inout Ray ray) {
+    float hitDist = INF;
 
-    if(a > -0.0001 && a < 0.0001)
-        return -1;
+    int stack[256];
+    int sp = 0;
 
-    float f = 1 / a;
-    vec3 s = ray.Origin - vec3(triangle.A);
-    float u = f * dot(s, h);
+    stack[sp++] = 1;
 
-    if(u < 0 || u > 1)
-        return -1;
+    while(sp > 0) {
+        int top = stack[--sp];
+        BVHNodeAlt node = BVHNodes[top];
 
-    vec3 q = cross(s, edge1);
-    float v = f * dot(ray.Direction, q);
-
-    if(v < 0 || u + v > 1)
-        return -1;
-
-    float t = f * dot(edge2, q);
-
-    if(t > 0.0001)
-        ray.t = min(ray.t, t);
-
-    outU = u;
-    outV = v;
-
-    return t;
-}
-
-float hitBVHAlt(inout Ray ray, int nodeIndex, out int hitTriIndex, out float outU, out float outV) {
-    const int MAX_STACK = 64;
-    int stack[MAX_STACK];
-    int stackPtr = 0;
-
-    stack[stackPtr++] = nodeIndex;
-    float closestHit = INF;
-    hitTriIndex = -1;
-
-    while(stackPtr > 0) {
-        int currentNodeIndex = stack[--stackPtr];
-        BVHNodeNew node = BVHNodes[currentNodeIndex];
-
-        if(!hitAABBAlt(ray, vec3(node.aabbMin), vec3(node.aabbMax)))
-            continue;
-        
-        // node.isLeaf()
-        if(node.triCount > 0) {
-            for(int i = 0; i < int(node.triCount); i++) {
-                int triIndex = TriIndex[int(node.left) + i];
-                Triangle triangle = Triangles[triIndex];
-                float u, v;
-                // i triangoli sono gia' in world space (offset bakato in fase di upload)
-                float distance = HitTriangle(ray, triangle, vec3(0.0), u, v);
-
-                if(distance >= 0 && distance < ray.t) {
-                    atomicAdd(hitCounter, 1);
-                    ray.t = distance;
-                    closestHit = min(closestHit, distance);
-                    outU = u;
-                    outV = v;
-                    hitTriIndex = triIndex;
-                }
+        if(node.n > 0) {
+            int L = int(node.index);
+            int R = int(node.index) + int(node.n) - 1;
+            float distance = hitArray(ray, L, R);
+            if(distance < hitDist) {
+                hitDist = distance;
             }
-        } else {
-            if(stackPtr < MAX_STACK)
-                stack[stackPtr++] = int(node.left) + 1;
-            
-            if(stackPtr < MAX_STACK)
-                stack[stackPtr++] = int(node.left);
+            continue;
+        }
+
+        float d1 = INF;
+        float d2 = INF;
+
+        if(node.left > 0) {
+            BVHNodeAlt leftNode = BVHNodes[int(node.left)];
+            d1 = hitAABBAlt(ray, vec3(leftNode.AA), vec3(leftNode.BB));
+        }
+
+        if(node.right > 0) {
+            BVHNodeAlt rightNode = BVHNodes[int(node.right)];
+            d2 = hitAABBAlt(ray, vec3(rightNode.AA), vec3(rightNode.BB));
+        }
+
+        if(d1 > 0 && d2 < 0) {
+            if(d1 < d2) {
+                stack[sp++] = int(node.right);
+                stack[sp++] = int(node.left);
+            } else {
+                stack[sp++] = int(node.left);
+                stack[sp++] = int(node.right);
+            }
+        } else if(d1 > 0) {
+            stack[sp++] = int(node.left);
+        } else if(d2 > 0) {
+            stack[sp++] = int(node.right);
         }
     }
 
-    return closestHit < INF ? closestHit : -1;
+    return hitDist;
 }
 
 float hitTri(inout Ray ray, Triangle triangle) {
@@ -514,26 +458,40 @@ HitInfo TraceRay(Ray ray) {
         }
     }
 
-    if(BVHNodes.length() > 0) {
-        // il test AABB usa ray.t per scartare i nodi oltre l'hit piu' vicino gia' trovato
-        ray.t = hitDistance;
+    for(int i = 0; i < Meshes.length(); i++) {
+    /*
+        MeshInfo mesh = Meshes[i];
 
-        int hitTriIndex;
-        float outU, outV;
-        float distance = hitBVHAlt(ray, rootNodeIndex, hitTriIndex, outU, outV);
+        if(!HitBoundingBox(ray, vec3(mesh.BoundsMin), vec3(mesh.BoundsMax), vec3(mesh.Position))) {
+            continue;
+        }
 
+        for(int j = int(mesh.FirstTriangle); j < mesh.FirstTriangle + mesh.NumTriangles; j++) {
+            Triangle triangle = Triangles[j];
+
+            float distance = HitTriangle(ray, triangle, vec3(mesh.Position), u, v);
+            //float distance = hitTri(ray, triangle);
+
+            if(distance >= 0 && distance < hitDistance) {
+                hitDistance = distance;
+                index = i;
+                objType = 2;
+                inside = false;
+            }
+        }
+    */
+
+        /*
+        float distance = hitBVHAlt(ray);
         if(distance >= 0 && distance < hitDistance) {
             hitDistance = distance;
-            index = hitTriIndex;
+            index = i;
             objType = 2;
             inside = false;
-            u = outU;
-            v = outV;
-
-            if(debugMode)
-                return HandleHit(ray, hitDistance, index, 5, inside, u, v);
         }
+        */
     }
+
 
     if(index < 0) {
         HitInfo result = NoHit();
@@ -567,33 +525,15 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit);
     } 
     else if(objType == 2) { // MESH
-        // vec3 meshPos = vec3(Meshes[index].Position);
-        // vec3 origin = ray.Origin - meshPos;
-        // vec3 closestPosition = meshPos;
-        // vec3 hitPosition = origin + ray.Direction * hitDistance;
-        // hitPosition += closestPosition;
-        // float w = 1 - u - v;
-        // vec4 normal = normalize(Triangles[index].NormalA * w + Triangles[index].NormalB * u + Triangles[index].NormalC * v);
-
-        // hit = HitInfo(hitDistance, hitPosition, vec3(normal), index, 2, insideHit);
-
-        int meshIndex = -1;
-        for(int i = 0; i < Meshes.length(); i++) {
-            if(index >= int(Meshes[i].FirstTriangle) && index < int(Meshes[i].FirstTriangle) + int(Meshes[i].NumTriangles)) {
-                meshIndex = i;
-                break;
-            }
-        }
-
-        Triangle tri = Triangles[index];
-        vec3 meshPos = meshIndex >= 0 ? vec3(Meshes[meshIndex].Position) : vec3(0);
-        vec3 hitPosition = ray.Origin + ray.Direction * hitDistance;
+        vec3 meshPos = vec3(Meshes[index].Position);
+        vec3 origin = ray.Origin - meshPos;
         vec3 closestPosition = meshPos;
+        vec3 hitPosition = origin + ray.Direction * hitDistance;
         hitPosition += closestPosition;
         float w = 1 - u - v;
         vec4 normal = normalize(Triangles[index].NormalA * w + Triangles[index].NormalB * u + Triangles[index].NormalC * v);
 
-        hit = HitInfo(hitDistance, hitPosition, vec3(normal), meshIndex, 2, insideHit);
+        hit = HitInfo(hitDistance, hitPosition, vec3(normal), index, 2, insideHit);
     }
 
     return hit;

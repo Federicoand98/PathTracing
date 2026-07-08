@@ -15,4 +15,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <filesystem>
+
+#define Print(text) std::cout << (text) << std::endl
 

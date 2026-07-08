@@ -10,6 +10,7 @@
 #include "Renderer/Primitives.h"
 #include "Graphics/Model.h"
 #include "Graphics/BVH.h"
+#include "Graphics/BVHBuilder.h"
 
 namespace PathTracer {
 
@@ -45,6 +46,9 @@ namespace PathTracer {
         std::vector<BVHNode> Nodes;
 		std::vector<BVHNodeAlt> NodesAlt;
 		std::vector<int> TriIndex;
+		std::vector<BVHNodeNew> BVHNodes;
+		BVHNodeNew* root;
+		std::unique_ptr<BVH> bvh;
 		int CurrentScene = 0;
 	private:
 		void PrepareMaterials();
@@ -58,6 +62,7 @@ namespace PathTracer {
 		void PrepareSetup3();
 
 		void UploadModel(const Model& model, const glm::vec3& Position, int material);
+		void BuildBVH();
 
 		void CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex);
 		void CreateCornellBox();

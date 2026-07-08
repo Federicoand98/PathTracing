@@ -90,7 +90,7 @@ namespace PathTracer {
 
 	void Texture::LoadCubeMap(const std::vector<std::string>& paths) {
 		if (paths.size() != 6) {
-			std::cout << "Texture: Failed LoadCubeMap!" << std::endl;
+			std::cout << "Texture: Failed LoadCubeMap! Incorrect number of images." << std::endl;
 			return;
 		}
 
@@ -99,10 +99,34 @@ namespace PathTracer {
 
 		// TODO: Parallelo
 		for (int i = 0; i < 6; i++) {
-			unsigned char* data = stbi_load(paths.at(i).c_str(), &width, &height, &nChannels, 0);
+			std::string path = paths.at(i);
+			std::string absoultePath = std::filesystem::absolute(path).string();
+
+			// Verifica se il file esiste
+			if (!std::filesystem::exists(absoultePath)) {
+				std::cerr << "File does not exist: " << absoultePath<< std::endl;
+				continue;
+			}
+
+			for (char c : absoultePath) {
+				if (!isprint(c)) {
+					std::cerr << "Non-printable character found in path: " << (int)c << std::endl;
+				}
+			}
+
+			FILE* file = fopen(absoultePath.c_str(), "rb");
+			if (!file) {
+				continue;
+			} else {
+				fclose(file);
+			}
+
+			unsigned char* data = stbi_load(absoultePath.c_str(), &width, &height, &nChannels, 0);
+			// unsigned char* data = stbi_load(paths.at(i).c_str(), &width, &height, &nChannels, 0);
 
 			if (data == NULL) {
 				std::cout << "Failed to load " << paths.at(i) << std::endl;
+				std::cerr << "Error: " << stbi_failure_reason() << std::endl;
 			}
 
 			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);

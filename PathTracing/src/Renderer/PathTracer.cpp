@@ -12,25 +12,23 @@ namespace PathTracer {
 
 		m_SkyBox = std::make_shared<Texture>(GL_TEXTURE_CUBE_MAP);
 
-		/*
 		m_SkyBox->LoadCubeMap({
-				"textures/EnvironmentMap/Temple/posx.png",
-				"textures/EnvironmentMap/Temple/negx.png",
-				"textures/EnvironmentMap/Temple/posy.png",
-				"textures/EnvironmentMap/Temple/negy.png",
-				"textures/EnvironmentMap/Temple/posz.png",
-				"textures/EnvironmentMap/Temple/negz.png"
+				"textures/EnvironmentMap/Temple/posX.png",
+				"textures/EnvironmentMap/Temple/negX.png",
+				"textures/EnvironmentMap/Temple/posY.png",
+				"textures/EnvironmentMap/Temple/negY.png",
+				"textures/EnvironmentMap/Temple/posZ.png",
+				"textures/EnvironmentMap/Temple/negZ.png"
 			});
-		*/
 
-		m_SkyBox->LoadCubeMap({
-				"textures/EnvironmentMap/City/posx.jpg",
-				"textures/EnvironmentMap/City/negx.jpg",
-				"textures/EnvironmentMap/City/posy.jpg",
-				"textures/EnvironmentMap/City/negy.jpg",
-				"textures/EnvironmentMap/City/posz.jpg",
-				"textures/EnvironmentMap/City/negz.jpg"
-			});
+		// m_SkyBox->LoadCubeMap({
+		// 		"/home/f-andrucci/projects/PathTracing/PathTracing/res/textures/EnvironmentMap/City/posX.jpg",
+		// 		"/home/f-andrucci/projects/PathTracing/PathTracing/res/textures/EnvironmentMap/City/negX.jpg",
+		// 		"/home/f-andrucci/projects/PathTracing/PathTracing/res/textures/EnvironmentMap/City/posY.jpg",
+		// 		"/home/f-andrucci/projects/PathTracing/PathTracing/res/textures/EnvironmentMap/City/negY.jpg",
+		// 		"/home/f-andrucci/projects/PathTracing/PathTracing/res/textures/EnvironmentMap/City/posZ.jpg",
+		// 		"/home/f-andrucci/projects/PathTracing/PathTracing/res/textures/EnvironmentMap/City/negZ.jpg"
+		// 	});
 	}
 
 	PathTracer::~PathTracer() {
@@ -48,6 +46,7 @@ namespace PathTracer {
 	void PathTracer::DispatchCompute(unsigned int numGroupX, unsigned int numGroupY) {
 		glDispatchCompute(numGroupX / 8, numGroupY / 8, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	}
 
 	void PathTracer::UploadUniforms(const ComputeUniformContainer& container) {

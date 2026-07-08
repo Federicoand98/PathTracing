@@ -21,6 +21,9 @@ namespace PathTracer {
 		unsigned int ssbo_idx;
 		unsigned int ssbo_bvh;
 
+		unsigned int ssbo_hit_counter;
+		unsigned int ssbo_distances;
+
 		ComputeShader(const char* path) {
 			std::string computeCode;
 			std::ifstream computeFile;
@@ -63,6 +66,9 @@ namespace PathTracer {
 			glGenBuffers(1, &ssbo_cubes);
 			glGenBuffers(1, &ssbo_idx);
 			glGenBuffers(1, &ssbo_bvh);
+
+			glGenBuffers(1, &ssbo_hit_counter);
+			glGenBuffers(1, &ssbo_distances);
 		}
 		
 		void Bind() {
@@ -100,8 +106,11 @@ namespace PathTracer {
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, ssbo_t);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, ssbo_mesh);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 5, ssbo_cubes);
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, ssbo_idx);
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, ssbo_bvh);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, ssbo_bvh);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, ssbo_idx);
+
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ssbo_hit_counter);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, ssbo_distances);
 		}
 
 		void UpdateWorldBuffer(const World& world, bool fullReset = false) {
@@ -120,30 +129,31 @@ namespace PathTracer {
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Quad) * world.Quads.size(), world.Quads.data(), GL_STATIC_DRAW);
 			}
 
-			if (world.Triangles.size() > 0 || fullReset) {
-				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_t);
-				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Triangle) * world.Triangles.size(), world.Triangles.data(), GL_STATIC_DRAW);
-			}
+			// upload incondizionato: un vettore vuoto azzera il buffer GPU, cosi'
+			// passando a una scena senza mesh non restano triangoli/BVH fantasma
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_t);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Triangle) * world.Triangles.size(), world.Triangles.data(), GL_STATIC_DRAW);
 
-			if (world.Meshes.size() > 0 || fullReset) {
-				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_mesh);
-				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(MeshInfo) * world.Meshes.size(), world.Meshes.data(), GL_STATIC_DRAW);
-			}
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_mesh);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(MeshInfo) * world.Meshes.size(), world.Meshes.data(), GL_STATIC_DRAW);
 
 			if (world.Boxes.size() > 0 || fullReset) {
 				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_cubes);
 				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Box) * world.Boxes.size(), world.Boxes.data(), GL_STATIC_DRAW);
 			}
+			// if (world.NodesAlt.size() > 0 || fullReset) {
+			// 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_bvh);
+			// 	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVHNodeAlt) * world.NodesAlt.size(), world.NodesAlt.data(), GL_STATIC_DRAW);
+			// }
 
-			if (world.TriIndex.size() > 0 || fullReset) {
-				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_idx);
-				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.TriIndex.size(), world.TriIndex.data(), GL_STATIC_DRAW);
-			}
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_bvh);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVHNodeNew) * world.BVHNodes.size(), world.BVHNodes.data(), GL_STATIC_DRAW);
 
-			if (world.NodesAlt.size() > 0 || fullReset) {
-				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_bvh);
-				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVHNodeAlt) * world.NodesAlt.size(), world.NodesAlt.data(), GL_STATIC_DRAW);
-			}
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_idx);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.TriIndex.size(), world.TriIndex.data(), GL_STATIC_DRAW);
+
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_hit_counter);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int), NULL, GL_DYNAMIC_DRAW);
 		}
 
 	private:

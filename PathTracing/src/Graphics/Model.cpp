@@ -17,64 +17,71 @@ namespace PathTracer {
 		std::stringstream ss;
 		std::ifstream ifile(filePath);
 
-		if (ifile.is_open()) {
-			while (std::getline(ifile, line)) {
-				ss.clear();
-				ss.str(line);
-				ss >> prefix;
+		std::cout << "Loading model: " << filePath << std::endl;
 
-				if (prefix == "v") {
-					glm::vec3* v = new glm::vec3;
-					ss >> v->x >> v->y >> v->z;
-					m_Vertices.push_back(v);
-				}
-				else if (prefix == "vn") {
-					glm::vec3* vn = new glm::vec3;
-					ss >> vn->x >> vn->y >> vn->z;
-					m_Normals.push_back(vn);
-				}
-				else if (prefix == "f") {
-					Face* face = new Face;
-					int counter = 0, face_index_counter = 0, temp_int = 0;
+		if (!std::filesystem::exists(filePath)) {
+			std::cerr << "File does not exist: " << filePath << std::endl;
+			return;
+		}
 
-					while (ss >> temp_int) {
-						if (counter % 2 == 0)
-							face->vertex_ins[face_index_counter] = temp_int;
-						else
-							face->normal_ins[face_index_counter] = temp_int;
+		if(!ifile.is_open()) {
+			std::cout << "Error while opening obj file..." << std::endl;
+			return;
+		}
+
+		while (std::getline(ifile, line)) {
+			ss.clear();
+			ss.str(line);
+			ss >> prefix;
+
+			if (prefix == "v") {
+				glm::vec3* v = new glm::vec3;
+				ss >> v->x >> v->y >> v->z;
+				m_Vertices.push_back(v);
+			}
+			else if (prefix == "vn") {
+				glm::vec3* vn = new glm::vec3;
+				ss >> vn->x >> vn->y >> vn->z;
+				m_Normals.push_back(vn);
+			}
+			else if (prefix == "f") {
+				Face* face = new Face;
+				int counter = 0, face_index_counter = 0, temp_int = 0;
+
+				while (ss >> temp_int) {
+					if (counter % 2 == 0)
+						face->vertex_ins[face_index_counter] = temp_int;
+					else
+						face->normal_ins[face_index_counter] = temp_int;
+
+					if (ss.peek() == '/') {
+						ss.ignore(1, '/');
 
 						if (ss.peek() == '/') {
 							ss.ignore(1, '/');
-
-							if (ss.peek() == '/') {
-								ss.ignore(1, '/');
-								counter++;
-							}
-						}
-						else if (ss.peek() == ' ') {
 							counter++;
-							ss.ignore(1, ' ');
-						}
-
-						if (counter % 2 == 0) {
-							counter = 0;
-							face_index_counter++;
 						}
 					}
+					else if (ss.peek() == ' ') {
+						counter++;
+						ss.ignore(1, ' ');
+					}
 
-					m_Faces.push_back(face);
-					m_TriangleCount++;
+					if (counter % 2 == 0) {
+						counter = 0;
+						face_index_counter++;
+					}
 				}
-			}
-			ifile.close();
 
-			MakeTriangles();
-			CalculateBoundingBox();
-			CleanTrash();
+				m_Faces.push_back(face);
+				m_TriangleCount++;
+			}
 		}
-		else {
-			std::cout << "Error while opening file..." << std::endl;
-		}
+		ifile.close();
+
+		MakeTriangles();
+		CalculateBoundingBox();
+		CleanTrash();
 	}
 
 	void Model::MakeTriangles() {

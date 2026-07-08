@@ -1,4 +1,5 @@
 #include "World.h"
+#include "Renderer/Material.h"
 
 namespace PathTracer {
 
@@ -49,6 +50,9 @@ namespace PathTracer {
 		default:
 			break;
 		}
+
+		// un unico BVH globale su tutti i triangoli della scena
+		BuildBVH();
 	}
 
 	void World::DestroyScene() {
@@ -58,6 +62,8 @@ namespace PathTracer {
 		Triangles.clear();
 		Meshes.clear();
 		Boxes.clear();
+		BVHNodes.clear();
+		TriIndex.clear();
 	}
 
 	void World::PrepareMaterials() {
@@ -101,13 +107,13 @@ namespace PathTracer {
 			Sphere s;
 			s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
 			s.MaterialIndex = 2;
-			Spheres.push_back(s);
+			// Spheres.push_back(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
 			s.MaterialIndex = 3;
-			Spheres.push_back(s);
+			// Spheres.push_back(s);
 		}
 		{
 			Sphere s;
@@ -152,16 +158,14 @@ namespace PathTracer {
 		BackgroundColor = { 0.54f, 0.73f, 0.95f };
 		CreateCornellBox();
 
-		/*
 		Model queen, king, knight;
 		queen.LoadObj("models/queen.obj");
 		king.LoadObj("models/king.obj");
 		knight.LoadObj("models/knight.obj");
 
-		UploadModel(queen, { 0.7, -2.1, 2.0 }, 1);
-		UploadModel(king, { -1.2, -2, 1.6 }, 1);
-		UploadModel(knight, { -1.2, -2, 1.6 }, 1);
-		*/
+		UploadModel(queen, { 0.7, -2.1, 2.0 }, 2);
+		UploadModel(king, { -1.2, -2.0, 1.6 }, 5);
+		UploadModel(knight, { 0.9, -2.0, 3.0 }, 1);
 	}
 
 	void World::PrepareRandomSpheres() {
@@ -691,49 +695,58 @@ namespace PathTracer {
 	}
 
 	void World::UploadModel(const Model& model, const glm::vec3& Position, int material) {
-		MeshInfo m;
 		std::vector<Triangle*> triangles = model.GetTriangles();
 
-		BVHBuilder builder(model.GetTriangles());
-		/*
-		Nodes = builder.CalculateBVH(model.GetTriangles());
-
-		for (int i = 0; i < Nodes.size(); i++) {
-			std::cout << "node n" << i << " " << Nodes.at(i).leftFirst << std::endl;
+		if (triangles.empty()) {
+			std::cerr << "Model upload skipped: no triangles were loaded." << std::endl;
+			return;
 		}
 
-		TriIndex = builder.GetTriIndex();
-		*/
+		MeshInfo mesh;
+		mesh.Position = glm::vec4(0.0f); // vertici bakati in world space, nessun offset a runtime
+		mesh.FirstTriangle = static_cast<float>(Triangles.size());
+		mesh.NumTriangles = static_cast<float>(triangles.size());
+		mesh.MaterialIndex = static_cast<float>(material);
 
-		BVHNodeAlt test;
-		test.left = 255;
-		test.right = 128;
-		test.n = 30;
-		test.AA = glm::vec4(1, 1, 0, 0);
-		test.BB = glm::vec4(0, 1, 0, 0);
-		std::vector<BVHNodeAlt> nodes{ test };
-		builder.BuildBVHAlt(triangles, nodes, 0, triangles.size() - 1, 8);
+		const glm::vec4 offset = glm::vec4(Position, 0.0f);
+		glm::vec4 boundsMin(1e30f);
+		glm::vec4 boundsMax(-1e30f);
 
-		NodesAlt = nodes;
+		// accumula i triangoli (in world space) nella collezione globale della scena
+		for (const Triangle* t : triangles) {
+			Triangle tri = *t;
+			tri.A += offset;
+			tri.B += offset;
+			tri.C += offset;
 
-		m.FirstTriangle = Triangles.size();
-		m.NumTriangles = model.GetTriangles().size();
-		m.MaterialIndex = material;
-		m.BoundsMin = model.GetBoundsMin();
-		m.BoundsMax = model.GetBoundsMax();
-		m.Position = glm::vec4(Position, 0.0);
+			boundsMin = glm::min(boundsMin, glm::min(tri.A, glm::min(tri.B, tri.C)));
+			boundsMax = glm::max(boundsMax, glm::max(tri.A, glm::max(tri.B, tri.C)));
 
-		/*
-		for (const Triangle* triangle : model.GetTriangles()) {
-			Triangles.push_back(*triangle);
-		}
-		*/
-
-		for (const Triangle* triangle : triangles) {
-			Triangles.push_back(*triangle);
+			Triangles.push_back(tri);
 		}
 
-		Meshes.push_back(m);
+		mesh.BoundsMin = boundsMin;
+		mesh.BoundsMax = boundsMax;
+
+		Meshes.push_back(mesh);
+
+		std::cout << "Model uploaded: " << triangles.size() << " triangles (material "
+			<< material << ")" << std::endl;
+	}
+
+	void World::BuildBVH() {
+		if (Triangles.empty()) {
+			BVHNodes.clear();
+			TriIndex.clear();
+			return;
+		}
+
+		BVH builder(Triangles);
+		BVHNodes = builder.GetNodes();
+		TriIndex = builder.GetTrianglesIndices();
+
+		std::cout << "BVH built: " << Triangles.size() << " triangles, "
+			<< BVHNodes.size() << " nodes" << std::endl;
 	}
 
 	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex) {
