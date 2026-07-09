@@ -20,10 +20,25 @@ namespace PathTracer {
         glm::vec3 b;
     };
 
+    // Struttura di authoring lato CPU: comoda da costruire, mai caricata sulla GPU.
     struct Triangle {
         glm::vec4 A;
         glm::vec4 B;
         glm::vec4 C;
+        glm::vec4 NormalA;
+        glm::vec4 NormalB;
+        glm::vec4 NormalC;
+    };
+
+    // Sulla GPU posizioni e normali stanno in due buffer distinti: il loop caldo del
+    // BVH legge solo le posizioni, dimezzando la banda nel punto piu' critico.
+    struct TrianglePosition {
+        glm::vec4 A;
+        glm::vec4 B;
+        glm::vec4 C;
+    };
+
+    struct TriangleNormal {
         glm::vec4 NormalA;
         glm::vec4 NormalB;
         glm::vec4 NormalC;

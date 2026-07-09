@@ -42,7 +42,9 @@ namespace PathTracer {
 		std::vector<Box> Boxes;
 		std::vector<Material> Materials;
 		std::vector<MeshInfo> Meshes;
-		std::vector<Triangle> Triangles;
+		std::vector<Triangle> Triangles;          // authoring CPU, sorgente per il BVH
+		std::vector<TrianglePosition> TriPositions; // caricati sulla GPU (binding 3)
+		std::vector<TriangleNormal> TriNormals;    // caricate sulla GPU (binding 8)
         std::vector<BVHNode> Nodes;
 		std::vector<BVHNodeAlt> NodesAlt;
 		std::vector<int> TriIndex;

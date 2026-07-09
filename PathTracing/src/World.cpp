@@ -60,6 +60,8 @@ namespace PathTracer {
 		Quads.clear();
 		Materials.clear();
 		Triangles.clear();
+		TriPositions.clear();
+		TriNormals.clear();
 		Meshes.clear();
 		Boxes.clear();
 		BVHNodes.clear();
@@ -738,12 +740,24 @@ namespace PathTracer {
 		if (Triangles.empty()) {
 			BVHNodes.clear();
 			TriIndex.clear();
+			TriPositions.clear();
+			TriNormals.clear();
 			return;
 		}
 
 		BVH builder(Triangles);
 		BVHNodes = builder.GetNodes();
 		TriIndex = builder.GetTrianglesIndices();
+
+		// separa posizioni e normali nei due buffer che finiranno sulla GPU
+		TriPositions.clear();
+		TriNormals.clear();
+		TriPositions.reserve(Triangles.size());
+		TriNormals.reserve(Triangles.size());
+		for (const Triangle& t : Triangles) {
+			TriPositions.push_back({ t.A, t.B, t.C });
+			TriNormals.push_back({ t.NormalA, t.NormalB, t.NormalC });
+		}
 
 		// La traversata nello shader usa uno stack fisso (MAX_STACK): se l'albero e'
 		// piu' profondo, i nodi in eccesso vengono scartati e la mesh mostra dei buchi.
@@ -755,14 +769,20 @@ namespace PathTracer {
 			maxDepth = std::max(maxDepth, depth);
 
 			const BVHNodeNew& node = BVHNodes.at(nodeIndex);
-			if (node.triCount == 0.0f) { // nodo interno
-				stack.push_back({ static_cast<int>(node.left), depth + 1 });
-				stack.push_back({ static_cast<int>(node.left) + 1, depth + 1 });
+			if (node.triCount == 0) { // nodo interno
+				stack.push_back({ node.left, depth + 1 });
+				stack.push_back({ node.left + 1, depth + 1 });
 			}
 		}
 
 		std::cout << "BVH built: " << Triangles.size() << " triangles, "
 			<< BVHNodes.size() << " nodes, max depth " << maxDepth << std::endl;
+
+		// deve restare allineato a MAX_STACK in hitBVH() dentro PathTracing.comp
+		constexpr int SHADER_MAX_STACK = 32;
+		if (maxDepth > SHADER_MAX_STACK)
+			std::cerr << "Warning: BVH depth (" << maxDepth << ") exceeds shader stack ("
+				<< SHADER_MAX_STACK << "): parts of the mesh may not render" << std::endl;
 	}
 
 	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex) {

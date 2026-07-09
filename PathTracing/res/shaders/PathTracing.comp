@@ -12,20 +12,13 @@ layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
 uniform samplerCube SamplerEnvironment;
 
-struct BVHNodeNew {
-    vec4 aabbMin;
-    vec4 aabbMax;
-    float left;
-    float triCount;
-};
-
-struct BVHNodeAlt {
-	vec4 AA;
-	vec4 BB;
-	float left;
-	float right;
-	float n;
-	float index;
+// 32 byte invece di 48: in std430 vec3 ha allineamento 16 ma dimensione 12,
+// quindi l'int seguente entra nel "buco" e il nodo occupa meno cache line.
+struct BVHNode {
+    vec3 aabbMin;
+    int left;      // foglia: primo indice in TriIndex | interno: indice figlio sinistro
+    vec3 aabbMax;
+    int triCount;  // 0 => nodo interno
 };
 
 struct Ray {
@@ -63,10 +56,15 @@ struct MeshInfo {
     float MaterialIndex;
 };
 
-struct Triangle {
+// Posizioni e normali sono in due buffer separati: il loop caldo del BVH tocca
+// solo le posizioni (48B), le normali servono una sola volta sull'hit finale.
+struct TrianglePosition {
     vec4 A;
     vec4 B;
     vec4 C;
+};
+
+struct TriangleNormal {
     vec4 NormalA;
     vec4 NormalB;
     vec4 NormalC;
@@ -102,7 +100,7 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
 HitInfo NoHit();
 bool HitSphere(Ray ray, Sphere sphere, out float t1, out float t2);
 float HitQuad(Ray ray, Quad quad);
-float HitTriangle(Ray ray, Triangle triangle, vec3 position, out float u, out float v);
+float HitTriangle(Ray ray, vec3 A, vec3 B, vec3 C, out float u, out float v);
 bool HitBoundingBox(Ray ray, vec3 boxMin, vec3 boxMax, vec3 position);
 float FresnelSchlick(float n1, float n2, vec3 normal, vec3 incident, float f0, float f90);
 vec3 GetNormal(Quad quad, vec3 surfacePosition);
@@ -110,12 +108,8 @@ uint GetPCGHash(inout uint seed);
 float GetRandomFloat();
 vec3 GetRandomVector(uint seed);
 
-float hitTri(inout Ray ray, Triangle triangle);
-float hitAABB(inout Ray ray, vec4 bmin, vec4 bmax);
-bool hitAABBAlt(inout Ray ray, vec3 bmin, vec3 bmax);
-float hitArray(inout Ray ray, int l, int r);
-float hitBVHAlt(inout Ray ray, int nodeIndex, out int hitTriIndex, out float outU, out float outV);
-float intersectTri(inout Ray ray, Triangle triangle, out float outU, out float outV);
+float hitAABB(Ray ray, vec3 invDir, vec3 bmin, vec3 bmax);
+float hitBVH(inout Ray ray, out int hitTriIndex, out float outU, out float outV);
 vec3 BvhHeatColor(float t);
 
 int rootNodeIndex = 0;
@@ -137,8 +131,6 @@ uniform bool EnvironmentMapping;
 uniform int bvhDebug;         // 0 = off, 1 = heatmap del costo di traversata BVH
 uniform float bvhHeatScale;   // n. di nodi visitati che mappa al colore "caldo" (rosso)
 
-bool debugMode = false;
-
 layout(std430, binding = 0) buffer SpheresBuffer {
     Sphere Spheres[];
 };
@@ -151,8 +143,8 @@ layout(std430, binding = 2) buffer QuadsBuffer {
     Quad Quads[];
 };
 
-layout(std430, binding = 3) buffer TrianglesBuffer {
-    Triangle Triangles[];
+layout(std430, binding = 3) buffer TrianglePositionsBuffer {
+    TrianglePosition TriPositions[];
 };
 
 layout(std430, binding = 4) buffer MeshBuffer {
@@ -164,15 +156,15 @@ layout(std430, binding = 5) buffer CubeBuffer {
 };
 
 layout(std430, binding = 6) buffer BVHBuffer {
-    BVHNodeNew BVHNodes[];
+    BVHNode BVHNodes[];
 };
 
 layout(std430, binding = 7) buffer TriIndexBuffer {
     int TriIndex[];
 };
 
-layout(std430, binding = 8) buffer DebugCounterBuffer {
-    int hitCounter;
+layout(std430, binding = 8) buffer TriangleNormalsBuffer {
+    TriangleNormal TriNormals[];
 };
 
 
@@ -195,7 +187,7 @@ void main() {
         if(BVHNodes.length() > 0) {
             int hitTriIndex;
             float outU, outV;
-            hitBVHAlt(ray, rootNodeIndex, hitTriIndex, outU, outV);
+            hitBVH(ray, hitTriIndex, outU, outV);
         }
 
         vec3 heat = BvhHeatColor(float(gNodeVisits) / max(bvhHeatScale, 1.0));
@@ -355,149 +347,85 @@ float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive,
     return rayProbability;
 }
 
-bool hitAABBAlt(inout Ray ray, vec3 bmin, vec3 bmax) {
-    float tx1 = (bmin.x - ray.Origin.x) / ray.Direction.x;
-    float tx2 = (bmax.x - ray.Origin.x) / ray.Direction.x;
-    float tmin = min(tx1, tx2);
-    float tmax = max(tx1, tx2);
-    float ty1 = (bmin.y - ray.Origin.y) / ray.Direction.y;
-    float ty2 = (bmax.y - ray.Origin.y) / ray.Direction.y;
-    tmin = max(tmin, min(ty1, ty2));
-    tmax = min(tmax, max(ty1, ty2));
-    float tz1 = (bmin.z - ray.Origin.z) / ray.Direction.z;
-    float tz2 = (bmax.z - ray.Origin.z) / ray.Direction.z;
-    tmin = max(tmin, min(tz1, tz2));
-    tmax = min(tmax, max(tz1, tz2));
+// Ritorna la distanza d'ingresso nella AABB, oppure FLOAT_MAX se il raggio la manca
+// (o se la colpisce oltre l'hit piu' vicino gia' trovato, ray.t).
+// invDir e' precalcolato una volta per raggio: sulle GPU la divisione costa
+// molto piu' della moltiplicazione, e qui la si pagherebbe 6 volte per nodo.
+float hitAABB(Ray ray, vec3 invDir, vec3 bmin, vec3 bmax) {
+    vec3 t1 = (bmin - ray.Origin) * invDir;
+    vec3 t2 = (bmax - ray.Origin) * invDir;
+    vec3 tsmall = min(t1, t2);
+    vec3 tbig = max(t1, t2);
 
-    return tmax >= tmin && tmin < ray.t && tmax > 0;
+    float tEnter = max(max(tsmall.x, tsmall.y), max(tsmall.z, 0.0));
+    float tExit = min(min(tbig.x, tbig.y), tbig.z);
+
+    return (tExit >= tEnter && tEnter < ray.t) ? tEnter : FLOAT_MAX;
 }
 
-float hitArray(inout Ray ray, int l, int r) {
-    float hitDist = INF;
-
-    for(int i = l; i <= r; i++) {
-        Triangle triangle = Triangles[i];
-        float distance = hitTri(ray, triangle);
-
-        if(distance < hitDist) {
-            hitDist = distance;
-        }
-    }
-
-    return hitDist;
-}
-
-float intersectTri(inout Ray ray, Triangle triangle, out float outU, out float outV) {
-    vec3 edge1 = vec3(triangle.B) - vec3(triangle.A);
-    vec3 edge2 = vec3(triangle.C) - vec3(triangle.A);
-    vec3 h = cross(ray.Direction, edge2);
-    float a = dot(edge1, h);
-
-    if(a > -0.0001 && a < 0.0001)
-        return -1;
-
-    float f = 1 / a;
-    vec3 s = ray.Origin - vec3(triangle.A);
-    float u = f * dot(s, h);
-
-    if(u < 0 || u > 1)
-        return -1;
-
-    vec3 q = cross(s, edge1);
-    float v = f * dot(ray.Direction, q);
-
-    if(v < 0 || u + v > 1)
-        return -1;
-
-    float t = f * dot(edge2, q);
-
-    if(t > 0.0001)
-        ray.t = min(ray.t, t);
-
-    outU = u;
-    outV = v;
-
-    return t;
-}
-
-float hitBVHAlt(inout Ray ray, int nodeIndex, out int hitTriIndex, out float outU, out float outV) {
-    const int MAX_STACK = 64;
+// Traversata ordinata front-to-back: si scende sempre prima nel figlio piu' vicino,
+// cosi' ray.t si restringe il prima possibile e il figlio lontano viene spesso
+// scartato senza mai essere visitato.
+float hitBVH(inout Ray ray, out int hitTriIndex, out float outU, out float outV) {
+    const int MAX_STACK = 32;
     int stack[MAX_STACK];
     int stackPtr = 0;
 
-    stack[stackPtr++] = nodeIndex;
-    float closestHit = INF;
+    vec3 invDir = 1.0 / ray.Direction;
+    int nodeIndex = rootNodeIndex;
+
     hitTriIndex = -1;
+    outU = 0.0;
+    outV = 0.0;
 
-    while(stackPtr > 0) {
-        int currentNodeIndex = stack[--stackPtr];
-        BVHNodeNew node = BVHNodes[currentNodeIndex];
+    while(true) {
+        BVHNode node = BVHNodes[nodeIndex];
+        gNodeVisits++;
 
-        gNodeVisits++; // ogni nodo estratto = un test AABB (metrica di costo del BVH)
+        if(node.triCount > 0) { // foglia
+            for(int i = 0; i < node.triCount; i++) {
+                int triIndex = TriIndex[node.left + i];
+                TrianglePosition tri = TriPositions[triIndex];
 
-        if(!hitAABBAlt(ray, vec3(node.aabbMin), vec3(node.aabbMax)))
-            continue;
-        
-        // node.isLeaf()
-        if(node.triCount > 0) {
-            for(int i = 0; i < int(node.triCount); i++) {
-                int triIndex = TriIndex[int(node.left) + i];
-                Triangle triangle = Triangles[triIndex];
                 float u, v;
                 // i triangoli sono gia' in world space (offset bakato in fase di upload)
-                float distance = HitTriangle(ray, triangle, vec3(0.0), u, v);
+                float distance = HitTriangle(ray, vec3(tri.A), vec3(tri.B), vec3(tri.C), u, v);
 
-                if(distance >= 0 && distance < ray.t) {
-                    atomicAdd(hitCounter, 1);
+                if(distance >= 0.0 && distance < ray.t) {
                     ray.t = distance;
-                    closestHit = min(closestHit, distance);
                     outU = u;
                     outV = v;
                     hitTriIndex = triIndex;
                 }
             }
+
+            if(stackPtr == 0) break;
+            nodeIndex = stack[--stackPtr];
+            continue;
+        }
+
+        int nearChild = node.left;
+        int farChild = node.left + 1;
+        float distNear = hitAABB(ray, invDir, BVHNodes[nearChild].aabbMin, BVHNodes[nearChild].aabbMax);
+        float distFar = hitAABB(ray, invDir, BVHNodes[farChild].aabbMin, BVHNodes[farChild].aabbMax);
+
+        if(distNear > distFar) { // scambia: il piu' vicino va visitato per primo
+            float dTmp = distNear; distNear = distFar; distFar = dTmp;
+            int iTmp = nearChild; nearChild = farChild; farChild = iTmp;
+        }
+
+        if(distNear == FLOAT_MAX) { // entrambi i figli mancati o troppo lontani
+            if(stackPtr == 0) break;
+            nodeIndex = stack[--stackPtr];
         } else {
-            if(stackPtr < MAX_STACK)
-                stack[stackPtr++] = int(node.left) + 1;
-            
-            if(stackPtr < MAX_STACK)
-                stack[stackPtr++] = int(node.left);
+            nodeIndex = nearChild;
+            if(distFar != FLOAT_MAX && stackPtr < MAX_STACK)
+                stack[stackPtr++] = farChild;
         }
     }
 
-    return closestHit < INF ? closestHit : -1;
+    return hitTriIndex >= 0 ? ray.t : -1.0;
 }
-
-float hitTri(inout Ray ray, Triangle triangle) {
-    vec3 edge1 = vec3(triangle.B) - vec3(triangle.A);
-    vec3 edge2 = vec3(triangle.C) - vec3(triangle.A);
-    vec3 h = cross(ray.Direction, edge2);
-    float a = dot(edge1, h);
-
-    if(a > -0.0001 && a < 0.0001)
-        return -1;
-
-    float f = 1 / a;
-    vec3 s = ray.Origin - vec3(triangle.A);
-    float u = f * dot(s, h);
-
-    if(u < 0 || u > 1)
-		return -1;
-
-    vec3 q = cross(s, edge1);
-    float v = f * dot(ray.Direction, q);
-
-    if(v < 0 || u + v > 1)
-        return -1;
-
-    float t = f * dot(edge2, q);
-
-    if(t > 0.0001)
-        ray.t = min(ray.t, t);
-
-	return t;
-}
-
 
 HitInfo TraceRay(Ray ray) {
     float hitDistance = 100000.0;
@@ -547,7 +475,7 @@ HitInfo TraceRay(Ray ray) {
 
         int hitTriIndex;
         float outU, outV;
-        float distance = hitBVHAlt(ray, rootNodeIndex, hitTriIndex, outU, outV);
+        float distance = hitBVH(ray, hitTriIndex, outU, outV);
 
         if(distance >= 0 && distance < hitDistance) {
             hitDistance = distance;
@@ -556,9 +484,6 @@ HitInfo TraceRay(Ray ray) {
             inside = false;
             u = outU;
             v = outV;
-
-            if(debugMode)
-                return HandleHit(ray, hitDistance, index, 5, inside, u, v);
         }
     }
 
@@ -594,16 +519,6 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit);
     } 
     else if(objType == 2) { // MESH
-        // vec3 meshPos = vec3(Meshes[index].Position);
-        // vec3 origin = ray.Origin - meshPos;
-        // vec3 closestPosition = meshPos;
-        // vec3 hitPosition = origin + ray.Direction * hitDistance;
-        // hitPosition += closestPosition;
-        // float w = 1 - u - v;
-        // vec4 normal = normalize(Triangles[index].NormalA * w + Triangles[index].NormalB * u + Triangles[index].NormalC * v);
-
-        // hit = HitInfo(hitDistance, hitPosition, vec3(normal), index, 2, insideHit);
-
         int meshIndex = -1;
         for(int i = 0; i < Meshes.length(); i++) {
             if(index >= int(Meshes[i].FirstTriangle) && index < int(Meshes[i].FirstTriangle) + int(Meshes[i].NumTriangles)) {
@@ -615,11 +530,13 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         // i triangoli sono gia' in world space, meshPos e' 0
         vec3 hitPosition = ray.Origin + ray.Direction * hitDistance;
 
-        // normale liscia interpolata coi pesi baricentrici (w->A, u->B, v->C)
+        // normale liscia interpolata coi pesi baricentrici (w->A, u->B, v->C).
+        // Le normali si leggono solo qui, una volta, non nel loop caldo del BVH.
+        TriangleNormal tn = TriNormals[index];
         float w = 1.0 - u - v;
-        vec3 normal = normalize(vec3(Triangles[index].NormalA) * w
-                              + vec3(Triangles[index].NormalB) * u
-                              + vec3(Triangles[index].NormalC) * v);
+        vec3 normal = normalize(vec3(tn.NormalA) * w
+                              + vec3(tn.NormalB) * u
+                              + vec3(tn.NormalC) * v);
 
         // orienta la normale contro il raggio: senza questo il BSDF riceve una
         // normale che punta "via" dal raggio (vn invertiti o silhouette) e produce
@@ -686,11 +603,7 @@ float HitQuad(Ray ray, Quad quad) {
     return t;
 }
 
-float HitTriangle(Ray ray, Triangle triangle, vec3 position, out float u, out float v) {
-    vec3 A = vec3(triangle.A) + position;
-    vec3 B = vec3(triangle.B) + position;
-    vec3 C = vec3(triangle.C) + position;
-
+float HitTriangle(Ray ray, vec3 A, vec3 B, vec3 C, out float u, out float v) {
     vec3 edgeAB = vec3(B) - vec3(A);
     vec3 edgeAC = vec3(C) - vec3(A);
     vec3 normalVector = cross(edgeAB, edgeAC);
