@@ -2,6 +2,36 @@
 
 namespace PathTracer {
 
+	namespace {
+		// Un token di faccia OBJ puo' essere "v", "v/vt", "v//vn" o "v/vt/vn".
+		// Estrae indice di vertice e (se presente) di normale, ignorando le UV.
+		// Ritorna false se il token non contiene un indice di vertice valido.
+		bool ParseFaceToken(const std::string& token, int& vertexIndex, int& normalIndex) {
+			vertexIndex = 0;
+			normalIndex = 0;
+
+			auto toInt = [](const std::string& s, int& out) -> bool {
+				if (s.empty()) return false;
+				try { out = std::stoi(s); }
+				catch (...) { return false; }
+				return true;
+			};
+
+			size_t firstSlash = token.find('/');
+			if (firstSlash == std::string::npos)
+				return toInt(token, vertexIndex);
+
+			if (!toInt(token.substr(0, firstSlash), vertexIndex))
+				return false;
+
+			size_t secondSlash = token.find('/', firstSlash + 1);
+			if (secondSlash != std::string::npos)
+				toInt(token.substr(secondSlash + 1), normalIndex); // opzionale
+
+			return true;
+		}
+	}
+
 	Model::Model() {
 	}
 
@@ -45,36 +75,41 @@ namespace PathTracer {
 				m_Normals.push_back(vn);
 			}
 			else if (prefix == "f") {
-				Face* face = new Face;
-				int counter = 0, face_index_counter = 0, temp_int = 0;
+				// Le facce OBJ possono essere poligoni (quad, ngon), non solo triangoli:
+				// le triangoliamo a ventaglio attorno al primo vertice.
+				std::vector<int> faceVertices, faceNormals;
+				std::string token;
 
-				while (ss >> temp_int) {
-					if (counter % 2 == 0)
-						face->vertex_ins[face_index_counter] = temp_int;
-					else
-						face->normal_ins[face_index_counter] = temp_int;
+				while (ss >> token) {
+					int v = 0, vn = 0;
+					if (!ParseFaceToken(token, v, vn))
+						continue;
 
-					if (ss.peek() == '/') {
-						ss.ignore(1, '/');
+					// gli indici negativi sono relativi alla fine della lista corrente
+					if (v < 0) v = static_cast<int>(m_Vertices.size()) + v + 1;
+					if (vn < 0) vn = static_cast<int>(m_Normals.size()) + vn + 1;
 
-						if (ss.peek() == '/') {
-							ss.ignore(1, '/');
-							counter++;
-						}
-					}
-					else if (ss.peek() == ' ') {
-						counter++;
-						ss.ignore(1, ' ');
-					}
-
-					if (counter % 2 == 0) {
-						counter = 0;
-						face_index_counter++;
-					}
+					faceVertices.push_back(v);
+					faceNormals.push_back(vn);
 				}
 
-				m_Faces.push_back(face);
-				m_TriangleCount++;
+				if (faceVertices.size() < 3)
+					continue;
+
+				for (size_t i = 1; i + 1 < faceVertices.size(); i++) {
+					Face* face = new Face;
+
+					face->vertex_ins[0] = faceVertices[0];
+					face->vertex_ins[1] = faceVertices[i];
+					face->vertex_ins[2] = faceVertices[i + 1];
+
+					face->normal_ins[0] = faceNormals[0];
+					face->normal_ins[1] = faceNormals[i];
+					face->normal_ins[2] = faceNormals[i + 1];
+
+					m_Faces.push_back(face);
+					m_TriangleCount++;
+				}
 			}
 		}
 		ifile.close();
@@ -91,7 +126,23 @@ namespace PathTracer {
 		// Il cross product NON normalizzato pesa ogni contributo per l'area del triangolo.
 		std::vector<glm::vec3> vertexNormals(m_Vertices.size(), glm::vec3(0.0f));
 
+		// scarta le facce che referenziano vertici fuori range (OBJ malformato)
+		auto validFace = [this](const Face* f) {
+			for (int i = 0; i < 3; i++) {
+				int idx = f->vertex_ins[i] - 1;
+				if (idx < 0 || idx >= static_cast<int>(m_Vertices.size()))
+					return false;
+			}
+			return true;
+		};
+
+		size_t skipped = 0;
 		for (auto& face : m_Faces) {
+			if (!validFace(face)) {
+				skipped++;
+				continue;
+			}
+
 			const glm::vec3& a = *m_Vertices[face->vertex_ins[0] - 1];
 			const glm::vec3& b = *m_Vertices[face->vertex_ins[1] - 1];
 			const glm::vec3& c = *m_Vertices[face->vertex_ins[2] - 1];
@@ -103,12 +154,18 @@ namespace PathTracer {
 			vertexNormals[face->vertex_ins[2] - 1] += faceNormal;
 		}
 
+		if (skipped > 0)
+			std::cerr << "Warning: skipped " << skipped << " faces with out-of-range vertex indices" << std::endl;
+
 		for (glm::vec3& n : vertexNormals) {
 			if (glm::length(n) > 1e-8f)
 				n = glm::normalize(n);
 		}
 
 		for (auto& face : m_Faces) {
+			if (!validFace(face))
+				continue;
+
 			Triangle* triangle = new Triangle;
 
 			triangle->A = glm::vec4(*(m_Vertices[face->vertex_ins[0] - 1]), 0.0f);

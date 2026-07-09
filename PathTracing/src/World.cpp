@@ -125,7 +125,7 @@ namespace PathTracer {
 		//CreateBox({ 0,0,0 }, { 3,1,1 }, 1);
 
 		Model m;
-		m.LoadObj("models/bunny.obj");
+		m.LoadObj("models/guitar.obj");
 
 		UploadModel(m, { 0.0, 0.0, 0.0 }, 5);
 	}
@@ -745,8 +745,24 @@ namespace PathTracer {
 		BVHNodes = builder.GetNodes();
 		TriIndex = builder.GetTrianglesIndices();
 
+		// La traversata nello shader usa uno stack fisso (MAX_STACK): se l'albero e'
+		// piu' profondo, i nodi in eccesso vengono scartati e la mesh mostra dei buchi.
+		int maxDepth = 0;
+		std::vector<std::pair<int, int>> stack{ {0, 1} }; // (indice nodo, profondita')
+		while (!stack.empty()) {
+			auto [nodeIndex, depth] = stack.back();
+			stack.pop_back();
+			maxDepth = std::max(maxDepth, depth);
+
+			const BVHNodeNew& node = BVHNodes.at(nodeIndex);
+			if (node.triCount == 0.0f) { // nodo interno
+				stack.push_back({ static_cast<int>(node.left), depth + 1 });
+				stack.push_back({ static_cast<int>(node.left) + 1, depth + 1 });
+			}
+		}
+
 		std::cout << "BVH built: " << Triangles.size() << " triangles, "
-			<< BVHNodes.size() << " nodes" << std::endl;
+			<< BVHNodes.size() << " nodes, max depth " << maxDepth << std::endl;
 	}
 
 	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex) {
