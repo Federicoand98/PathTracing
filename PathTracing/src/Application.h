@@ -80,6 +80,7 @@ namespace PathTracer {
 		void DrawAddObjectMenu();
 		void DrawMaterialEditor(Material& material, int index);
 		void DrawMaterialEditorWindow();
+		void DrawTextureManager();
 		void DrawDeletePopup();
 		void DeleteSelection();
 		bool CanDeleteSelection() const;
@@ -131,6 +132,8 @@ namespace PathTracer {
 		float m_NewObjectMaterial = 0.0f;
 		std::vector<std::string> m_ModelFiles;
 		int m_SelectedModelFile = 0;
+		std::vector<std::string> m_TextureFiles;
+		int m_SelectedTextureFile = 0;
 
 		// diagnostica del picking (visibile nel pannello)
 		glm::ivec2 m_LastPickPixel{ -1, -1 };

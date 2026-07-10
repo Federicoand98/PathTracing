@@ -829,8 +829,17 @@ namespace PathTracer {
 		}
 
 		ImGui::SeparatorText("Surface");
+		if (ImGui::SliderFloat("Metalness", &material.Metalness, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
 		if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+
+		// con Metalness a 1 la probabilita' speculare effettiva vale 1 comunque: il controllo
+		// resta vivo ma non ha piu' effetto, e lasciarlo attivo sarebbe fuorviante
+		ImGui::BeginDisabled(material.Metalness >= 0.999f);
 		if (ImGui::DragFloat("Specular Probability", &material.SpecularProbability, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+		ImGui::EndDisabled();
+
+		if (material.Metalness > 0.0f)
+			ImGui::TextDisabled("metallo: niente diffuso, il riflesso e' tinto dall'albedo");
 
 		ImGui::SeparatorText("Refraction");
 		if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.01f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
@@ -934,7 +943,77 @@ namespace PathTracer {
 		ImGui::End();
 	}
 
+	// I materiali indicizzano le texture per LAYER (Material::AlbedoTexture). Rimuoverne una
+	// farebbe scalare i layer successivi e ogni materiale punterebbe all'immagine sbagliata,
+	// in silenzio. Quindi qui si puo' solo aggiungere in coda, come per gli oggetti.
+	void Application::DrawTextureManager() {
+		ImGui::SeparatorText("Textures");
+
+		if (m_World.TexturePaths.empty())
+			ImGui::TextDisabled("nessuna texture caricata");
+
+		for (size_t i = 0; i < m_World.TexturePaths.size(); i++)
+			ImGui::BulletText("layer %d  -  %s", (int)i, m_World.TexturePaths[i].c_str());
+
+		// elenco dei file disponibili, letto una volta sola. EnvironmentMap e' un'altra cosa:
+		// finisce nella cubemap, non nel sampler2DArray degli albedo.
+		if (m_TextureFiles.empty() && std::filesystem::exists("textures")) {
+			for (const auto& entry : std::filesystem::recursive_directory_iterator("textures")) {
+				if (!entry.is_regular_file()) continue;
+
+				const std::string path = entry.path().string();
+				if (path.find("EnvironmentMap") != std::string::npos) continue;
+
+				const std::string ext = entry.path().extension().string();
+				if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".bmp")
+					m_TextureFiles.push_back(path);
+			}
+
+			std::sort(m_TextureFiles.begin(), m_TextureFiles.end());
+		}
+
+		if (m_TextureFiles.empty()) {
+			ImGui::TextDisabled("(nessun file in res/textures)");
+			return;
+		}
+
+		m_SelectedTextureFile = std::clamp(m_SelectedTextureFile, 0, (int)m_TextureFiles.size() - 1);
+
+		ImGui::PushItemWidth(240.0f);
+		if (ImGui::BeginCombo("##texture", m_TextureFiles[m_SelectedTextureFile].c_str())) {
+			for (int i = 0; i < (int)m_TextureFiles.size(); i++)
+				if (ImGui::Selectable(m_TextureFiles[i].c_str(), i == m_SelectedTextureFile))
+					m_SelectedTextureFile = i;
+
+			ImGui::EndCombo();
+		}
+		ImGui::PopItemWidth();
+		ImGui::SameLine();
+
+		const std::string& selected = m_TextureFiles[m_SelectedTextureFile];
+		const bool alreadyLoaded = std::find(m_World.TexturePaths.begin(), m_World.TexturePaths.end(),
+			selected) != m_World.TexturePaths.end();
+
+		ImGui::BeginDisabled(alreadyLoaded);
+		if (ImGui::Button("+ Texture")) {
+			// PathTracer confronta TexturePaths con quelle caricate e ricarica da solo
+			m_World.TexturePaths.push_back(selected);
+			m_Renderer.ResetPathTracingCounter();
+		}
+		ImGui::EndDisabled();
+
+		if (alreadyLoaded) {
+			ImGui::SameLine();
+			ImGui::TextDisabled("gia' caricata");
+		}
+
+		ImGui::TextDisabled("solo append: i layer sono indicizzati dai materiali");
+	}
+
 	void Application::DrawMaterialsTab() {
+		ImGui::Spacing();
+
+		DrawTextureManager();
 		ImGui::Spacing();
 
 		if (ImGui::Button("+ Add material")) {

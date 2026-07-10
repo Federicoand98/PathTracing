@@ -213,9 +213,17 @@ namespace PathTracer {
 		baseMat.Roughness = 0.8f;
 		baseMat.SpecularColor = baseMat.Color;
 
+		// layer 0 del sampler2DArray. L'albedo moltiplica material.Color: un materiale
+		// colorato tingerebbe la texture, quindi il colore va portato a bianco.
+		TexturePaths.push_back("textures/earthmap.jpg");
+		diffuse.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		diffuse.SpecularColor = diffuse.Color;
+		diffuse.SpecularProbability = 0.0f; // niente riflesso: la texture si vedrebbe poco
+		diffuse.AlbedoTexture = 0.0f;
+
 		Materials.push_back(dielectric);
 		Materials.push_back(metal);
-		Materials.push_back(diffuse);
+		Materials.push_back(diffuse);   // materiale 2: solo di sphere2, la sfera "terra"
 		Materials.push_back(baseMat);
 		Spheres.push_back(sphere1);
 		Spheres.push_back(sphere2);

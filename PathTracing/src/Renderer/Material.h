@@ -38,12 +38,18 @@ namespace PathTracer {
 		float NoiseTurbulence = 10.0f;// peso della turbolenza nella fase del marmo
 		glm::vec4 NoiseColorA{ 0.08f, 0.06f, 0.05f, 1.0f }; // rumore = 0
 		glm::vec4 NoiseColorB{ 0.85f, 0.80f, 0.75f, 1.0f }; // rumore = 1
+
+		// 0 = dielettrico (plastica, vetro, intonaco): riflesso non tinto, componente diffusa
+		// 1 = metallo: nessuna componente diffusa, il riflesso e' tinto dall'albedo
+		float Metalness = 0.0f;
+		glm::vec3 _pad2{ 0.0f }; // porta la dimensione a 176, multiplo di 16
 	};
 
-	static_assert(sizeof(Material) == 160, "Material deve essere 160 byte per combaciare con lo std430");
+	static_assert(sizeof(Material) == 176, "Material deve essere 176 byte per combaciare con lo std430");
 	static_assert(offsetof(Material, RefractionColor) == 80, "RefractionColor deve stare a 80 (std430 allinea i vec4 a 16)");
 	static_assert(offsetof(Material, AlbedoTexture) == 96, "AlbedoTexture deve stare a 96");
 	static_assert(offsetof(Material, NoiseColorA) == 128, "NoiseColorA deve stare a 128 (std430 allinea i vec4 a 16)");
+	static_assert(offsetof(Material, Metalness) == 160, "Metalness deve stare a 160");
 
 	static Material CreateDefaultDiffuse(glm::vec4 color = {0.4f, 0.2, 0.1f, 1.0f}) {
 		Material m;
@@ -62,6 +68,7 @@ namespace PathTracer {
 		m.EmissiveColor = m.Color;
 		m.RefractionColor = m.Color;
 		m.Roughness = 0.0f;
+		m.Metalness = 1.0f; // niente diffuso: il colore vive nel riflesso
 		return m;
 	}
 
@@ -138,6 +145,7 @@ namespace PathTracer {
 			m.RefractionColor = m.Color;
 			m.EmissiveColor = m.Color;
 			m.Roughness = 0.0f;
+			m.Metalness = 1.0f;
 		}
 		else if (rnd < 0.5) {
 			// Glossy
