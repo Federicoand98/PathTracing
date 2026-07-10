@@ -6,7 +6,10 @@ if (POLICY CMP0141)
   set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
+
 project ("PathTracing")
+
+set(OpenGL_GL_PREFERENCE "GLVND")
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -18,37 +21,51 @@ set(RES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/res")
 file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.h")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${RES_DIR})
 
-add_executable (${PROJECT_NAME} ${SOURCES} "src/stb_image_write.cpp")
+execute_process(COMMAND ${CMAKE_COMMAND} -E echo "Contents of ${RES_DIR}:")
+# List contents of RES_DIR
+file(GLOB_RECURSE RES_FILES "${RES_DIR}/**")
+message("Contents of ${RES_DIR}:")
+foreach(file ${RES_FILES})
+  message("${file}")
+endforeach()
+
+
+add_executable (${PROJECT_NAME} ${SOURCES} "src/stb_image_write.cpp" "src/stb_image_impl.cpp")
 target_precompile_headers(${PROJECT_NAME} PRIVATE "src/ptpch.h")
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/deps/glfw")
+# add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/deps/glfw")
 
 # GLFW
-set(GLFW_DIR "${LIB_DIR}/glfw")
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+# set(GLFW_DIR "${LIB_DIR}/glfw")
+# set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+# set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+# set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 find_package(OpenGL REQUIRED)
+find_package(glfw3 REQUIRED)
+find_package(GLEW REQUIRED)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
+target_link_libraries(${PROJECT_NAME} PRIVATE ${GLEW_LIBRARIES})
 include_directories(
 		"${LIB_DIR}/glm"
 		"${SRC_DIR}"
 		"${SRC_DIR}/ImGui"
+		"${SRC_DIR}/ImGuizmo"
+    ${GLFW_INCLUDE_DIRS}
 )
 
-include_directories("${LIB_DIR}/glew/include")
 
-target_link_libraries(${PROJECT_NAME} PRIVATE "${LIB_DIR}/glew/lib/Release/x64/glew32.lib")
+# include_directories("${LIB_DIR}/glew/include")
 
-file(GLOB DLLS "libs/glew/glew32.dll")
-file(COPY ${DLLS} DESTINATION ${RES_DIR})
+# target_link_libraries(${PROJECT_NAME} PRIVATE "${LIB_DIR}/glew/lib/Release/x64/glew32.lib")
+
+# file(GLOB DLLS "libs/glew/glew32.dll")
+# file(COPY ${DLLS} DESTINATION ${RES_DIR})
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC -DImTextureID=ImU64)
 
-set(CMAKE_EXE_LINKER_FLAGS "-static")
-
+# set(CMAKE_EXE_LINKER_FLAGS "-static")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET PathTracing PROPERTY CXX_STANDARD 20)

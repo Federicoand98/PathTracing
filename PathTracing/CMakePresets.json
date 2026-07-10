@@ -1,4 +1,4 @@
-﻿{
+{
     "version": 3,
     "configurePresets": [
         {
@@ -55,6 +55,26 @@
             "inherits": "x86-debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "release",
+            "description": "",
+            "displayName": "",
+            "inherits": [
+                "x64-release"
+            ]
+        },
+        {
+            "name": "GCC 13.2.0 x86_64-linux-gnu",
+            "displayName": "GCC 13.2.0 x86_64-linux-gnu",
+            "description": "Uso dei compilatori: C = /usr/bin/gcc, CXX = /usr/bin/g++",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
+                "CMAKE_BUILD_TYPE": "Debug"
             }
         }
     ]
