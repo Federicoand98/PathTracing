@@ -40,6 +40,17 @@ namespace PathTracer {
 		// MaterialIndex degli oggetti, Box::index) restano validi.
 		void CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex);
 		int AddMesh(const std::string& objPath, const glm::vec3& position, int material);
+
+		// Al contrario delle creazioni, le rimozioni NON sono append: invalidano ogni indice
+		// successivo a quello tolto, nella collezione toccata. Chi tiene indici (la selezione)
+		// deve azzerarli. Box::index viene rimappato qui dentro perche' nessun altro puo' farlo.
+		bool RemoveSphere(int sphereIndex);
+		bool RemoveQuad(int quadIndex);   // rifiuta i quad che appartengono a un box
+		bool RemoveBox(int boxIndex);     // porta via anche i suoi 6 quad
+		bool RemoveMesh(int meshIndex);
+
+		// -1 se il quad e' autonomo, altrimenti l'indice del box che lo possiede
+		int QuadOwnerBox(int quadIndex) const;
 	public:
 		glm::vec3 BackgroundColor;
         std::vector<Test> Tests;

@@ -8,6 +8,9 @@
 
 namespace PathTracer {
 
+	// il testo prima di ### e' il titolo, il resto e' l'ID stabile
+	static const char* kDeletePopupId = "Delete object?###DeleteObject";
+
 	static Application* s_Instance = nullptr;
 
 	namespace {
@@ -46,6 +49,8 @@ namespace PathTracer {
 		s_Instance = this;
 
 		m_World.LoadScene();
+
+
 	}
 
 	Application::~Application() {
@@ -220,6 +225,9 @@ namespace PathTracer {
 			// RenderUI disegna la finestra "Viewport", e con essa overlay e gizmo
 			RenderUI(m_DeltaTime);
 			UpdateSelection();
+			// dopo UpdateSelection: e' li' che Canc chiama OpenPopup, cosi' la modale
+			// compare nello stesso frame in cui viene richiesta
+			DrawDeletePopup();
 			Render(m_DeltaTime);
 			ImGui::Render();
 
@@ -545,6 +553,10 @@ namespace PathTracer {
 		ImGui::Spacing();
 		if (ImGui::Button("Deseleziona (ESC)"))
 			m_Selection = {};
+
+		ImGui::SameLine();
+		if (ImGui::Button("Elimina (Canc)"))
+			m_DeleteRequested = true;
 	}
 
 	// Un DragFloat sull'indice del materiale non dice niente su cosa si sta scegliendo:
@@ -697,6 +709,108 @@ namespace PathTracer {
 	}
 
 	// ------------------------------------------------------------ UI: tab Materials
+
+	// Quanti elementi ha la collezione a cui punta una selezione di questo tipo.
+	int Application::SelectionCollectionSize(SelectionType type) const {
+		switch (type) {
+		case SelectionType::Sphere: return static_cast<int>(m_World.Spheres.size());
+		case SelectionType::Quad:   return static_cast<int>(m_World.Quads.size());
+		case SelectionType::Box:    return static_cast<int>(m_World.Boxes.size());
+		case SelectionType::Mesh:   return static_cast<int>(m_World.Meshes.size());
+		default:                    return 0;
+		}
+	}
+
+	bool Application::CanDeleteSelection() const {
+		return m_Selection.IsValid() && m_Selection.Index < SelectionCollectionSize(m_Selection.Type);
+	}
+
+	// Ogni rimozione fa scalare gli indici successivi della sua collezione: la selezione
+	// corrente diventa insensata comunque vada, quindi si azzera PRIMA di toccare il World
+	// (la finestra "Viewport" la userebbe piu' avanti in questo stesso frame).
+	void Application::DeleteSelection() {
+		if (!CanDeleteSelection()) return;
+
+		const Selection sel = m_Selection;
+		m_Selection = {};
+
+		bool removed = false;
+		switch (sel.Type) {
+		case SelectionType::Sphere: removed = m_World.RemoveSphere(sel.Index); break;
+		case SelectionType::Quad:   removed = m_World.RemoveQuad(sel.Index);   break;
+		case SelectionType::Box:    removed = m_World.RemoveBox(sel.Index);    break;
+		case SelectionType::Mesh:   removed = m_World.RemoveMesh(sel.Index);   break;
+		default: break;
+		}
+
+		if (removed)
+			m_Renderer.ResetPathTracingCounter();
+	}
+
+	// Modale: va aperta fuori dal Begin/End di qualsiasi finestra.
+	// m_ShowDeletePopup e' solo il nostro specchio dello stato di ImGui: la OpenPopup
+	// la fa chi preme Canc, e se ImGui chiude da solo (Escape, click fuori) BeginPopupModal
+	// torna false e qui si risincronizza. Riaprirla in base al flag sarebbe un loop.
+	void Application::DrawDeletePopup() {
+		if (m_DeleteRequested) {
+			m_DeleteRequested = false;
+			m_ShowDeletePopup = true;
+			ImGui::OpenPopup(kDeletePopupId);
+		}
+
+		if (!m_ShowDeletePopup)
+			return;
+
+		ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+		ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+		if (ImGui::BeginPopupModal(kDeletePopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+			// La selezione puo' essere svanita mentre la modale era aperta (cambio scena):
+			// stessa classe di bug che faceva crashare la selezione, stesso trattamento.
+			if (!CanDeleteSelection()) {
+				m_ShowDeletePopup = false;
+				ImGui::CloseCurrentPopup();
+				ImGui::EndPopup();
+				return;
+			}
+
+			ImGui::Text("Eliminare %s?", GetSelectionName().c_str());
+
+			switch (m_Selection.Type) {
+			case SelectionType::Mesh:
+				ImGui::TextDisabled("%d triangoli - il BVH verra' ricostruito",
+					static_cast<int>(m_World.Meshes[m_Selection.Index].NumTriangles));
+				break;
+			case SelectionType::Box:
+				ImGui::TextDisabled("porta via anche le sue 6 facce");
+				break;
+			default:
+				break;
+			}
+
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Spacing();
+
+			if (ImGui::Button("Elimina", ImVec2(120, 0))) {
+				DeleteSelection();
+				m_ShowDeletePopup = false;
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::SetItemDefaultFocus();
+			ImGui::SameLine();
+			if (ImGui::Button("Annulla", ImVec2(120, 0))) {
+				m_ShowDeletePopup = false;
+				ImGui::CloseCurrentPopup();
+			}
+
+			ImGui::EndPopup();
+		}
+		else {
+			// ImGui l'ha chiusa per conto suo: Escape o click all'esterno
+			m_ShowDeletePopup = false;
+		}
+	}
 
 	// Corpo dell'editor, condiviso fra il tab Materials e la finestra flottante:
 	// due copie divergerebbero al primo campo aggiunto.
@@ -1010,14 +1124,9 @@ namespace PathTracer {
 		return m_GizmoOperation;
 	}
 
-	std::string Application::GetSelectionLabel() const {
-		if (!m_Selection.IsValid())
-			return "Nessuna selezione  -  click su un oggetto per selezionarlo";
-
-		const ImGuizmo::OPERATION effective = EffectiveGizmoOperation();
-		const char* operation = effective == ImGuizmo::ROTATE ? "Rotate"
-							  : effective == ImGuizmo::SCALE  ? "Scale" : "Translate";
-
+	// Solo il nome dell'oggetto, senza l'operazione del gizmo: serve anche alla modale
+	// di cancellazione, dove "Eliminare Sphere #0 - Translate?" non avrebbe senso.
+	std::string Application::GetSelectionName() const {
 		std::string name;
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: name = "Sphere"; break;
@@ -1028,10 +1137,20 @@ namespace PathTracer {
 			if (m_Selection.Index < (int)m_World.MeshNames.size())
 				name += " \"" + m_World.MeshNames[m_Selection.Index] + "\"";
 			break;
-		default: name = "?"; break;
+		default: return "?";
 		}
+		return name + " #" + std::to_string(m_Selection.Index);
+	}
 
-		std::string label = name + " #" + std::to_string(m_Selection.Index) + "  -  " + operation;
+	std::string Application::GetSelectionLabel() const {
+		if (!m_Selection.IsValid())
+			return "Nessuna selezione  -  click su un oggetto per selezionarlo";
+
+		const ImGuizmo::OPERATION effective = EffectiveGizmoOperation();
+		const char* operation = effective == ImGuizmo::ROTATE ? "Rotate"
+							  : effective == ImGuizmo::SCALE  ? "Scale" : "Translate";
+
+		std::string label = GetSelectionName() + "  -  " + operation;
 		if (!m_Selection.SupportsRotation())
 			label += "  (no rotazione)";
 
@@ -1199,11 +1318,16 @@ namespace PathTracer {
 		// la camera (tasto destro + WASD). Il test giusto e' WantTextInput: con
 		// NavEnableKeyboard attivo, WantCaptureKeyboard resta sempre vero e bloccherebbe
 		// ogni scorciatoia.
-		if (!io.WantTextInput && !Input::IsMouseButtonDown(MouseButton::Right)) {
+		// con la modale di conferma aperta, Escape deve chiuderla e non deselezionare,
+		// e Canc non deve riaprirla: le scorciatoie restano sospese
+		if (!io.WantTextInput && !m_ShowDeletePopup && !Input::IsMouseButtonDown(MouseButton::Right)) {
 			if (ImGui::IsKeyPressed(ImGuiKey_G)) m_GizmoOperation = ImGuizmo::TRANSLATE;
 			if (ImGui::IsKeyPressed(ImGuiKey_R)) m_GizmoOperation = ImGuizmo::ROTATE;
 			if (ImGui::IsKeyPressed(ImGuiKey_S)) m_GizmoOperation = ImGuizmo::SCALE;
 			if (ImGui::IsKeyPressed(ImGuiKey_Escape)) m_Selection = {};
+
+			if (ImGui::IsKeyPressed(ImGuiKey_Delete) && CanDeleteSelection())
+				m_DeleteRequested = true;
 		}
 
 		// il gizmo ha la precedenza sul picking: trascinarlo non deve deselezionare

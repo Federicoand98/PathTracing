@@ -778,6 +778,90 @@ namespace PathTracer {
 		return static_cast<int>(Meshes.size()) - 1;
 	}
 
+	int World::QuadOwnerBox(int quadIndex) const {
+		for (size_t b = 0; b < Boxes.size(); b++) {
+			const int first = static_cast<int>(Boxes[b].index);
+			if (quadIndex >= first && quadIndex < first + 6)
+				return static_cast<int>(b);
+		}
+		return -1;
+	}
+
+	// Nessuno tiene indici verso le sfere, a parte la selezione: qui basta la erase.
+	bool World::RemoveSphere(int sphereIndex) {
+		if (sphereIndex < 0 || sphereIndex >= static_cast<int>(Spheres.size()))
+			return false;
+
+		Spheres.erase(Spheres.begin() + sphereIndex);
+		return true;
+	}
+
+	// I Box puntano ai quad per indice (Box::index = primo dei suoi 6, consecutivi).
+	// Togliere un quad davanti a un box gli sposta i piedi sotto: va rimappato.
+	// Lo shader scorre Quads e Cubes in lockstep e pretende FirstQuad crescente,
+	// quindi la rimappatura per sottrazione conserva anche l'ordinamento.
+	bool World::RemoveQuad(int quadIndex) {
+		if (quadIndex < 0 || quadIndex >= static_cast<int>(Quads.size()))
+			return false;
+
+		// un quad di un box non e' un oggetto autonomo: si cancella il box, non la faccia
+		if (QuadOwnerBox(quadIndex) >= 0)
+			return false;
+
+		Quads.erase(Quads.begin() + quadIndex);
+
+		for (Box& box : Boxes)
+			if (static_cast<int>(box.index) > quadIndex)
+				box.index -= 1.0f;
+
+		return true;
+	}
+
+	bool World::RemoveBox(int boxIndex) {
+		if (boxIndex < 0 || boxIndex >= static_cast<int>(Boxes.size()))
+			return false;
+
+		const int first = static_cast<int>(Boxes[boxIndex].index);
+		if (first < 0 || first + 6 > static_cast<int>(Quads.size()))
+			return false;
+
+		Quads.erase(Quads.begin() + first, Quads.begin() + first + 6);
+		Boxes.erase(Boxes.begin() + boxIndex);
+
+		for (Box& box : Boxes)
+			if (static_cast<int>(box.index) > first)
+				box.index -= 6.0f;
+
+		return true;
+	}
+
+	// I triangoli di tutte le mesh vivono concatenati in Triangles, e ogni MeshInfo ci
+	// punta con FirstTriangle. Togliendone una si apre un buco: vanno rimossi i suoi
+	// triangoli e va sottratto il conteggio a tutte le mesh che stavano dopo, altrimenti
+	// le rimanenti indicherebbero triangoli altrui. Poi BuildBVH() rifa' tutto il resto
+	// (TriPositions/Normals/UVs, TriIndex, BVHNodes, RootNode) da Triangles + Meshes.
+	bool World::RemoveMesh(int meshIndex) {
+		if (meshIndex < 0 || meshIndex >= static_cast<int>(Meshes.size()))
+			return false;
+
+		const int first = static_cast<int>(Meshes[meshIndex].FirstTriangle);
+		const int count = static_cast<int>(Meshes[meshIndex].NumTriangles);
+
+		Triangles.erase(Triangles.begin() + first, Triangles.begin() + first + count);
+
+		Meshes.erase(Meshes.begin() + meshIndex);
+		if (meshIndex < static_cast<int>(MeshNames.size()))
+			MeshNames.erase(MeshNames.begin() + meshIndex);
+
+		for (int i = meshIndex; i < static_cast<int>(Meshes.size()); i++)
+			Meshes[i].FirstTriangle -= static_cast<float>(count);
+
+		BuildBVH();
+
+		std::cout << "Mesh " << meshIndex << " removed (" << count << " triangles)" << std::endl;
+		return true;
+	}
+
 	// Aggiorna la trasformazione di una mesh: ricalcola l'inversa e l'AABB world.
 	// Nessun triangolo viene toccato, nessun BVH ricostruito.
 	void World::SetMeshTransform(int meshIndex, const glm::mat4& transform) {

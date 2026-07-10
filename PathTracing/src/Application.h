@@ -80,6 +80,10 @@ namespace PathTracer {
 		void DrawAddObjectMenu();
 		void DrawMaterialEditor(Material& material, int index);
 		void DrawMaterialEditorWindow();
+		void DrawDeletePopup();
+		void DeleteSelection();
+		bool CanDeleteSelection() const;
+		int SelectionCollectionSize(SelectionType type) const;
 		bool SelectableObjectRow(const char* label, SelectionType type, int index, float materialIndex);
 		bool MaterialCombo(const char* label, float& materialIndex);
 
@@ -97,6 +101,7 @@ namespace PathTracer {
 		glm::vec3 GetSelectionPivot() const;
 		void GetSelectionBounds(glm::vec3& outMin, glm::vec3& outMax) const;
 		std::string GetSelectionLabel() const;
+		std::string GetSelectionName() const;
 		void ApplyDelta(const glm::mat4& delta);
 	private:
 		Selection m_Selection;
@@ -114,6 +119,13 @@ namespace PathTracer {
 		// al cambio scena la lista si svuota sotto i piedi, come per la selezione.
 		bool m_ShowMaterialEditor = false;
 		int m_MaterialEditorIndex = -1;
+
+		// La richiesta e' separata dallo stato "aperta" perche' OpenPopup usa l'ID stack
+		// della finestra corrente: chiamandola dal bottone dentro "Settings" produrrebbe un
+		// ID diverso da quello della modale, disegnata a livello top. Quindi si alza solo
+		// un flag e la OpenPopup la fa sempre DrawDeletePopup.
+		bool m_DeleteRequested = false;
+		bool m_ShowDeletePopup = false;   // finche' e' vero, le scorciatoie sono sospese
 
 		// creazione oggetti
 		float m_NewObjectMaterial = 0.0f;
