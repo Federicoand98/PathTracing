@@ -68,6 +68,25 @@ namespace PathTracer {
 		void RenderUI(float deltaTime);
 		void Render(float deltaTime);
 
+		// pannelli della UI, uno per tab
+		void DrawSceneTab();
+		void DrawMaterialsTab();
+		void DrawRenderTab();
+		void DrawDebugTab();
+
+		void DrawOutliner();
+		void DrawSelectionProperties();
+		void DrawGizmoToolbar();
+		void DrawAddObjectMenu();
+		void DrawMaterialEditor(Material& material, int index);
+		void DrawMaterialEditorWindow();
+		bool SelectableObjectRow(const char* label, SelectionType type, int index, float materialIndex);
+		bool MaterialCombo(const char* label, float& materialIndex);
+
+		int EnsureMaterialExists();          // garantisce almeno un materiale, ne ritorna l'indice
+		glm::vec3 SpawnPosition() const;     // davanti alla camera
+		void OpenMaterialEditor(int index);
+
 		// selezione + gizmo
 		void UpdateSelection();
 		void DrawGizmo();
@@ -90,6 +109,16 @@ namespace PathTracer {
 		ImVec2 m_ViewportPos{ 0.0f, 0.0f };
 		ImVec2 m_ViewportSize{ 0.0f, 0.0f };
 		bool m_ViewportHovered = false;
+
+		// editor materiale flottante. L'indice va sempre validato contro Materials:
+		// al cambio scena la lista si svuota sotto i piedi, come per la selezione.
+		bool m_ShowMaterialEditor = false;
+		int m_MaterialEditorIndex = -1;
+
+		// creazione oggetti
+		float m_NewObjectMaterial = 0.0f;
+		std::vector<std::string> m_ModelFiles;
+		int m_SelectedModelFile = 0;
 
 		// diagnostica del picking (visibile nel pannello)
 		glm::ivec2 m_LastPickPixel{ -1, -1 };

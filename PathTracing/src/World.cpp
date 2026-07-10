@@ -760,6 +760,24 @@ namespace PathTracer {
 			<< material << ")" << std::endl;
 	}
 
+	// Carica un OBJ a runtime. I BLAS vivono tutti in BVHNodes con offset per mesh,
+	// quindi aggiungerne uno impone di ricostruire l'intero BVH: gli offset dei nodi
+	// e gli indici in TriIndex cambiano. Costoso, ma e' un'azione esplicita dell'utente.
+	int World::AddMesh(const std::string& objPath, const glm::vec3& position, int material) {
+		Model model;
+		model.LoadObj(objPath.c_str());
+
+		if (model.GetTriangles().empty()) {
+			std::cerr << "AddMesh failed: " << objPath << std::endl;
+			return -1;
+		}
+
+		UploadModel(model, position, material);
+		BuildBVH();
+
+		return static_cast<int>(Meshes.size()) - 1;
+	}
+
 	// Aggiorna la trasformazione di una mesh: ricalcola l'inversa e l'AABB world.
 	// Nessun triangolo viene toccato, nessun BVH ricostruito.
 	void World::SetMeshTransform(int meshIndex, const glm::mat4& transform) {

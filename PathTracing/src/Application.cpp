@@ -268,296 +268,41 @@ namespace PathTracer {
 		ValidateSelection();
 
 		ImGui::Begin("Settings");
-		ImGui::Text("FPS: %f", m_FPS);
-		ImGui::Text("Last Render: %.3fms", deltaTime * 1000);
-		ImGui::Spacing();
-		ImGui::SeparatorText("OpenGL info:");
-		ImGui::Text("Vendor: %s", glGetString(GL_VENDOR));
-		ImGui::Text("Renderer: %s", glGetString(GL_RENDERER));
-		ImGui::Text("Version: %s", glGetString(GL_VERSION));
-		ImGui::Separator();
-		
-		ImGui::Spacing();
 
-		if (ImGui::Button("Screenshot")) {
+		ImGui::Text("FPS: %.1f", m_FPS);
+		ImGui::SameLine();
+		ImGui::TextDisabled("| %.2f ms/frame", deltaTime * 1000.0f);
+		ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80.0f);
+		if (ImGui::Button("Screenshot"))
 			m_Renderer.GetFrameBuffer()->SavePPMTexture();
-		}
 
-		ImGui::Separator();
 		ImGui::Spacing();
 
-		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
-		ImGui::SeparatorText("ENGINE CONFIGURATIONS");
-		ImGui::PopStyleColor();
-		ImGui::Spacing();
-		if (ImGui::Checkbox("Vsync", &m_Vsync))
-			glfwSwapInterval(m_Vsync);
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Checkbox("Post Processing", &m_Renderer.PostProcessing);
-		ImGui::DragFloat("HDR", &m_Renderer.Exposure, 0.01f, 0.0f, 10.0f);
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Text("Samples Per Pixel:");
-		if(ImGui::SliderInt("samples", &m_Renderer.m_SamplesPerPixel, 1, 16))
-			m_Renderer.ResetPathTracingCounter();
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Text("Ray Depth:");
-		if(ImGui::SliderInt("ray", &m_Renderer.m_RayDepth, 1, 50))
-			m_Renderer.ResetPathTracingCounter();
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Text("Selection:");
-		ImGui::Text("%s", GetSelectionLabel().c_str());
-		ImGui::TextDisabled("click = seleziona | G/R/S = sposta/ruota/scala | ESC = deseleziona");
-
-		if (ImGui::TreeNode("Picking debug")) {
-			ImGui::Text("hovered window : %s", HoveredWindowName());
-			ImGui::Text("viewport hover : %s", m_ViewportHovered ? "SI" : "NO");
-			ImGui::Text("viewport rect  : (%.0f,%.0f) %.0f x %.0f",
-				m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
-			ImGui::Text("richieste pick : %d", m_PickRequestCount);
-			ImGui::Text("ultimo pixel   : (%d, %d)", m_LastPickPixel.x, m_LastPickPixel.y);
-			ImGui::Text("ultimo esito   : type=%d index=%d  (-2=shader non scrive, -1=nessun hit)",
-				m_LastPickType, m_LastPickIndex);
-
-			// Bypassa il gate del mouse: se questo seleziona ma il click no, il problema
-			// e' nel gate; se non seleziona nemmeno questo, e' nella pipeline di picking.
-			if (ImGui::Button("Pick al centro della viewport")) {
-				m_LastPickPixel = { (int)m_ViewportSize.x / 2, (int)m_ViewportSize.y / 2 };
-				m_PickRequestCount++;
-				m_Renderer.RequestPick(m_LastPickPixel.x, m_LastPickPixel.y);
+		if (ImGui::BeginTabBar("MainTabs")) {
+			if (ImGui::BeginTabItem("Scene")) {
+				DrawSceneTab();
+				ImGui::EndTabItem();
+			}
+			if (ImGui::BeginTabItem("Materials")) {
+				DrawMaterialsTab();
+				ImGui::EndTabItem();
+			}
+			if (ImGui::BeginTabItem("Render")) {
+				DrawRenderTab();
+				ImGui::EndTabItem();
+			}
+			if (ImGui::BeginTabItem("Debug")) {
+				DrawDebugTab();
+				ImGui::EndTabItem();
 			}
 
-			ImGui::TreePop();
+			ImGui::EndTabBar();
 		}
-
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Text("BVH Debugger:");
-		if (ImGui::Checkbox("BVH Heatmap", &m_Renderer.BVHDebug))
-			m_Renderer.ResetPathTracingCounter();
-		if (m_Renderer.BVHDebug) {
-			ImGui::TextDisabled("blu = poche ricerche, rosso = molte");
-			ImGui::SliderFloat("heat scale", &m_Renderer.BVHHeatScale, 1.0f, 256.0f);
-		}
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Checkbox("Enable Path Tracing", &m_Renderer.PathTracing);
-		if (ImGui::Button("Reset Accumulation"))
-			m_Renderer.ResetPathTracingCounter();
-
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Separator();
-
-		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
-		ImGui::SeparatorText("CAMERA CONFIGURATIONS");
-		ImGui::PopStyleColor();
-
-		if (ImGui::SliderFloat("Camera FOV (Vertical)", &m_Camera.m_VerticalFOV, 30.0f, 140.0f)) {
-			m_Camera.RecalculateProjection();
-			m_Renderer.ResetPathTracingCounter();
-		}
-
-		if (ImGui::Button("Reset Camera Pos")) {
-			m_Camera.ResetPosition();
-			m_Renderer.ResetPathTracingCounter();
-		}
-
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Separator();
-
-		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 255, 0, 255));
-		ImGui::SeparatorText("SCENE CONFIGURATIONS");
-		ImGui::PopStyleColor();	
-
-
-		ImGui::Separator();
-		ImGui::Spacing();
-		ImGui::Text("Background");
-		if(ImGui::Checkbox("Environment Mapping", &m_Renderer.EnvironmentMapping)) {
-			m_Renderer.ResetPathTracingCounter();
-		}
-
-		if(!m_Renderer.EnvironmentMapping)
-			if(ImGui::ColorEdit3("Background Color", glm::value_ptr(m_World.BackgroundColor)))
-				m_Renderer.ResetPathTracingCounter();
-
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Text("Select the scene");
-		if (ImGui::Combo("Current Scene", &m_World.CurrentScene, "TWO SPHERES\0RANDOM SPHERES\0CORNELL BOX\0RANDOM BOXES\0CORNELL BOW WITH MESHES\0SETUP - 1\0SETUP - 2\0SETUP - 3\0\0")) {
-			// gli indici della vecchia scena non significano piu' niente: la finestra
-			// "Viewport" viene disegnata piu' avanti in QUESTO stesso frame e userebbe
-			// la selezione stale per indicizzare collezioni gia' svuotate
-			m_Selection = {};
-
-			m_World.DestroyScene();
-			m_Renderer.ResetPathTracingCounter(true);
-			m_World.LoadScene();
-		}
-
-		ImGui::Spacing();
-		ImGui::Spacing();
-
-		ImGui::PushItemWidth(200.0);
-		ImGui::Text("Objects:");
-
-		if (m_World.Spheres.size() > 0) {
-			if (ImGui::TreeNode("Spheres")) {
-				for (size_t i = 0; i < m_World.Spheres.size(); i++) {
-					Sphere& sphere = m_World.Spheres.at(i);
-
-					ImGui::PushID(i);
-					if (ImGui::DragFloat3("Position", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.1f, -10.0f, 10.0f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Material", &sphere.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
-
-					ImGui::Separator();
-					ImGui::PopID();
-				}
-
-				ImGui::TreePop();
-			}
-		}
-
-		if (m_World.Quads.size() > 0) {
-			if (ImGui::TreeNode("Quads")) {
-				for (size_t i = 0; i < m_World.Quads.size(); i++) {
-					Quad& quad = m_World.Quads.at(i);
-
-					ImGui::PushID(i);
-					if (ImGui::DragFloat3("Position", glm::value_ptr(quad.PositionLLC), 0.1f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat3("U", glm::value_ptr(quad.U), 0.1f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat3("V", glm::value_ptr(quad.V), 0.1f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Width", &quad.Width, 0.1f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Height", &quad.Height, 0.1f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Material", &quad.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) m_Renderer.ResetPathTracingCounter();
-					ImGui::Separator();
-					ImGui::PopID();
-				}
-
-				ImGui::TreePop();
-			}
-		}
-
-
-		if (m_World.Boxes.size() > 0) {
-			if (ImGui::TreeNode("Boxes")) {
-				for (size_t i = 0; i < m_World.Boxes.size(); i++) {
-					Box& box = m_World.Boxes.at(i);
-
-					ImGui::PushID(i);
-					if (ImGui::DragFloat3("Min", glm::value_ptr(box.Min), 0.1f)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
-					if (ImGui::DragFloat3("Max", glm::value_ptr(box.Max), 0.1f)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
-					if (ImGui::DragFloat("Material", &box.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); box.UpdateBox(m_World.Quads); }
-					ImGui::Separator();
-					ImGui::PopID();
-				}
-
-				ImGui::TreePop();
-			}
-		}
-
-		if (m_World.Meshes.size() > 0) {
-			if (ImGui::TreeNode("Meshes")) {
-				for (size_t i = 0; i < m_World.Meshes.size(); i++) {
-					MeshInfo& mesh = m_World.Meshes.at(i);
-
-					ImGui::PushID(i);
-					// la traslazione vive nell'ultima colonna della Transform
-					glm::vec3 position = glm::vec3(mesh.Transform[3]);
-					if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f)) {
-						glm::mat4 transform = mesh.Transform;
-						transform[3] = glm::vec4(position, 1.0f);
-						m_World.SetMeshTransform((int)i, transform);
-						m_Renderer.ResetPathTracingCounter();
-					}
-					if (ImGui::DragFloat("Material", &mesh.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); }
-					ImGui::Separator();
-					ImGui::PopID();
-				}
-
-				ImGui::TreePop();
-			}
-		}
-
-		ImGui::Spacing();
-		ImGui::Spacing();
-		ImGui::Text("Materials List:");
-
-		if(ImGui::TreeNode("Materials") && m_World.Materials.size() > 0) {
-			ImGui::Checkbox("Linked Colors", &m_LinkColors);
-			ImGui::Spacing();
-
-			for(size_t i = 0; i < m_World.Materials.size(); i++) {
-				Material& material = m_World.Materials.at(i);
-
-				ImGui::PushID(i);
-
-				if(ImGui::TreeNode(("Material " + std::to_string(i)).c_str())) {
-					if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color))) {
-						if(m_LinkColors) {
-							material.RefractionColor = material.Color;
-							material.SpecularColor = material.Color;
-						}
-
-						m_Renderer.ResetPathTracingCounter();
-					}
-					if(!m_LinkColors) {
-						if (ImGui::ColorEdit3("Specular Color", glm::value_ptr(material.SpecularColor))) m_Renderer.ResetPathTracingCounter();
-						if (ImGui::ColorEdit3("Refraction Color", glm::value_ptr(material.RefractionColor))) m_Renderer.ResetPathTracingCounter();
-					}
-
-					if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Specular Probability", &material.SpecularProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.01f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Refractin Probability", &material.RefractionProbability, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Refractin Roughness", &material.RefractionRoughness, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
-					if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
-
-					ImGui::Separator();
-					int checkerMode = (int)(material.Checker + 0.5f);
-					if (ImGui::Combo("Checker", &checkerMode, "Off\0UV (debug)\0World space\0\0")) {
-						material.Checker = (float)checkerMode;
-						m_Renderer.ResetPathTracingCounter();
-					}
-					if (checkerMode != 0) {
-						if (ImGui::DragFloat("Checker scale", &material.CheckerScale, 0.1f, 0.01f, 64.0f))
-							m_Renderer.ResetPathTracingCounter();
-					}
-
-					// -1 = nessuna texture; gli altri valori indicizzano i layer di TexturePaths.
-					// Con min == max ImGui disattiva il clamping, quindi senza texture
-					// il drag va nascosto del tutto invece che lasciato libero di sforare.
-					int layerCount = (int)m_World.TexturePaths.size();
-					if (layerCount > 0) {
-						if (ImGui::DragFloat("Albedo texture layer", &material.AlbedoTexture, 1.0f, -1.0f, (float)(layerCount - 1)))
-							m_Renderer.ResetPathTracingCounter();
-					}
-					else {
-						material.AlbedoTexture = -1.0f;
-						ImGui::TextDisabled("(nessuna texture caricata in questa scena)");
-					}
-
-					if (checkerMode != 0 && material.SpecularProbability > 0.5f)
-						ImGui::TextDisabled("Specular Probability alta: l'albedo si vede poco");
-
-					ImGui::TreePop();
-				}
-				ImGui::PopID();
-			}
-
-			ImGui::TreePop();
-		}
-
-		ImGui::PopItemWidth();
 
 		ImGui::End();
+
+		// finestra a se' stante: va aperta fuori dal Begin/End di "Settings"
+		DrawMaterialEditorWindow();
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 		ImGui::Begin("Viewport");
@@ -587,6 +332,572 @@ namespace PathTracer {
 
 		ImGui::End();
 		ImGui::PopStyleVar();
+	}
+
+	// ---------------------------------------------------------------- UI: tab Scene
+
+	void Application::DrawSceneTab() {
+		ImGui::Spacing();
+
+		if (ImGui::Combo("Scene", &m_World.CurrentScene,
+			"Two Spheres\0Random Spheres\0Cornell Box\0Random Boxes\0Cornell Box (meshes)\0Setup 1\0Setup 2\0Setup 3\0\0")) {
+			// gli indici della vecchia scena non significano piu' niente: la finestra
+			// "Viewport" viene disegnata piu' avanti in QUESTO stesso frame e userebbe
+			// la selezione stale per indicizzare collezioni gia' svuotate
+			m_Selection = {};
+
+			m_World.DestroyScene();
+			m_Renderer.ResetPathTracingCounter(true);
+			m_World.LoadScene();
+		}
+
+		if (ImGui::Checkbox("Environment Mapping", &m_Renderer.EnvironmentMapping))
+			m_Renderer.ResetPathTracingCounter();
+
+		if (!m_Renderer.EnvironmentMapping)
+			if (ImGui::ColorEdit3("Background", glm::value_ptr(m_World.BackgroundColor)))
+				m_Renderer.ResetPathTracingCounter();
+
+		ImGui::SeparatorText("Add");
+		DrawAddObjectMenu();
+
+		ImGui::SeparatorText("Outliner");
+		DrawOutliner();
+
+		ImGui::SeparatorText("Properties");
+		DrawSelectionProperties();
+	}
+
+	void Application::DrawOutliner() {
+		// I 6 quad che compongono un box vivono ANCHE in Quads: elencarli entrambi
+		// riempirebbe l'outliner di duplicati (Random Boxes ha 121 box = 726 quad).
+		// Le facce si selezionano tramite il box che le possiede.
+		std::vector<bool> quadOwnedByBox(m_World.Quads.size(), false);
+		for (const Box& box : m_World.Boxes) {
+			int first = static_cast<int>(box.index);
+			for (int q = first; q < first + 6 && q < (int)m_World.Quads.size(); q++)
+				quadOwnedByBox[q] = true;
+		}
+
+		const size_t standaloneQuads = std::count(quadOwnedByBox.begin(), quadOwnedByBox.end(), false);
+		const bool empty = m_World.Spheres.empty() && m_World.Boxes.empty()
+						&& standaloneQuads == 0 && m_World.Meshes.empty();
+
+		ImGui::BeginChild("OutlinerList", ImVec2(0.0f, 190.0f), true);
+
+		if (empty)
+			ImGui::TextDisabled("scena vuota");
+
+		if (!m_World.Spheres.empty() && ImGui::TreeNodeEx("spheres", ImGuiTreeNodeFlags_DefaultOpen, "Spheres (%zu)", m_World.Spheres.size())) {
+			for (size_t i = 0; i < m_World.Spheres.size(); i++)
+				SelectableObjectRow("Sphere", SelectionType::Sphere, (int)i, m_World.Spheres[i].MaterialIndex);
+			ImGui::TreePop();
+		}
+
+		if (!m_World.Boxes.empty() && ImGui::TreeNodeEx("boxes", ImGuiTreeNodeFlags_DefaultOpen, "Boxes (%zu)", m_World.Boxes.size())) {
+			for (size_t i = 0; i < m_World.Boxes.size(); i++)
+				SelectableObjectRow("Box", SelectionType::Box, (int)i, m_World.Boxes[i].MaterialIndex);
+			ImGui::TreePop();
+		}
+
+		if (standaloneQuads > 0 && ImGui::TreeNodeEx("quads", ImGuiTreeNodeFlags_DefaultOpen, "Quads (%zu)", standaloneQuads)) {
+			for (size_t i = 0; i < m_World.Quads.size(); i++) {
+				if (quadOwnedByBox[i])
+					continue; // faccia di un box
+
+				SelectableObjectRow("Quad", SelectionType::Quad, (int)i, m_World.Quads[i].MaterialIndex);
+			}
+			ImGui::TreePop();
+		}
+
+		if (!m_World.Meshes.empty() && ImGui::TreeNodeEx("meshes", ImGuiTreeNodeFlags_DefaultOpen, "Meshes (%zu)", m_World.Meshes.size())) {
+			for (size_t i = 0; i < m_World.Meshes.size(); i++) {
+				const char* name = i < m_World.MeshNames.size() ? m_World.MeshNames[i].c_str() : "Mesh";
+				SelectableObjectRow(name, SelectionType::Mesh, (int)i, m_World.Meshes[i].MaterialIndex);
+			}
+			ImGui::TreePop();
+		}
+
+		ImGui::EndChild();
+	}
+
+	// Una riga dell'outliner: cliccarla equivale a cliccare l'oggetto nella viewport,
+	// cosi' selezione, gizmo e contorno restano un'unica nozione.
+	bool Application::SelectableObjectRow(const char* label, SelectionType type, int index, float materialIndex) {
+		ImGui::PushID(static_cast<int>(type) * 100000 + index);
+
+		const bool selected = (m_Selection.Type == type && m_Selection.Index == index);
+
+		char row[160];
+		snprintf(row, sizeof(row), "%s #%d", label, index);
+
+		const bool clicked = ImGui::Selectable(row, selected);
+
+		ImGui::SameLine(ImGui::GetContentRegionAvail().x - 30.0f);
+		ImGui::TextDisabled("m%d", static_cast<int>(materialIndex));
+
+		if (clicked) {
+			m_Selection = { type, index };
+			m_GizmoOperation = ImGuizmo::TRANSLATE;
+		}
+
+		ImGui::PopID();
+		return clicked;
+	}
+
+	void Application::DrawGizmoToolbar() {
+		const ImGuizmo::OPERATION effective = EffectiveGizmoOperation();
+
+		auto operationButton = [&](const char* label, ImGuizmo::OPERATION operation, bool enabled) {
+			const bool active = (effective == operation);
+			if (active)
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.85f, 0.55f, 0.10f, 1.0f));
+
+			ImGui::BeginDisabled(!enabled);
+			if (ImGui::Button(label))
+				m_GizmoOperation = operation;
+			ImGui::EndDisabled();
+
+			if (active)
+				ImGui::PopStyleColor();
+		};
+
+		operationButton("Move (G)", ImGuizmo::TRANSLATE, true);
+		ImGui::SameLine();
+		operationButton("Rotate (R)", ImGuizmo::ROTATE, m_Selection.SupportsRotation());
+		ImGui::SameLine();
+		operationButton("Scale (S)", ImGuizmo::SCALE, true);
+	}
+
+	void Application::DrawSelectionProperties() {
+		if (!m_Selection.IsValid()) {
+			ImGui::TextDisabled("Nessun oggetto selezionato.");
+			ImGui::TextDisabled("Click nella viewport, o su una riga dell'outliner.");
+			return;
+		}
+
+		ImGui::TextColored(ImVec4(1.0f, 0.67f, 0.16f, 1.0f), "%s", GetSelectionLabel().c_str());
+		DrawGizmoToolbar();
+		ImGui::Spacing();
+
+		ImGui::PushItemWidth(200.0f);
+
+		switch (m_Selection.Type) {
+		case SelectionType::Sphere: {
+			Sphere& sphere = m_World.Spheres.at(m_Selection.Index);
+			if (ImGui::DragFloat3("Center", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.05f, 0.001f, 1000.0f)) m_Renderer.ResetPathTracingCounter();
+			if (MaterialCombo("Material", sphere.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
+			break;
+		}
+		case SelectionType::Quad: {
+			Quad& quad = m_World.Quads.at(m_Selection.Index);
+			if (ImGui::DragFloat3("Corner", glm::value_ptr(quad.PositionLLC), 0.1f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat3("U axis", glm::value_ptr(quad.U), 0.05f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat3("V axis", glm::value_ptr(quad.V), 0.05f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Width", &quad.Width, 0.1f, 0.001f, 1000.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Height", &quad.Height, 0.1f, 0.001f, 1000.0f)) m_Renderer.ResetPathTracingCounter();
+			if (MaterialCombo("Material", quad.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
+			ImGui::TextDisabled("pivot = angolo inferiore sinistro");
+			break;
+		}
+		case SelectionType::Box: {
+			Box& box = m_World.Boxes.at(m_Selection.Index);
+
+			bool changed = false;
+			changed |= ImGui::DragFloat3("Min", glm::value_ptr(box.Min), 0.1f);
+			changed |= ImGui::DragFloat3("Max", glm::value_ptr(box.Max), 0.1f);
+			changed |= MaterialCombo("Material", box.MaterialIndex);
+
+			if (changed) {
+				box.UpdateBox(m_World.Quads); // un box e' 6 quad: vanno riscritti
+				m_Renderer.ResetPathTracingCounter();
+			}
+			ImGui::TextDisabled("axis-aligned: non ruotabile");
+			break;
+		}
+		case SelectionType::Mesh: {
+			MeshInfo& mesh = m_World.Meshes.at(m_Selection.Index);
+			ImGui::Text("Triangoli: %d", static_cast<int>(mesh.NumTriangles));
+
+			glm::vec3 position = glm::vec3(mesh.Transform[3]); // la traslazione e' l'ultima colonna
+			if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f)) {
+				glm::mat4 transform = mesh.Transform;
+				transform[3] = glm::vec4(position, 1.0f);
+				m_World.SetMeshTransform(m_Selection.Index, transform);
+				m_Renderer.ResetPathTracingCounter();
+			}
+
+			if (MaterialCombo("Material", mesh.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
+
+			if (ImGui::Button("Reset transform")) {
+				m_World.SetMeshTransform(m_Selection.Index, glm::mat4(1.0f));
+				m_Renderer.ResetPathTracingCounter();
+			}
+			break;
+		}
+		default:
+			break;
+		}
+
+		ImGui::PopItemWidth();
+
+		ImGui::Spacing();
+		if (ImGui::Button("Deseleziona (ESC)"))
+			m_Selection = {};
+	}
+
+	// Un DragFloat sull'indice del materiale non dice niente su cosa si sta scegliendo:
+	// qui ogni voce mostra la pastiglia col colore del materiale.
+	bool Application::MaterialCombo(const char* label, float& materialIndex) {
+		if (m_World.Materials.empty())
+			return false;
+
+		const int count = static_cast<int>(m_World.Materials.size());
+		const int current = std::clamp(static_cast<int>(materialIndex), 0, count - 1);
+
+		const std::string preview = "Material " + std::to_string(current);
+		bool changed = false;
+
+		if (ImGui::BeginCombo(label, preview.c_str())) {
+			for (int i = 0; i < count; i++) {
+				ImGui::PushID(i);
+
+				const glm::vec4& color = m_World.Materials[i].Color;
+				ImGui::ColorButton("##swatch", ImVec4(color.r, color.g, color.b, 1.0f),
+					ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop, ImVec2(14.0f, 14.0f));
+				ImGui::SameLine();
+
+				const std::string item = "Material " + std::to_string(i);
+				if (ImGui::Selectable(item.c_str(), i == current)) {
+					materialIndex = static_cast<float>(i);
+					changed = true;
+				}
+
+				ImGui::PopID();
+			}
+			ImGui::EndCombo();
+		}
+
+		// Scorciatoia verso l'editor di QUESTO materiale: evita di cambiare tab,
+		// ritrovare l'indice giusto e riaprire l'albero.
+		ImGui::SameLine();
+		ImGui::PushID(label);
+		if (ImGui::SmallButton("Edit"))
+			OpenMaterialEditor(std::clamp(static_cast<int>(materialIndex), 0, count - 1));
+		ImGui::PopID();
+
+		return changed;
+	}
+
+	// Nuovi oggetti nascono davanti alla camera, non nell'origine: altrimenti finirebbero
+	// fuori vista e sembrerebbe che il pulsante non abbia fatto niente.
+	glm::vec3 Application::SpawnPosition() const {
+		return m_Camera.GetPosition() + m_Camera.GetDirection() * 4.0f;
+	}
+
+	// Un oggetto con un MaterialIndex senza corrispondenza indicizzerebbe fuori dal
+	// buffer dei materiali nello shader.
+	int Application::EnsureMaterialExists() {
+		if (m_World.Materials.empty())
+			m_World.Materials.push_back(CreateDefaultDiffuse({ 0.8f, 0.8f, 0.8f, 1.0f }));
+
+		return std::clamp(static_cast<int>(m_NewObjectMaterial), 0, (int)m_World.Materials.size() - 1);
+	}
+
+	void Application::DrawAddObjectMenu() {
+		const glm::vec3 spawn = SpawnPosition();
+
+		if (ImGui::Button("+ Sphere")) {
+			const int material = EnsureMaterialExists();
+
+			Sphere sphere;
+			sphere.Position = glm::vec4(spawn, 0.5f); // la w e' il raggio
+			sphere.MaterialIndex = static_cast<float>(material);
+			m_World.Spheres.push_back(sphere);
+
+			m_Selection = { SelectionType::Sphere, (int)m_World.Spheres.size() - 1 };
+			m_GizmoOperation = ImGuizmo::TRANSLATE;
+			m_Renderer.ResetPathTracingCounter();
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("+ Box")) {
+			const int material = EnsureMaterialExists();
+
+			// CreateBox appende i suoi 6 quad in coda, quindi i Box::index gia' esistenti
+			// restano validi e in ordine crescente, come si aspetta il loop dei Cubes
+			// nello shader (che li scorre in parallelo ai quad).
+			m_World.CreateBox(spawn - glm::vec3(0.5f), spawn + glm::vec3(0.5f), (float)material);
+
+			m_Selection = { SelectionType::Box, (int)m_World.Boxes.size() - 1 };
+			m_GizmoOperation = ImGuizmo::TRANSLATE;
+			m_Renderer.ResetPathTracingCounter();
+		}
+
+		ImGui::SameLine();
+		if (ImGui::Button("+ Quad")) {
+			const int material = EnsureMaterialExists();
+
+			Quad quad;
+			quad.PositionLLC = glm::vec4(spawn - glm::vec3(0.5f, 0.5f, 0.0f), 0.0f);
+			quad.U = { 1.0f, 0.0f, 0.0f, 0.0f };
+			quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
+			quad.Width = 1.0f;
+			quad.Height = 1.0f;
+			quad.MaterialIndex = static_cast<float>(material);
+			m_World.Quads.push_back(quad);
+
+			m_Selection = { SelectionType::Quad, (int)m_World.Quads.size() - 1 };
+			m_GizmoOperation = ImGuizmo::TRANSLATE;
+			m_Renderer.ResetPathTracingCounter();
+		}
+
+		// elenco dei .obj disponibili, letto una volta sola
+		if (m_ModelFiles.empty() && std::filesystem::exists("models")) {
+			for (const auto& entry : std::filesystem::directory_iterator("models"))
+				if (entry.path().extension() == ".obj")
+					m_ModelFiles.push_back(entry.path().filename().string());
+
+			std::sort(m_ModelFiles.begin(), m_ModelFiles.end());
+		}
+
+		if (!m_ModelFiles.empty()) {
+			ImGui::PushItemWidth(160.0f);
+
+			if (ImGui::BeginCombo("##model", m_ModelFiles[m_SelectedModelFile].c_str())) {
+				for (int i = 0; i < (int)m_ModelFiles.size(); i++)
+					if (ImGui::Selectable(m_ModelFiles[i].c_str(), i == m_SelectedModelFile))
+						m_SelectedModelFile = i;
+
+				ImGui::EndCombo();
+			}
+
+			ImGui::PopItemWidth();
+			ImGui::SameLine();
+
+			if (ImGui::Button("+ Mesh")) {
+				const int material = EnsureMaterialExists();
+				const std::string path = "models/" + m_ModelFiles[m_SelectedModelFile];
+
+				// ricostruisce l'INTERO BVH: sui modelli grossi puo' bloccare per qualche secondo
+				const int mesh = m_World.AddMesh(path, spawn, material);
+				if (mesh >= 0) {
+					m_Selection = { SelectionType::Mesh, mesh };
+					m_GizmoOperation = ImGuizmo::TRANSLATE;
+				}
+
+				m_Renderer.ResetPathTracingCounter();
+			}
+		}
+
+		ImGui::PushItemWidth(160.0f);
+		MaterialCombo("Material for new objects", m_NewObjectMaterial);
+		ImGui::PopItemWidth();
+	}
+
+	// ------------------------------------------------------------ UI: tab Materials
+
+	// Corpo dell'editor, condiviso fra il tab Materials e la finestra flottante:
+	// due copie divergerebbero al primo campo aggiunto.
+	void Application::DrawMaterialEditor(Material& material, int index) {
+		if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color))) {
+			if (m_LinkColors) {
+				material.RefractionColor = material.Color;
+				material.SpecularColor = material.Color;
+			}
+			m_Renderer.ResetPathTracingCounter();
+		}
+
+		if (!m_LinkColors) {
+			if (ImGui::ColorEdit3("Specular Color", glm::value_ptr(material.SpecularColor))) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::ColorEdit3("Refraction Color", glm::value_ptr(material.RefractionColor))) m_Renderer.ResetPathTracingCounter();
+		}
+
+		ImGui::SeparatorText("Surface");
+		if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+		if (ImGui::DragFloat("Specular Probability", &material.SpecularProbability, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+
+		ImGui::SeparatorText("Refraction");
+		if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.01f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
+		if (ImGui::DragFloat("Refraction Probability", &material.RefractionProbability, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+		if (ImGui::DragFloat("Refraction Roughness", &material.RefractionRoughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+
+		ImGui::SeparatorText("Emission");
+		if (ImGui::DragFloat("Emissive Strength", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
+		if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
+
+		ImGui::SeparatorText("Albedo");
+		int checkerMode = static_cast<int>(material.Checker + 0.5f);
+		if (ImGui::Combo("Checker", &checkerMode, "Off\0UV (debug)\0World space\0\0")) {
+			material.Checker = static_cast<float>(checkerMode);
+			m_Renderer.ResetPathTracingCounter();
+		}
+		if (checkerMode != 0) {
+			if (ImGui::DragFloat("Checker scale", &material.CheckerScale, 0.1f, 0.01f, 64.0f))
+				m_Renderer.ResetPathTracingCounter();
+		}
+
+		// -1 = nessuna texture; gli altri valori indicizzano i layer di TexturePaths.
+		// Con min == max ImGui disattiva il clamping, quindi senza texture
+		// il drag va nascosto del tutto invece che lasciato libero di sforare.
+		const int layerCount = static_cast<int>(m_World.TexturePaths.size());
+		if (layerCount > 0) {
+			if (ImGui::DragFloat("Albedo texture layer", &material.AlbedoTexture, 1.0f, -1.0f, (float)(layerCount - 1)))
+				m_Renderer.ResetPathTracingCounter();
+		}
+		else {
+			material.AlbedoTexture = -1.0f;
+			ImGui::TextDisabled("(nessuna texture caricata in questa scena)");
+		}
+
+		if (checkerMode != 0 && material.SpecularProbability > 0.5f)
+			ImGui::TextDisabled("Specular Probability alta: l'albedo si vede poco");
+
+		ImGui::Spacing();
+		ImGui::TextDisabled("Material %d", index);
+	}
+
+	void Application::OpenMaterialEditor(int index) {
+		m_MaterialEditorIndex = index;
+		m_ShowMaterialEditor = true;
+	}
+
+	// Finestra flottante sul materiale dell'oggetto selezionato.
+	void Application::DrawMaterialEditorWindow() {
+		if (!m_ShowMaterialEditor)
+			return;
+
+		// L'indice puo' essere diventato invalido (cambio scena): e' esattamente la classe
+		// di bug che ha fatto crashare la selezione, quindi stesso trattamento.
+		if (m_MaterialEditorIndex < 0 || m_MaterialEditorIndex >= (int)m_World.Materials.size()) {
+			m_ShowMaterialEditor = false;
+			return;
+		}
+
+		ImGui::SetNextWindowSize(ImVec2(340.0f, 0.0f), ImGuiCond_FirstUseEver);
+
+		// il "###" fissa l'ID della finestra mentre il titolo cambia con l'indice
+		const std::string title = "Material " + std::to_string(m_MaterialEditorIndex) + "###MaterialEditor";
+
+		if (ImGui::Begin(title.c_str(), &m_ShowMaterialEditor)) {
+			ImGui::PushItemWidth(170.0f);
+			DrawMaterialEditor(m_World.Materials[m_MaterialEditorIndex], m_MaterialEditorIndex);
+			ImGui::PopItemWidth();
+		}
+
+		ImGui::End();
+	}
+
+	void Application::DrawMaterialsTab() {
+		ImGui::Spacing();
+
+		if (ImGui::Button("+ Add material")) {
+			m_World.Materials.push_back(CreateDefaultDiffuse({ 0.8f, 0.8f, 0.8f, 1.0f }));
+			OpenMaterialEditor((int)m_World.Materials.size() - 1);
+			m_Renderer.ResetPathTracingCounter();
+		}
+		ImGui::SameLine();
+		ImGui::Checkbox("Linked Colors", &m_LinkColors);
+
+		if (m_World.Materials.empty()) {
+			ImGui::TextDisabled("nessun materiale in questa scena");
+			return;
+		}
+
+		ImGui::Spacing();
+		ImGui::PushItemWidth(200.0f);
+
+		for (size_t i = 0; i < m_World.Materials.size(); i++) {
+			Material& material = m_World.Materials.at(i);
+
+			ImGui::PushID((int)i);
+
+			// pastiglia del colore accanto al nome: si riconosce il materiale a colpo d'occhio
+			ImGui::ColorButton("##swatch", ImVec4(material.Color.r, material.Color.g, material.Color.b, 1.0f),
+				ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop, ImVec2(14.0f, 14.0f));
+			ImGui::SameLine();
+
+			if (ImGui::TreeNode(("Material " + std::to_string(i)).c_str())) {
+				DrawMaterialEditor(material, (int)i);
+				ImGui::TreePop();
+			}
+
+			ImGui::PopID();
+		}
+
+		ImGui::PopItemWidth();
+	}
+
+	// --------------------------------------------------------------- UI: tab Render
+
+	void Application::DrawRenderTab() {
+		ImGui::Spacing();
+		ImGui::PushItemWidth(200.0f);
+
+		ImGui::SeparatorText("Path tracing");
+		ImGui::Checkbox("Enable Path Tracing", &m_Renderer.PathTracing);
+		if (ImGui::SliderInt("Samples per pixel", &m_Renderer.m_SamplesPerPixel, 1, 16)) m_Renderer.ResetPathTracingCounter();
+		if (ImGui::SliderInt("Ray depth", &m_Renderer.m_RayDepth, 1, 50)) m_Renderer.ResetPathTracingCounter();
+		if (ImGui::Button("Reset Accumulation")) m_Renderer.ResetPathTracingCounter();
+
+		ImGui::SeparatorText("Output");
+		if (ImGui::Checkbox("Vsync", &m_Vsync))
+			glfwSwapInterval(m_Vsync);
+		ImGui::Checkbox("Post Processing", &m_Renderer.PostProcessing);
+		ImGui::DragFloat("HDR exposure", &m_Renderer.Exposure, 0.01f, 0.0f, 10.0f);
+
+		ImGui::SeparatorText("Camera");
+		if (ImGui::SliderFloat("Vertical FOV", &m_Camera.m_VerticalFOV, 30.0f, 140.0f)) {
+			m_Camera.RecalculateProjection();
+			m_Renderer.ResetPathTracingCounter();
+		}
+		if (ImGui::Button("Reset Camera Position")) {
+			m_Camera.ResetPosition();
+			m_Renderer.ResetPathTracingCounter();
+		}
+		ImGui::TextDisabled("tasto destro + WASD per navigare");
+
+		ImGui::PopItemWidth();
+
+		ImGui::SeparatorText("OpenGL");
+		ImGui::TextDisabled("Vendor:   %s", glGetString(GL_VENDOR));
+		ImGui::TextDisabled("Renderer: %s", glGetString(GL_RENDERER));
+		ImGui::TextDisabled("Version:  %s", glGetString(GL_VERSION));
+	}
+
+	// ---------------------------------------------------------------- UI: tab Debug
+
+	void Application::DrawDebugTab() {
+		ImGui::Spacing();
+
+		ImGui::SeparatorText("BVH");
+		if (ImGui::Checkbox("BVH Heatmap", &m_Renderer.BVHDebug))
+			m_Renderer.ResetPathTracingCounter();
+
+		if (m_Renderer.BVHDebug) {
+			ImGui::TextDisabled("blu = poche ricerche, rosso = molte");
+			ImGui::TextDisabled("disattiva Post Processing per i colori reali");
+			ImGui::SliderFloat("Heat scale", &m_Renderer.BVHHeatScale, 1.0f, 256.0f);
+		}
+
+		ImGui::SeparatorText("Picking");
+		ImGui::Text("hovered window : %s", HoveredWindowName());
+		ImGui::Text("viewport hover : %s", m_ViewportHovered ? "SI" : "NO");
+		ImGui::Text("viewport rect  : (%.0f,%.0f) %.0f x %.0f",
+			m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
+		ImGui::Text("richieste pick : %d", m_PickRequestCount);
+		ImGui::Text("ultimo pixel   : (%d, %d)", m_LastPickPixel.x, m_LastPickPixel.y);
+		ImGui::Text("ultimo esito   : type=%d index=%d", m_LastPickType, m_LastPickIndex);
+		ImGui::TextDisabled("-2 = lo shader non ha scritto, -1 = raggio a vuoto");
+
+		// Bypassa il gate del mouse: se questo seleziona ma il click no, il problema
+		// e' nel gate; se non seleziona nemmeno questo, e' nella pipeline di picking.
+		if (ImGui::Button("Pick al centro della viewport")) {
+			m_LastPickPixel = { (int)m_ViewportSize.x / 2, (int)m_ViewportSize.y / 2 };
+			m_PickRequestCount++;
+			m_Renderer.RequestPick(m_LastPickPixel.x, m_LastPickPixel.y);
+		}
 	}
 
 	// Dove ancorare il gizmo: il centro VISIVO dell'oggetto, non l'origine della sua
@@ -848,6 +1159,7 @@ namespace PathTracer {
 
 	void Application::UpdateSelection() {
 		ImGuiIO& io = ImGui::GetIO();
+
 
 
 

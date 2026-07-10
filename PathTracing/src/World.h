@@ -35,6 +35,11 @@ namespace PathTracer {
 		void LoadScene();
 		void DestroyScene();
 		void SetMeshTransform(int meshIndex, const glm::mat4& transform);
+
+		// Creazione a runtime. Sono tutte APPEND: gli indici gia' in giro (selezione,
+		// MaterialIndex degli oggetti, Box::index) restano validi.
+		void CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex);
+		int AddMesh(const std::string& objPath, const glm::vec3& position, int material);
 	public:
 		glm::vec3 BackgroundColor;
         std::vector<Test> Tests;
@@ -71,7 +76,6 @@ namespace PathTracer {
 		void BuildBVH();
 		int ComputeBVHDepth(int rootNode) const;
 
-		void CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex);
 		void CreateCornellBox();
 	};
 }
