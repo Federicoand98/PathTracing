@@ -754,6 +754,37 @@ namespace PathTracer {
 		if (checkerMode != 0 && material.SpecularProbability > 0.5f)
 			ImGui::TextDisabled("Specular Probability alta: l'albedo si vede poco");
 
+		ImGui::SeparatorText("Procedural noise");
+		int noiseMode = static_cast<int>(material.NoiseType + 0.5f);
+		if (ImGui::Combo("Noise", &noiseMode, "Off\0Perlin\0Turbulence\0Marble\0\0")) {
+			material.NoiseType = static_cast<float>(noiseMode);
+			m_Renderer.ResetPathTracingCounter();
+		}
+		if (noiseMode != 0) {
+			if (ImGui::DragFloat("Noise scale", &material.NoiseScale, 0.05f, 0.01f, 64.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::SliderFloat("Noise blend", &material.NoiseBlend, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+
+			// Turbulence e Marble sommano ottave: il costo per raggio e' lineare in questo
+			// valore, e viene pagato a ogni rimbalzo su questo materiale.
+			if (noiseMode >= 2) {
+				int octaves = static_cast<int>(material.NoiseOctaves + 0.5f);
+				if (ImGui::SliderInt("Octaves", &octaves, 1, 8)) {
+					material.NoiseOctaves = static_cast<float>(octaves);
+					m_Renderer.ResetPathTracingCounter();
+				}
+			}
+			// La fase e' quello che trasforma il rumore in venature: senza, il marmo e' nebbia.
+			if (noiseMode == 3) {
+				if (ImGui::DragFloat("Turbulence phase", &material.NoiseTurbulence, 0.1f, 0.0f, 40.0f))
+					m_Renderer.ResetPathTracingCounter();
+			}
+
+			if (ImGui::ColorEdit3("Noise color A", glm::value_ptr(material.NoiseColorA))) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::ColorEdit3("Noise color B", glm::value_ptr(material.NoiseColorB))) m_Renderer.ResetPathTracingCounter();
+
+			ImGui::TextDisabled("Valutato in world space: l'oggetto \"scorre\" nel rumore se lo sposti");
+		}
+
 		ImGui::Spacing();
 		ImGui::TextDisabled("Material %d", index);
 	}

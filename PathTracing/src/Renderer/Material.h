@@ -28,12 +28,22 @@ namespace PathTracer {
 		float AlbedoTexture = -1.0f; // layer nel sampler2DArray, -1 = nessuna texture
 		float Checker = 0.0f;        // 0 = off, 1 = scacchiera UV, 2 = scacchiera world-space
 		float CheckerScale = 8.0f;   // celle per unita' di UV (o di spazio, se world-space)
-		float _pad1 = 0.0f;          // porta la dimensione a 112, multiplo di 16
+
+		// Rumore procedurale valutato in world space (non usa le UV: e' una texture di
+		// volume, quindi funziona anche su mesh senza parametrizzazione decente).
+		float NoiseType = 0.0f;       // 0 = off, 1 = perlin, 2 = turbolenza, 3 = marmo
+		float NoiseScale = 4.0f;      // frequenza: quante celle di rumore per unita' di mondo
+		float NoiseBlend = 1.0f;      // 0 = albedo di base, 1 = solo rumore
+		float NoiseOctaves = 5.0f;    // ottave della turbolenza (costo lineare!)
+		float NoiseTurbulence = 10.0f;// peso della turbolenza nella fase del marmo
+		glm::vec4 NoiseColorA{ 0.08f, 0.06f, 0.05f, 1.0f }; // rumore = 0
+		glm::vec4 NoiseColorB{ 0.85f, 0.80f, 0.75f, 1.0f }; // rumore = 1
 	};
 
-	static_assert(sizeof(Material) == 112, "Material deve essere 112 byte per combaciare con lo std430");
+	static_assert(sizeof(Material) == 160, "Material deve essere 160 byte per combaciare con lo std430");
 	static_assert(offsetof(Material, RefractionColor) == 80, "RefractionColor deve stare a 80 (std430 allinea i vec4 a 16)");
 	static_assert(offsetof(Material, AlbedoTexture) == 96, "AlbedoTexture deve stare a 96");
+	static_assert(offsetof(Material, NoiseColorA) == 128, "NoiseColorA deve stare a 128 (std430 allinea i vec4 a 16)");
 
 	static Material CreateDefaultDiffuse(glm::vec4 color = {0.4f, 0.2, 0.1f, 1.0f}) {
 		Material m;
