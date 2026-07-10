@@ -17,6 +17,7 @@ namespace PathTracer {
 
 		std::vector<Triangle*> GetTriangles() const { return m_Triangles; }
 		int GetTrianglesCount() const { return m_TriangleCount; }
+		const std::string& GetName() const { return m_Name; }
 		glm::vec4 GetBoundsMin() const { return m_BoundsMin; }
 		glm::vec4 GetBoundsMax() const { return m_BoundsMax; }
 	private:
@@ -25,6 +26,7 @@ namespace PathTracer {
 		void CleanTrash();
 	private:
 		int m_TriangleCount = 0;
+		std::string m_Name;
 		std::vector<glm::vec3*> m_Vertices;
 		std::vector<glm::vec3*> m_Normals;
 		std::vector<Face*> m_Faces;

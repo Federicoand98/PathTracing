@@ -21,6 +21,7 @@ namespace PathTracer {
 		unsigned int ssbo_cubes;
 		unsigned int ssbo_idx;
 		unsigned int ssbo_bvh;
+		unsigned int ssbo_pick;
 
 		ComputeShader(const char* path) {
 			std::string computeCode;
@@ -65,6 +66,26 @@ namespace PathTracer {
 			glGenBuffers(1, &ssbo_cubes);
 			glGenBuffers(1, &ssbo_idx);
 			glGenBuffers(1, &ssbo_bvh);
+			glGenBuffers(1, &ssbo_pick);
+
+			ResetPickBuffer();
+		}
+
+		// Azzera il risultato prima del dispatch. La sentinella e' -2, non -1: cosi'
+		// "lo shader non ha scritto" (-2) si distingue da "raggio a vuoto" (-1).
+		void ResetPickBuffer() {
+			const int empty[2] = { -2, -2 };
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_pick);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(empty), empty, GL_DYNAMIC_DRAW);
+		}
+
+		void ReadPickBuffer(int& objectType, int& objectIndex) {
+			int result[2] = { -1, -1 };
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_pick);
+			glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(result), result);
+
+			objectType = result[0];
+			objectIndex = result[1];
 		}
 		
 		void Bind() {
@@ -81,6 +102,10 @@ namespace PathTracer {
 
 		void SetInt(const std::string& name, int value) const {
 			glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
+		}
+
+		void SetIVec2(const std::string& name, int x, int y) const {
+			glUniform2i(glGetUniformLocation(ID, name.c_str()), x, y);
 		}
 
 		void SetFloat(const std::string& name, float value) const {
@@ -105,6 +130,7 @@ namespace PathTracer {
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 6, ssbo_bvh);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, ssbo_idx);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ssbo_tn);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, ssbo_pick);
 		}
 
 		void UpdateWorldBuffer(const World& world, bool fullReset = false) {

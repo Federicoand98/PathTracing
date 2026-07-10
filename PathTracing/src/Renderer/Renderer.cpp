@@ -35,11 +35,20 @@ namespace PathTracer {
 		m_RenderedImage->Bind();
 		m_RenderedImage->AttachImage(0, 0);
 
-		ComputeUniformContainer container = { m_Width, m_Height, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, *m_World, *m_Camera };
+		glm::ivec2 pickPixel = m_PickRequested ? glm::ivec2(m_PickX, m_PickY) : glm::ivec2(-1, -1);
+
+		ComputeUniformContainer container = { m_Width, m_Height, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, pickPixel, *m_World, *m_Camera };
 
 		m_PathTracer->Begin();
 		m_PathTracer->UploadUniforms(container);
 		m_PathTracer->DispatchCompute(m_Width, m_Height);
+
+		if (m_PickRequested) {
+			m_PathTracer->ReadPickResult(m_PickType, m_PickIndex);
+			m_PickRequested = false;
+			m_PickAvailable = true;
+		}
+
 		m_PathTracer->End();
 
 		glViewport(0, 0, m_Width, m_Height);

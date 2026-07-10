@@ -42,9 +42,12 @@ namespace PathTracer {
 
     class BVH {
     public:
-        explicit BVH(const std::vector<Triangle>& triangles)
-            : tris(&triangles) {
-            const int N = static_cast<int>(triangles.size());
+        // Costruisce un BVH sul sotto-range [firstTriangle, firstTriangle + count) di
+        // 'triangles'. Gli indici restituiti da GetTrianglesIndices() sono LOCALI al
+        // range (0..count-1): chi chiama li rimappa a indici globali.
+        BVH(const std::vector<Triangle>& triangles, int firstTriangle, int count)
+            : tris(&triangles), firstTri(firstTriangle) {
+            const int N = count;
             if (N == 0) return;
 
             nodes.resize(static_cast<size_t>(2 * N));
@@ -52,7 +55,8 @@ namespace PathTracer {
             centroids.reserve(N);
             triangleIndices.reserve(N);
             for (int i = 0; i < N; i++) {
-                centroids.push_back(glm::vec3(triangles[i].A + triangles[i].B + triangles[i].C) / 3.0f);
+                const Triangle& t = triangles[firstTriangle + i];
+                centroids.push_back(glm::vec3(t.A + t.B + t.C) / 3.0f);
                 triangleIndices.push_back(i);
             }
 
@@ -75,13 +79,16 @@ namespace PathTracer {
             int triCount = 0;
         };
 
+        // triangleIndices contiene indici locali al range: qui li si riporta a globali
+        const Triangle& Tri(int localIndex) const { return (*tris)[firstTri + localIndex]; }
+
         void UpdateNodeBounds(int nodeIndex) {
             BVHNodeNew& node = nodes[nodeIndex];
             node.aabbMin = glm::vec3(1e30f);
             node.aabbMax = glm::vec3(-1e30f);
 
             for (int i = 0; i < node.triCount; i++) {
-                const Triangle& leaf = (*tris)[triangleIndices[node.left + i]];
+                const Triangle& leaf = Tri(triangleIndices[node.left + i]);
 
                 node.aabbMin = glm::min(node.aabbMin, glm::vec3(leaf.A));
                 node.aabbMin = glm::min(node.aabbMin, glm::vec3(leaf.B));
@@ -123,7 +130,7 @@ namespace PathTracer {
 
                 for (int i = 0; i < node.triCount; i++) {
                     int triIdx = triangleIndices[node.left + i];
-                    const Triangle& tri = (*tris)[triIdx];
+                    const Triangle& tri = Tri(triIdx);
 
                     int binIdx = std::min(BINS - 1, static_cast<int>((centroids[triIdx][axis] - boundsMin) * scale));
                     bins[binIdx].triCount++;
@@ -211,6 +218,7 @@ namespace PathTracer {
 
         std::vector<BVHNodeNew> nodes;
         const std::vector<Triangle>* tris = nullptr; // riferimento: niente copia da 18 MB
+        int firstTri = 0;
         std::vector<glm::vec3> centroids;
         std::vector<int> triangleIndices;
         int rootNodeIndex = 0;

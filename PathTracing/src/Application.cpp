@@ -1,11 +1,45 @@
 #include "stb_image_write.h"
 #include "Application.h"
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include "imgui_internal.h"
+#include "Input.h"
 #include "Random.h"
 
 namespace PathTracer {
 
 	static Application* s_Instance = nullptr;
+
+	namespace {
+		// Il dockspace copre l'intera viewport, quindi io.WantCaptureMouse sarebbe sempre
+		// vero e il picking non scatterebbe mai. Non possiamo pero' riconoscere il
+		// dockspace dal nome: quando il mouse e' su un dock node, ImGui riporta una
+		// finestra host interna con nome generato ("DockSpace Demo/DockSpace_0000001A").
+		// Usiamo invece i flag: il dockspace ha NoBringToFrontOnFocus, i pannelli no.
+		const char* HoveredWindowName() {
+			ImGuiWindow* hovered = ImGui::GetCurrentContext()->HoveredWindow;
+			return hovered ? hovered->Name : "(nessuna)";
+		}
+
+		// Proietta un punto world sullo schermo. Ritorna false se sta dietro la camera:
+		// dividere per una w negativa produrrebbe un punto ribaltato davanti all'occhio.
+		bool WorldToScreen(const glm::mat4& viewProjection, const glm::vec3& point,
+						   const ImVec2& viewportPos, const ImVec2& viewportSize, ImVec2& outScreen) {
+			glm::vec4 clip = viewProjection * glm::vec4(point, 1.0f);
+			if (clip.w <= 1e-6f)
+				return false;
+
+			glm::vec3 ndc = glm::vec3(clip) / clip.w;
+			outScreen = ImVec2(viewportPos.x + (ndc.x * 0.5f + 0.5f) * viewportSize.x,
+							   viewportPos.y + (1.0f - (ndc.y * 0.5f + 0.5f)) * viewportSize.y);
+			return true;
+		}
+
+		void DrawTextWithShadow(ImDrawList* drawList, const ImVec2& pos, ImU32 color, const char* text) {
+			drawList->AddText(ImVec2(pos.x + 1.0f, pos.y + 1.0f), IM_COL32(0, 0, 0, 200), text);
+			drawList->AddText(pos, color, text);
+		}
+	}
 
 	Application::Application() : m_Window(nullptr), m_Height(900), m_Width(1600), m_IsRunning(true),
 								 m_Camera(45.0f, 0.1f, 100.0f) {
@@ -149,6 +183,7 @@ namespace PathTracer {
 			glClear(GL_COLOR_BUFFER_BIT);
 
 			ImGui::NewFrame();
+			ImGuizmo::BeginFrame();
 
 			{
 				static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
@@ -182,7 +217,9 @@ namespace PathTracer {
 			}
 
 			// Rendering
+			// RenderUI disegna la finestra "Viewport", e con essa overlay e gizmo
 			RenderUI(m_DeltaTime);
+			UpdateSelection();
 			Render(m_DeltaTime);
 			ImGui::Render();
 
@@ -267,6 +304,33 @@ namespace PathTracer {
 		ImGui::Text("Ray Depth:");
 		if(ImGui::SliderInt("ray", &m_Renderer.m_RayDepth, 1, 50))
 			m_Renderer.ResetPathTracingCounter();
+		ImGui::Spacing();
+		ImGui::Spacing();
+		ImGui::Text("Selection:");
+		ImGui::Text("%s", GetSelectionLabel().c_str());
+		ImGui::TextDisabled("click = seleziona | G/R/S = sposta/ruota/scala | ESC = deseleziona");
+
+		if (ImGui::TreeNode("Picking debug")) {
+			ImGui::Text("hovered window : %s", HoveredWindowName());
+			ImGui::Text("viewport hover : %s", m_ViewportHovered ? "SI" : "NO");
+			ImGui::Text("viewport rect  : (%.0f,%.0f) %.0f x %.0f",
+				m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
+			ImGui::Text("richieste pick : %d", m_PickRequestCount);
+			ImGui::Text("ultimo pixel   : (%d, %d)", m_LastPickPixel.x, m_LastPickPixel.y);
+			ImGui::Text("ultimo esito   : type=%d index=%d  (-2=shader non scrive, -1=nessun hit)",
+				m_LastPickType, m_LastPickIndex);
+
+			// Bypassa il gate del mouse: se questo seleziona ma il click no, il problema
+			// e' nel gate; se non seleziona nemmeno questo, e' nella pipeline di picking.
+			if (ImGui::Button("Pick al centro della viewport")) {
+				m_LastPickPixel = { (int)m_ViewportSize.x / 2, (int)m_ViewportSize.y / 2 };
+				m_PickRequestCount++;
+				m_Renderer.RequestPick(m_LastPickPixel.x, m_LastPickPixel.y);
+			}
+
+			ImGui::TreePop();
+		}
+
 		ImGui::Spacing();
 		ImGui::Spacing();
 		ImGui::Text("BVH Debugger:");
@@ -397,7 +461,14 @@ namespace PathTracer {
 					MeshInfo& mesh = m_World.Meshes.at(i);
 
 					ImGui::PushID(i);
-					if (ImGui::DragFloat3("Position", glm::value_ptr(mesh.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
+					// la traslazione vive nell'ultima colonna della Transform
+					glm::vec3 position = glm::vec3(mesh.Transform[3]);
+					if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f)) {
+						glm::mat4 transform = mesh.Transform;
+						transform[3] = glm::vec4(position, 1.0f);
+						m_World.SetMeshTransform((int)i, transform);
+						m_Renderer.ResetPathTracingCounter();
+					}
 					if (ImGui::DragFloat("Material", &mesh.MaterialIndex, 1.0f, 0, (int)m_World.Materials.size() - 1)) { m_Renderer.ResetPathTracingCounter(); }
 					ImGui::Separator();
 					ImGui::PopID();
@@ -470,8 +541,332 @@ namespace PathTracer {
 				ImVec2(1, 0)
 			);
 
+		// rettangolo dell'immagine: a questo si ancorano picking, gizmo e overlay
+		m_ViewportPos = pos;
+		m_ViewportSize = ImVec2((float)m_ViewportWidth, (float)m_ViewportHeight);
+		m_ViewportHovered = ImGui::IsWindowHovered();
+
+		// disegnati QUI dentro, sulla draw list della finestra "Viewport": la background
+		// draw list starebbe sotto l'immagine e non si vedrebbe nulla
+		DrawSelectionOverlay();
+		DrawGizmo();
+
 		ImGui::End();
 		ImGui::PopStyleVar();
+	}
+
+	// Dove ancorare il gizmo: il centro VISIVO dell'oggetto, non l'origine della sua
+	// parametrizzazione (il pivot di un quad e' l'angolo, quello di una mesh e' l'origine
+	// della sua Transform: entrambi possono cadere lontano dalla geometria).
+	glm::vec3 Application::GetSelectionPivot() const {
+		switch (m_Selection.Type) {
+		case SelectionType::Sphere:
+			return glm::vec3(m_World.Spheres.at(m_Selection.Index).Position);
+		case SelectionType::Quad: {
+			const Quad& q = m_World.Quads.at(m_Selection.Index);
+			return glm::vec3(q.PositionLLC)
+				 + glm::vec3(q.U) * (q.Width * 0.5f)
+				 + glm::vec3(q.V) * (q.Height * 0.5f);
+		}
+		case SelectionType::Box: {
+			const Box& b = m_World.Boxes.at(m_Selection.Index);
+			return 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
+		}
+		case SelectionType::Mesh: {
+			const MeshInfo& m = m_World.Meshes.at(m_Selection.Index);
+			return 0.5f * (glm::vec3(m.BoundsMin) + glm::vec3(m.BoundsMax));
+		}
+		default:
+			return glm::vec3(0.0f);
+		}
+	}
+
+	// AABB world dell'oggetto selezionato, usata per disegnarne il contorno.
+	void Application::GetSelectionBounds(glm::vec3& outMin, glm::vec3& outMax) const {
+		outMin = glm::vec3(0.0f);
+		outMax = glm::vec3(0.0f);
+
+		switch (m_Selection.Type) {
+		case SelectionType::Sphere: {
+			const Sphere& s = m_World.Spheres.at(m_Selection.Index);
+			glm::vec3 center(s.Position);
+			outMin = center - glm::vec3(s.Position.w);
+			outMax = center + glm::vec3(s.Position.w);
+			break;
+		}
+		case SelectionType::Quad: {
+			const Quad& q = m_World.Quads.at(m_Selection.Index);
+			glm::vec3 llc(q.PositionLLC);
+			glm::vec3 edgeU = glm::vec3(q.U) * q.Width;
+			glm::vec3 edgeV = glm::vec3(q.V) * q.Height;
+
+			// AABB dei 4 angoli del quad
+			outMin = outMax = llc;
+			for (const glm::vec3& corner : { llc + edgeU, llc + edgeV, llc + edgeU + edgeV }) {
+				outMin = glm::min(outMin, corner);
+				outMax = glm::max(outMax, corner);
+			}
+			break;
+		}
+		case SelectionType::Box: {
+			const Box& b = m_World.Boxes.at(m_Selection.Index);
+			outMin = glm::vec3(b.Min);
+			outMax = glm::vec3(b.Max);
+			break;
+		}
+		case SelectionType::Mesh: {
+			const MeshInfo& m = m_World.Meshes.at(m_Selection.Index);
+			outMin = glm::vec3(m.BoundsMin); // gia' in world space
+			outMax = glm::vec3(m.BoundsMax);
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	// Sfere e box non sono ruotabili: se e' selezionata la rotazione si ripiega su
+	// translate. Passa da qui sia il gizmo sia l'etichetta, cosi' non possono divergere.
+	ImGuizmo::OPERATION Application::EffectiveGizmoOperation() const {
+		if (m_GizmoOperation == ImGuizmo::ROTATE && !m_Selection.SupportsRotation())
+			return ImGuizmo::TRANSLATE;
+
+		return m_GizmoOperation;
+	}
+
+	std::string Application::GetSelectionLabel() const {
+		if (!m_Selection.IsValid())
+			return "Nessuna selezione  -  click su un oggetto per selezionarlo";
+
+		const ImGuizmo::OPERATION effective = EffectiveGizmoOperation();
+		const char* operation = effective == ImGuizmo::ROTATE ? "Rotate"
+							  : effective == ImGuizmo::SCALE  ? "Scale" : "Translate";
+
+		std::string name;
+		switch (m_Selection.Type) {
+		case SelectionType::Sphere: name = "Sphere"; break;
+		case SelectionType::Quad:   name = "Quad";   break;
+		case SelectionType::Box:    name = "Box";    break;
+		case SelectionType::Mesh:
+			name = "Mesh";
+			if (m_Selection.Index < (int)m_World.MeshNames.size())
+				name += " \"" + m_World.MeshNames[m_Selection.Index] + "\"";
+			break;
+		default: name = "?"; break;
+		}
+
+		std::string label = name + " #" + std::to_string(m_Selection.Index) + "  -  " + operation;
+		if (!m_Selection.SupportsRotation())
+			label += "  (no rotazione)";
+
+		return label;
+	}
+
+	// Etichetta a schermo + contorno dell'AABB: feedback immediato su cosa e' selezionato,
+	// utile perche' il gizmo da solo puo' finire fuori vista (es. la sfera-terreno).
+	void Application::DrawSelectionOverlay() {
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+		const ImU32 accent = m_Selection.IsValid() ? IM_COL32(255, 170, 40, 255) : IM_COL32(180, 180, 180, 200);
+		std::string label = GetSelectionLabel();
+		DrawTextWithShadow(drawList, ImVec2(m_ViewportPos.x + 14.0f, m_ViewportPos.y + 14.0f), accent, label.c_str());
+
+		if (!m_Selection.IsValid())
+			return;
+
+		glm::vec3 boundsMin, boundsMax;
+		GetSelectionBounds(boundsMin, boundsMax);
+
+		glm::mat4 viewProjection = m_Camera.GetProjection() * m_Camera.GetView();
+
+		// gli 8 angoli: il bit i-esimo sceglie min/max sull'asse i
+		ImVec2 corners[8];
+		bool visible[8];
+		for (int i = 0; i < 8; i++) {
+			glm::vec3 corner((i & 1) ? boundsMax.x : boundsMin.x,
+							 (i & 2) ? boundsMax.y : boundsMin.y,
+							 (i & 4) ? boundsMax.z : boundsMin.z);
+			visible[i] = WorldToScreen(viewProjection, corner, m_ViewportPos, m_ViewportSize, corners[i]);
+		}
+
+		// i 12 spigoli collegano angoli che differiscono per un solo bit
+		static const int edges[12][2] = {
+			{0,1},{0,2},{0,4},{1,3},{1,5},{2,3},
+			{2,6},{3,7},{4,5},{4,6},{5,7},{6,7}
+		};
+
+		for (const auto& edge : edges) {
+			// se un estremo sta dietro la camera lo spigolo andrebbe clippato: lo saltiamo
+			if (visible[edge[0]] && visible[edge[1]])
+				drawList->AddLine(corners[edge[0]], corners[edge[1]], accent, 1.5f);
+		}
+
+		ImVec2 pivot;
+		if (WorldToScreen(viewProjection, GetSelectionPivot(), m_ViewportPos, m_ViewportSize, pivot))
+			drawList->AddCircleFilled(pivot, 4.0f, accent);
+	}
+
+	// 'delta' e' una trasformazione affine world-space: per un punto p, p' = delta * p.
+	// Applicare il delta (invece di ricostruire una matrice assoluta) permette di ancorare
+	// il gizmo dove vogliamo senza dover reinventare la parametrizzazione di ogni primitiva.
+	void Application::ApplyDelta(const glm::mat4& delta) {
+		const glm::mat3 linear(delta); // parte lineare: rotazione + scala
+
+		// fattori di scala per asse = lunghezza delle colonne della parte lineare
+		const glm::vec3 axisScale(glm::length(linear[0]), glm::length(linear[1]), glm::length(linear[2]));
+
+		switch (m_Selection.Type) {
+		case SelectionType::Sphere: {
+			Sphere& s = m_World.Spheres.at(m_Selection.Index);
+			glm::vec3 center = glm::vec3(delta * glm::vec4(glm::vec3(s.Position), 1.0f));
+
+			// una sfera ha un solo raggio: la scala puo' essere solo uniforme
+			float uniformScale = (axisScale.x + axisScale.y + axisScale.z) / 3.0f;
+			s.Position = glm::vec4(center, glm::max(s.Position.w * uniformScale, 1e-4f));
+			break;
+		}
+		case SelectionType::Quad: {
+			Quad& q = m_World.Quads.at(m_Selection.Index);
+
+			// i lati del quad sono U*Width e V*Height: si trasformano come direzioni
+			glm::vec3 edgeU = linear * (glm::vec3(q.U) * q.Width);
+			glm::vec3 edgeV = linear * (glm::vec3(q.V) * q.Height);
+
+			float width = glm::length(edgeU);
+			float height = glm::length(edgeV);
+			if (width < 1e-6f || height < 1e-6f)
+				break; // quad degenere: ignoriamo la manipolazione
+
+			q.PositionLLC = glm::vec4(glm::vec3(delta * glm::vec4(glm::vec3(q.PositionLLC), 1.0f)), 0.0f);
+			q.Width = width;
+			q.Height = height;
+			q.U = glm::vec4(edgeU / width, 0.0f);
+			q.V = glm::vec4(edgeV / height, 0.0f);
+			break;
+		}
+		case SelectionType::Box: {
+			Box& b = m_World.Boxes.at(m_Selection.Index);
+			glm::vec3 center = 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
+			glm::vec3 size = glm::vec3(b.Max) - glm::vec3(b.Min);
+
+			center = glm::vec3(delta * glm::vec4(center, 1.0f));
+			// il box e' axis-aligned: si puo' scalare, non ruotare
+			// UpdateBox normalizza gli assi, quindi una dimensione nulla darebbe NaN
+			size = glm::max(size * axisScale, glm::vec3(1e-3f));
+
+			b.Min = glm::vec4(center - size * 0.5f, 0.0f);
+			b.Max = glm::vec4(center + size * 0.5f, 0.0f);
+			b.UpdateBox(m_World.Quads); // riscrive i 6 quad che compongono il box
+			break;
+		}
+		case SelectionType::Mesh: {
+			// nessuna ricostruzione del BVH: cambia solo la trasformazione dell'istanza
+			const MeshInfo& mesh = m_World.Meshes.at(m_Selection.Index);
+			m_World.SetMeshTransform(m_Selection.Index, delta * mesh.Transform);
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	void Application::SetSelectionFromPick(int objectType, int objectIndex) {
+		if (objectType < 0 || objectIndex < 0) {
+			m_Selection = {};
+			return;
+		}
+
+		// lo shader non conosce i box: riporta l'indice del quad colpito, e i 6 quad
+		// consecutivi a partire da Box::index appartengono a quel box
+		if (objectType == static_cast<int>(SelectionType::Quad)) {
+			for (size_t b = 0; b < m_World.Boxes.size(); b++) {
+				int firstQuad = static_cast<int>(m_World.Boxes[b].index);
+				if (objectIndex >= firstQuad && objectIndex < firstQuad + 6) {
+					m_Selection = { SelectionType::Box, static_cast<int>(b) };
+					return;
+				}
+			}
+		}
+
+		m_Selection = { static_cast<SelectionType>(objectType), objectIndex };
+	}
+
+	void Application::UpdateSelection() {
+		ImGuiIO& io = ImGui::GetIO();
+
+
+
+		// Le scorciatoie non devono agire mentre si scrive in un widget o si naviga con
+		// la camera (tasto destro + WASD). Il test giusto e' WantTextInput: con
+		// NavEnableKeyboard attivo, WantCaptureKeyboard resta sempre vero e bloccherebbe
+		// ogni scorciatoia.
+		if (!io.WantTextInput && !Input::IsMouseButtonDown(MouseButton::Right)) {
+			if (ImGui::IsKeyPressed(ImGuiKey_G)) m_GizmoOperation = ImGuizmo::TRANSLATE;
+			if (ImGui::IsKeyPressed(ImGuiKey_R)) m_GizmoOperation = ImGuizmo::ROTATE;
+			if (ImGui::IsKeyPressed(ImGuiKey_S)) m_GizmoOperation = ImGuizmo::SCALE;
+			if (ImGui::IsKeyPressed(ImGuiKey_Escape)) m_Selection = {};
+		}
+
+		// il gizmo ha la precedenza sul picking: trascinarlo non deve deselezionare
+		const bool gizmoBusy = m_Selection.IsValid() && (ImGuizmo::IsOver() || ImGuizmo::IsUsing());
+
+		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_ViewportHovered && !gizmoBusy) {
+			ImVec2 mouse = ImGui::GetMousePos();
+
+			// coordinate locali al rettangolo dell'immagine, non alla finestra OS
+			float localX = mouse.x - m_ViewportPos.x;
+			float localY = mouse.y - m_ViewportPos.y;
+
+			if (localX >= 0.0f && localY >= 0.0f && localX < m_ViewportSize.x && localY < m_ViewportSize.y) {
+				int px = static_cast<int>(localX);
+				// AddImage campiona con V ribaltata (0,1)->(1,0): la riga 0 dell'immagine
+				// del compute sta in BASSO, mentre il mouse ha origine in alto
+				int py = static_cast<int>(m_ViewportSize.y - 1.0f - localY);
+
+				m_LastPickPixel = { px, py };
+				m_PickRequestCount++;
+				m_Renderer.RequestPick(px, py);
+			}
+		}
+
+		// il risultato e' pronto il frame dopo la richiesta
+		int pickedType, pickedIndex;
+		if (m_Renderer.ConsumePickResult(pickedType, pickedIndex)) {
+			m_LastPickType = pickedType;
+			m_LastPickIndex = pickedIndex;
+
+			SetSelectionFromPick(pickedType, pickedIndex);
+			if (m_Selection.IsValid())
+				m_GizmoOperation = ImGuizmo::TRANSLATE; // default alla selezione, come Blender
+		}
+	}
+
+	void Application::DrawGizmo() {
+		if (!m_Selection.IsValid())
+			return;
+
+		ImGuizmo::SetOrthographic(false);
+		// draw list della finestra "Viewport": e' li' che vive l'immagine path-traced
+		ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+		ImGuizmo::SetRect(m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
+
+		const ImGuizmo::OPERATION operation = EffectiveGizmoOperation();
+
+		// Mentre si trascina, la matrice deve conservare lo stato accumulato da ImGuizmo;
+		// appena si rilascia, la si ri-ancora al centro corrente dell'oggetto.
+		if (!ImGuizmo::IsUsing())
+			m_GizmoMatrix = glm::translate(glm::mat4(1.0f), GetSelectionPivot());
+
+		glm::mat4 view = m_Camera.GetView();
+		glm::mat4 projection = m_Camera.GetProjection();
+		glm::mat4 delta(1.0f);
+
+		if (ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection),
+								 operation, ImGuizmo::WORLD,
+								 glm::value_ptr(m_GizmoMatrix), glm::value_ptr(delta))) {
+			ApplyDelta(delta);
+			m_Renderer.ResetPathTracingCounter(); // la scena e' cambiata: riparte l'accumulo
+		}
 	}
 
 	void Application::Render(float deltaTime) {

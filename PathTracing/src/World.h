@@ -34,6 +34,7 @@ namespace PathTracer {
 
 		void LoadScene();
 		void DestroyScene();
+		void SetMeshTransform(int meshIndex, const glm::mat4& transform);
 	public:
 		glm::vec3 BackgroundColor;
         std::vector<Test> Tests;
@@ -42,6 +43,7 @@ namespace PathTracer {
 		std::vector<Box> Boxes;
 		std::vector<Material> Materials;
 		std::vector<MeshInfo> Meshes;
+		std::vector<std::string> MeshNames;       // solo CPU, per la UI
 		std::vector<Triangle> Triangles;          // authoring CPU, sorgente per il BVH
 		std::vector<TrianglePosition> TriPositions; // caricati sulla GPU (binding 3)
 		std::vector<TriangleNormal> TriNormals;    // caricate sulla GPU (binding 8)
@@ -65,6 +67,7 @@ namespace PathTracer {
 
 		void UploadModel(const Model& model, const glm::vec3& Position, int material);
 		void BuildBVH();
+		int ComputeBVHDepth(int rootNode) const;
 
 		void CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex);
 		void CreateCornellBox();

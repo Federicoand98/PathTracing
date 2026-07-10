@@ -48,12 +48,16 @@ struct CubeInfo {
 };
 
 struct MeshInfo {
-    vec4 Position;
-    vec4 BoundsMin;
+    mat4 Transform;
+    mat4 InvTransform;
+    vec4 BoundsMin;   // AABB in world space
     vec4 BoundsMax;
+    vec4 LocalMin;
+    vec4 LocalMax;
     float FirstTriangle;
     float NumTriangles;
     float MaterialIndex;
+    float RootNode;   // radice del BLAS di questa mesh
 };
 
 // Posizioni e normali sono in due buffer separati: il loop caldo del BVH tocca
@@ -109,7 +113,8 @@ float GetRandomFloat();
 vec3 GetRandomVector(uint seed);
 
 float hitAABB(Ray ray, vec3 invDir, vec3 bmin, vec3 bmax);
-float hitBVH(inout Ray ray, out int hitTriIndex, out float outU, out float outV);
+float hitBVH(inout Ray ray, int rootNode, out int hitTriIndex, out float outU, out float outV);
+float TraceMeshes(inout Ray ray, out int hitTriIndex, out float outU, out float outV);
 vec3 BvhHeatColor(float t);
 
 int rootNodeIndex = 0;
@@ -130,6 +135,7 @@ uniform vec3 BackgroundColor;
 uniform bool EnvironmentMapping;
 uniform int bvhDebug;         // 0 = off, 1 = heatmap del costo di traversata BVH
 uniform float bvhHeatScale;   // n. di nodi visitati che mappa al colore "caldo" (rosso)
+uniform ivec2 pickPixel;      // pixel da campionare per il picking, (-1,-1) = nessuno
 
 layout(std430, binding = 0) buffer SpheresBuffer {
     Sphere Spheres[];
@@ -167,6 +173,13 @@ layout(std430, binding = 8) buffer TriangleNormalsBuffer {
     TriangleNormal TriNormals[];
 };
 
+// Risultato del picking: scritto da una sola invocazione (quella su pickPixel),
+// quindi non serve nessuna atomica.
+layout(std430, binding = 9) buffer PickBuffer {
+    int pickType;   // 0 sfera, 1 quad, 2 mesh, -1 niente
+    int pickIndex;
+};
+
 
 uint rndSeed;
 
@@ -176,6 +189,18 @@ void main() {
 
     rndSeed = gl_GlobalInvocationID.x * 1973 + gl_GlobalInvocationID.y * 9277 + rendererFrame * 2699 | 1;
 
+    // Picking: la sola invocazione che copre il pixel richiesto lancia un raggio
+    // primario non jitterato e riporta l'oggetto colpito. Riusa TraceRay, quindi non
+    // c'e' una seconda implementazione dell'intersezione da tenere in sincrono.
+    if(pickPixel.x >= 0 && texelCoord == pickPixel) {
+        vec2 pickNdc = (vec2(texelCoord) + 0.5) / vec2(imageResultSize) * 2.0 - 1.0;
+        Ray pickRay = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, pickNdc);
+
+        HitInfo pickHit = TraceRay(pickRay);
+        pickType = pickHit.ObjectType;
+        pickIndex = pickHit.ObjectIndex;
+    }
+
     // BVH debugger: colora ogni pixel in base a quanti nodi BVH testa il raggio
     // primario. Bypassa l'accumulazione e scrive direttamente (vista live).
     if(bvhDebug == 1) {
@@ -184,10 +209,10 @@ void main() {
         ray.t = FLOAT_MAX;
 
         gNodeVisits = 0;
-        if(BVHNodes.length() > 0) {
+        {
             int hitTriIndex;
             float outU, outV;
-            hitBVH(ray, hitTriIndex, outU, outV);
+            TraceMeshes(ray, hitTriIndex, outU, outV);
         }
 
         vec3 heat = BvhHeatColor(float(gNodeVisits) / max(bvhHeatScale, 1.0));
@@ -366,13 +391,13 @@ float hitAABB(Ray ray, vec3 invDir, vec3 bmin, vec3 bmax) {
 // Traversata ordinata front-to-back: si scende sempre prima nel figlio piu' vicino,
 // cosi' ray.t si restringe il prima possibile e il figlio lontano viene spesso
 // scartato senza mai essere visitato.
-float hitBVH(inout Ray ray, out int hitTriIndex, out float outU, out float outV) {
+float hitBVH(inout Ray ray, int rootNode, out int hitTriIndex, out float outU, out float outV) {
     const int MAX_STACK = 32;
     int stack[MAX_STACK];
     int stackPtr = 0;
 
     vec3 invDir = 1.0 / ray.Direction;
-    int nodeIndex = rootNodeIndex;
+    int nodeIndex = rootNode;
 
     hitTriIndex = -1;
     outU = 0.0;
@@ -427,6 +452,51 @@ float hitBVH(inout Ray ray, out int hitTriIndex, out float outU, out float outV)
     return hitTriIndex >= 0 ? ray.t : -1.0;
 }
 
+// BVH a due livelli. Invece di trasformare i triangoli nel mondo (che imporrebbe di
+// ribakarli e ricostruire il BVH ad ogni spostamento), si trasforma il RAGGIO nello
+// spazio locale della mesh. La direzione locale NON viene rinormalizzata: cosi' il
+// parametro t resta lo stesso in entrambi gli spazi ed e' direttamente confrontabile.
+float TraceMeshes(inout Ray ray, out int hitTriIndex, out float outU, out float outV) {
+    hitTriIndex = -1;
+    outU = 0.0;
+    outV = 0.0;
+
+    if(BVHNodes.length() == 0)
+        return -1.0;
+
+    vec3 invDirWorld = 1.0 / ray.Direction;
+    float closest = -1.0;
+
+    for(int m = 0; m < Meshes.length(); m++) {
+        MeshInfo mesh = Meshes[m];
+        if(int(mesh.NumTriangles) == 0)
+            continue;
+
+        // reject rapido contro l'AABB della mesh in world space
+        if(hitAABB(ray, invDirWorld, vec3(mesh.BoundsMin), vec3(mesh.BoundsMax)) == FLOAT_MAX)
+            continue;
+
+        Ray local;
+        local.Origin = vec3(mesh.InvTransform * vec4(ray.Origin, 1.0));
+        local.Direction = vec3(mesh.InvTransform * vec4(ray.Direction, 0.0));
+        local.t = ray.t;
+
+        int triIndex;
+        float u, v;
+        float distance = hitBVH(local, int(mesh.RootNode), triIndex, u, v);
+
+        if(distance >= 0.0 && distance < ray.t) {
+            ray.t = distance; // restringe la ricerca per le mesh successive
+            closest = distance;
+            hitTriIndex = triIndex;
+            outU = u;
+            outV = v;
+        }
+    }
+
+    return closest;
+}
+
 HitInfo TraceRay(Ray ray) {
     float hitDistance = 100000.0;
     int index = -1;
@@ -475,7 +545,7 @@ HitInfo TraceRay(Ray ray) {
 
         int hitTriIndex;
         float outU, outV;
-        float distance = hitBVH(ray, hitTriIndex, outU, outV);
+        float distance = TraceMeshes(ray, hitTriIndex, outU, outV);
 
         if(distance >= 0 && distance < hitDistance) {
             hitDistance = distance;
@@ -527,16 +597,22 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
             }
         }
 
-        // i triangoli sono gia' in world space, meshPos e' 0
+        // il raggio e' in world space e t e' lo stesso nei due spazi (direzione locale
+        // non rinormalizzata), quindi il punto d'impatto si calcola direttamente qui
         vec3 hitPosition = ray.Origin + ray.Direction * hitDistance;
 
         // normale liscia interpolata coi pesi baricentrici (w->A, u->B, v->C).
         // Le normali si leggono solo qui, una volta, non nel loop caldo del BVH.
         TriangleNormal tn = TriNormals[index];
         float w = 1.0 - u - v;
-        vec3 normal = normalize(vec3(tn.NormalA) * w
-                              + vec3(tn.NormalB) * u
-                              + vec3(tn.NormalC) * v);
+        vec3 localNormal = vec3(tn.NormalA) * w
+                         + vec3(tn.NormalB) * u
+                         + vec3(tn.NormalC) * v;
+
+        // local -> world con l'inversa trasposta: con scale non uniformi la normale
+        // non si trasforma come una direzione, altrimenti smette di essere ortogonale
+        mat3 normalMatrix = meshIndex >= 0 ? transpose(mat3(Meshes[meshIndex].InvTransform)) : mat3(1.0);
+        vec3 normal = normalize(normalMatrix * localNormal);
 
         // orienta la normale contro il raggio: senza questo il BSDF riceve una
         // normale che punta "via" dal raggio (vn invertiti o silhouette) e produce

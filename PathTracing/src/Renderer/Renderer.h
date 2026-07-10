@@ -21,6 +21,16 @@ namespace PathTracer {
 		void Render(const Camera& camera, const World& world);
 		void OnResize(uint32_t width, uint32_t height);
 		void ResetPathTracingCounter(bool sceneReset = false) { m_PTCounter = 1; m_sceneReset = sceneReset; }
+
+		// Picking: si richiede un pixel, e il frame successivo il risultato e' pronto.
+		void RequestPick(int x, int y) { m_PickX = x; m_PickY = y; m_PickRequested = true; }
+		bool ConsumePickResult(int& objectType, int& objectIndex) {
+			if (!m_PickAvailable) return false;
+			objectType = m_PickType;
+			objectIndex = m_PickIndex;
+			m_PickAvailable = false;
+			return true;
+		}
 		std::shared_ptr<Texture> GetRenderedImage() const { return m_RenderedImage; }
 		std::shared_ptr<FrameBuffer> GetFrameBuffer() const { return m_FrameBuffer; }
 	public:
@@ -47,6 +57,10 @@ namespace PathTracer {
 		uint32_t m_Width = 0, m_Height = 0;
 		int m_PTCounter = 1;
 		bool m_sceneReset = false;
+		bool m_PickRequested = false;
+		bool m_PickAvailable = false;
+		int m_PickX = -1, m_PickY = -1;
+		int m_PickType = -1, m_PickIndex = -1;
 	};
 }
 

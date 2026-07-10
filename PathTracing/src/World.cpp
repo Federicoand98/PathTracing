@@ -1,5 +1,6 @@
 #include "World.h"
 #include "Renderer/Material.h"
+#include <glm/gtc/matrix_transform.hpp>
 
 namespace PathTracer {
 
@@ -63,6 +64,7 @@ namespace PathTracer {
 		TriPositions.clear();
 		TriNormals.clear();
 		Meshes.clear();
+		MeshNames.clear();
 		Boxes.clear();
 		BVHNodes.clear();
 		TriIndex.clear();
@@ -705,53 +707,69 @@ namespace PathTracer {
 		}
 
 		MeshInfo mesh;
-		mesh.Position = glm::vec4(0.0f); // vertici bakati in world space, nessun offset a runtime
 		mesh.FirstTriangle = static_cast<float>(Triangles.size());
 		mesh.NumTriangles = static_cast<float>(triangles.size());
 		mesh.MaterialIndex = static_cast<float>(material);
 
-		const glm::vec4 offset = glm::vec4(Position, 0.0f);
-		glm::vec4 boundsMin(1e30f);
-		glm::vec4 boundsMax(-1e30f);
+		glm::vec4 localMin(1e30f);
+		glm::vec4 localMax(-1e30f);
 
-		// accumula i triangoli (in world space) nella collezione globale della scena
+		// i triangoli restano in LOCAL SPACE: la posizione vive nella Transform
 		for (const Triangle* t : triangles) {
-			Triangle tri = *t;
-			tri.A += offset;
-			tri.B += offset;
-			tri.C += offset;
+			const Triangle& tri = *t;
 
-			boundsMin = glm::min(boundsMin, glm::min(tri.A, glm::min(tri.B, tri.C)));
-			boundsMax = glm::max(boundsMax, glm::max(tri.A, glm::max(tri.B, tri.C)));
+			localMin = glm::min(localMin, glm::min(tri.A, glm::min(tri.B, tri.C)));
+			localMax = glm::max(localMax, glm::max(tri.A, glm::max(tri.B, tri.C)));
 
 			Triangles.push_back(tri);
 		}
 
-		mesh.BoundsMin = boundsMin;
-		mesh.BoundsMax = boundsMax;
+		mesh.LocalMin = localMin;
+		mesh.LocalMax = localMax;
 
 		Meshes.push_back(mesh);
+		MeshNames.push_back(model.GetName());
+		SetMeshTransform(static_cast<int>(Meshes.size()) - 1, glm::translate(glm::mat4(1.0f), Position));
 
 		std::cout << "Model uploaded: " << triangles.size() << " triangles (material "
 			<< material << ")" << std::endl;
 	}
 
-	void World::BuildBVH() {
-		if (Triangles.empty()) {
-			BVHNodes.clear();
-			TriIndex.clear();
-			TriPositions.clear();
-			TriNormals.clear();
-			return;
+	// Aggiorna la trasformazione di una mesh: ricalcola l'inversa e l'AABB world.
+	// Nessun triangolo viene toccato, nessun BVH ricostruito.
+	void World::SetMeshTransform(int meshIndex, const glm::mat4& transform) {
+		MeshInfo& mesh = Meshes.at(meshIndex);
+		mesh.Transform = transform;
+		mesh.InvTransform = glm::inverse(transform);
+
+		// AABB world = box che racchiude gli 8 angoli locali trasformati
+		glm::vec3 worldMin(1e30f), worldMax(-1e30f);
+		for (int corner = 0; corner < 8; corner++) {
+			glm::vec4 p(
+				(corner & 1) ? mesh.LocalMax.x : mesh.LocalMin.x,
+				(corner & 2) ? mesh.LocalMax.y : mesh.LocalMin.y,
+				(corner & 4) ? mesh.LocalMax.z : mesh.LocalMin.z,
+				1.0f);
+
+			glm::vec3 w = glm::vec3(transform * p);
+			worldMin = glm::min(worldMin, w);
+			worldMax = glm::max(worldMax, w);
 		}
 
-		BVH builder(Triangles);
-		BVHNodes = builder.GetNodes();
-		TriIndex = builder.GetTrianglesIndices();
+		mesh.BoundsMin = glm::vec4(worldMin, 0.0f);
+		mesh.BoundsMax = glm::vec4(worldMax, 0.0f);
+	}
 
-		// separa posizioni e normali nei due buffer che finiranno sulla GPU
+	void World::BuildBVH() {
+		BVHNodes.clear();
+		TriIndex.clear();
 		TriPositions.clear();
 		TriNormals.clear();
+
+		if (Triangles.empty())
+			return;
+
+		// separa posizioni e normali nei due buffer che finiranno sulla GPU (local space)
 		TriPositions.reserve(Triangles.size());
 		TriNormals.reserve(Triangles.size());
 		for (const Triangle& t : Triangles) {
@@ -759,10 +777,54 @@ namespace PathTracer {
 			TriNormals.push_back({ t.NormalA, t.NormalB, t.NormalC });
 		}
 
-		// La traversata nello shader usa uno stack fisso (MAX_STACK): se l'albero e'
-		// piu' profondo, i nodi in eccesso vengono scartati e la mesh mostra dei buchi.
+		// Un BLAS per mesh, tutti concatenati in BVHNodes/TriIndex. Gli indici prodotti
+		// dal builder sono relativi al singolo BLAS: qui vengono rimappati ai globali.
 		int maxDepth = 0;
-		std::vector<std::pair<int, int>> stack{ {0, 1} }; // (indice nodo, profondita')
+
+		for (MeshInfo& mesh : Meshes) {
+			const int first = static_cast<int>(mesh.FirstTriangle);
+			const int count = static_cast<int>(mesh.NumTriangles);
+			if (count == 0) continue;
+
+			BVH builder(Triangles, first, count);
+			std::vector<BVHNodeNew>& blasNodes = builder.GetNodes();
+
+			const int nodeOffset = static_cast<int>(BVHNodes.size());
+			const int triOffset = static_cast<int>(TriIndex.size());
+
+			mesh.RootNode = static_cast<float>(nodeOffset);
+
+			for (BVHNodeNew node : blasNodes) {
+				if (node.triCount == 0)
+					node.left += nodeOffset; // indice del figlio sinistro
+				else
+					node.left += triOffset;  // primo indice dentro TriIndex
+
+				BVHNodes.push_back(node);
+			}
+
+			for (int localIdx : builder.GetTrianglesIndices())
+				TriIndex.push_back(first + localIdx);
+
+			maxDepth = std::max(maxDepth, ComputeBVHDepth(nodeOffset));
+		}
+
+		std::cout << "BVH built: " << Triangles.size() << " triangles, "
+			<< BVHNodes.size() << " nodes, " << Meshes.size() << " BLAS, max depth "
+			<< maxDepth << std::endl;
+
+		// deve restare allineato a MAX_STACK in hitBVH() dentro PathTracing.comp
+		constexpr int SHADER_MAX_STACK = 32;
+		if (maxDepth > SHADER_MAX_STACK)
+			std::cerr << "Warning: BVH depth (" << maxDepth << ") exceeds shader stack ("
+				<< SHADER_MAX_STACK << "): parts of the mesh may not render" << std::endl;
+	}
+
+	// Profondita' massima del BLAS con radice in rootNode (lo shader ha uno stack fisso).
+	int World::ComputeBVHDepth(int rootNode) const {
+		int maxDepth = 0;
+		std::vector<std::pair<int, int>> stack{ {rootNode, 1} }; // (nodo, profondita')
+
 		while (!stack.empty()) {
 			auto [nodeIndex, depth] = stack.back();
 			stack.pop_back();
@@ -775,14 +837,7 @@ namespace PathTracer {
 			}
 		}
 
-		std::cout << "BVH built: " << Triangles.size() << " triangles, "
-			<< BVHNodes.size() << " nodes, max depth " << maxDepth << std::endl;
-
-		// deve restare allineato a MAX_STACK in hitBVH() dentro PathTracing.comp
-		constexpr int SHADER_MAX_STACK = 32;
-		if (maxDepth > SHADER_MAX_STACK)
-			std::cerr << "Warning: BVH depth (" << maxDepth << ") exceeds shader stack ("
-				<< SHADER_MAX_STACK << "): parts of the mesh may not render" << std::endl;
+		return maxDepth;
 	}
 
 	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex) {

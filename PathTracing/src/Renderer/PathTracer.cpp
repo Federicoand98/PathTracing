@@ -49,6 +49,12 @@ namespace PathTracer {
 		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	}
 
+	void PathTracer::ReadPickResult(int& objectType, int& objectIndex) {
+		// il dispatch ha appena scritto l'SSBO: serve la barriera prima di rileggerlo
+		glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+		m_ComputeShader->ReadPickBuffer(objectType, objectIndex);
+	}
+
 	void PathTracer::UploadUniforms(const ComputeUniformContainer& container) {
 		m_ComputeShader->SetInt("SamplerEnvironment", 0);
 		m_ComputeShader->SetInt("width", container.Width);
@@ -60,6 +66,10 @@ namespace PathTracer {
 		m_ComputeShader->SetBool("EnvironmentMapping", container.EnvironmentMapping);
 		m_ComputeShader->SetInt("bvhDebug", container.BVHDebug ? 1 : 0);
 		m_ComputeShader->SetFloat("bvhHeatScale", container.BVHHeatScale);
+		m_ComputeShader->SetIVec2("pickPixel", container.PickPixel.x, container.PickPixel.y);
+
+		if (container.PickPixel.x >= 0)
+			m_ComputeShader->ResetPickBuffer();
 		m_ComputeShader->SetVec3("cameraPosition", container.Camera.GetPosition());
 		m_ComputeShader->SetVec3("BackgroundColor", container.World.BackgroundColor);
 		m_ComputeShader->SetMat4("inverseProjection", container.Camera.GetInverseProjection());

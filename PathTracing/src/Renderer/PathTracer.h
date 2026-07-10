@@ -17,6 +17,7 @@ namespace PathTracer {
 		bool EnvironmentMapping;
 		bool BVHDebug;
 		float BVHHeatScale;
+		glm::ivec2 PickPixel; // (-1,-1) = nessuna richiesta di picking
 		const class World& World;
 		const class Camera& Camera;
 	};
@@ -31,6 +32,7 @@ namespace PathTracer {
 
 		void DispatchCompute(unsigned int numGroupX, unsigned int numGroupY);
 		void UploadUniforms(const ComputeUniformContainer& container);
+		void ReadPickResult(int& objectType, int& objectIndex);
 	private:
 		std::shared_ptr<ComputeShader> m_ComputeShader;
 		std::shared_ptr<Texture> m_SkyBox;

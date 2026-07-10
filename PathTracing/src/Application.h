@@ -16,6 +16,7 @@
 #include "Graphics/Texture.h"
 #include "Renderer/Renderer.h"
 #include "Graphics/FrameBuffer.h"
+#include "ImGuizmo.h"
 #include "ptpch.h"
 
 /*
@@ -30,6 +31,25 @@
 */
 
 namespace PathTracer {
+
+	// I valori 0/1/2 combaciano con ObjectType dello shader (pickType).
+	// Box non esiste nello shader: e' un gruppo di 6 quad, mappato lato CPU.
+	enum class SelectionType {
+		None = -1,
+		Sphere = 0,
+		Quad = 1,
+		Mesh = 2,
+		Box = 3
+	};
+
+	struct Selection {
+		SelectionType Type = SelectionType::None;
+		int Index = -1;
+
+		bool IsValid() const { return Type != SelectionType::None && Index >= 0; }
+		// una sfera non ha orientamento, un box e' axis-aligned: niente rotazione
+		bool SupportsRotation() const { return Type == SelectionType::Quad || Type == SelectionType::Mesh; }
+	};
 
 	class Application {
 	public:
@@ -47,7 +67,35 @@ namespace PathTracer {
 		void CalculateTime();
 		void RenderUI(float deltaTime);
 		void Render(float deltaTime);
+
+		// selezione + gizmo
+		void UpdateSelection();
+		void DrawGizmo();
+		void SetSelectionFromPick(int objectType, int objectIndex);
+		void DrawSelectionOverlay();
+		ImGuizmo::OPERATION EffectiveGizmoOperation() const;
+		glm::vec3 GetSelectionPivot() const;
+		void GetSelectionBounds(glm::vec3& outMin, glm::vec3& outMax) const;
+		std::string GetSelectionLabel() const;
+		void ApplyDelta(const glm::mat4& delta);
 	private:
+		Selection m_Selection;
+		ImGuizmo::OPERATION m_GizmoOperation = ImGuizmo::TRANSLATE;
+		glm::mat4 m_GizmoMatrix{ 1.0f };
+
+		// Rettangolo a schermo dell'immagine path-traced dentro la finestra "Viewport".
+		// La 3D view non e' il background: e' una AddImage in un pannello ImGui, quindi
+		// picking, gizmo e overlay devono essere ancorati a QUESTO rettangolo.
+		ImVec2 m_ViewportPos{ 0.0f, 0.0f };
+		ImVec2 m_ViewportSize{ 0.0f, 0.0f };
+		bool m_ViewportHovered = false;
+
+		// diagnostica del picking (visibile nel pannello)
+		glm::ivec2 m_LastPickPixel{ -1, -1 };
+		int m_LastPickType = -1;
+		int m_LastPickIndex = -1;
+		int m_PickRequestCount = 0;
+
 		Renderer m_Renderer;
 		Camera m_Camera;
 		World m_World;

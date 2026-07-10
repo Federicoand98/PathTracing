@@ -49,14 +49,21 @@ namespace PathTracer {
         int normal_ins[3];
     };
 
+    // Istanza di mesh in un BVH a due livelli: i triangoli restano in LOCAL SPACE e
+    // hanno un proprio BVH (BLAS) con radice RootNode. Trasformare la mesh significa
+    // aggiornare Transform, non ri-bakare i triangoli ne' ricostruire il BVH: e' il
+    // raggio a essere portato nello spazio locale della mesh.
     struct MeshInfo {
-        glm::vec4 Position{0.0f};
-        glm::vec4 BoundsMin;
-        glm::vec4 BoundsMax;
-        float FirstTriangle;
-        float NumTriangles;
+        glm::mat4 Transform{ 1.0f };
+        glm::mat4 InvTransform{ 1.0f };
+        glm::vec4 BoundsMin{ 0.0f };  // AABB in world space (per il reject rapido)
+        glm::vec4 BoundsMax{ 0.0f };
+        glm::vec4 LocalMin{ 0.0f };   // AABB in local space (per ricalcolare quella world)
+        glm::vec4 LocalMax{ 0.0f };
+        float FirstTriangle = 0;
+        float NumTriangles = 0;
         float MaterialIndex = 0;
-        float paddind = 0.0f;
+        float RootNode = 0;           // indice della radice del BLAS in BVHNodes
     };
 
     struct Sphere {
