@@ -1249,6 +1249,7 @@ namespace PathTracer {
 			return;
 
 		ImGuizmo::SetOrthographic(false);
+		ImGuizmo::AllowAxisFlip(false);
 		// draw list della finestra "Viewport": e' li' che vive l'immagine path-traced
 		ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
 		ImGuizmo::SetRect(m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
