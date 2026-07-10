@@ -4,6 +4,7 @@
 #include "RenderingUnit.h"
 #include "../Graphics/ComputeShader.h"
 #include "../Graphics/Texture.h"
+#include "../Graphics/TextureArray.h"
 
 namespace PathTracer {
 
@@ -36,5 +37,7 @@ namespace PathTracer {
 	private:
 		std::shared_ptr<ComputeShader> m_ComputeShader;
 		std::shared_ptr<Texture> m_SkyBox;
+		TextureArray m_AlbedoTextures;
+		std::vector<std::string> m_LoadedTexturePaths; // per ricaricare solo al cambio scena
 	};
 }

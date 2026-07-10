@@ -10,6 +10,10 @@ namespace PathTracer {
 		m_ComputeShader = std::make_shared<ComputeShader>("shaders/PathTracing.comp");
 		m_ComputeShader->UpdateWorldBuffer(world);
 
+		// anche senza texture va creato l'array: campionare un sampler incompleto e' UB
+		m_AlbedoTextures.Load(world.TexturePaths);
+		m_LoadedTexturePaths = world.TexturePaths;
+
 		m_SkyBox = std::make_shared<Texture>(GL_TEXTURE_CUBE_MAP);
 
 		m_SkyBox->LoadCubeMap({
@@ -56,7 +60,15 @@ namespace PathTracer {
 	}
 
 	void PathTracer::UploadUniforms(const ComputeUniformContainer& container) {
+		// il decode delle immagini e' costoso: si ricarica solo se la scena le ha cambiate
+		if (container.World.TexturePaths != m_LoadedTexturePaths) {
+			m_AlbedoTextures.Load(container.World.TexturePaths);
+			m_LoadedTexturePaths = container.World.TexturePaths;
+		}
+
 		m_ComputeShader->SetInt("SamplerEnvironment", 0);
+		m_ComputeShader->SetInt("AlbedoTextures", 1);
+		m_AlbedoTextures.AttachSampler(1); // la cubemap occupa gia' l'unit 0
 		m_ComputeShader->SetInt("width", container.Width);
         m_ComputeShader->SetInt("nNodes", container.World.Nodes.size());
 		m_ComputeShader->SetInt("height", container.Height);

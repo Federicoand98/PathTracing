@@ -8,6 +8,10 @@
 
 namespace PathTracer {
 
+	// ATTENZIONE al layout: questo struct viene caricato tale e quale in un SSBO std430.
+	// In std430 un vec4 e' allineato a 16 byte, ma alignof(glm::vec4) e' 4: senza il
+	// padding esplicito qui sotto il C++ metterebbe RefractionColor a 72 mentre lo shader
+	// la legge a 80, e l'intero struct avrebbe stride 96 invece di 112.
 	struct Material {
 		glm::vec4 Color {0.0f};
 		float Roughness = 1.0f;
@@ -18,10 +22,18 @@ namespace PathTracer {
 		glm::vec4 SpecularColor{0.0f};
 		float RefractionProbability = 0.0f;
 		float RefractionRoughness = 1.0f;
+		glm::vec2 _pad0{ 0.0f };     // porta RefractionColor all'offset 80 (multiplo di 16)
 		glm::vec4 RefractionColor{0.0f};
 
-		glm::vec2 padding{0.0f};
+		float AlbedoTexture = -1.0f; // layer nel sampler2DArray, -1 = nessuna texture
+		float Checker = 0.0f;        // 0 = off, 1 = scacchiera UV, 2 = scacchiera world-space
+		float CheckerScale = 8.0f;   // celle per unita' di UV (o di spazio, se world-space)
+		float _pad1 = 0.0f;          // porta la dimensione a 112, multiplo di 16
 	};
+
+	static_assert(sizeof(Material) == 112, "Material deve essere 112 byte per combaciare con lo std430");
+	static_assert(offsetof(Material, RefractionColor) == 80, "RefractionColor deve stare a 80 (std430 allinea i vec4 a 16)");
+	static_assert(offsetof(Material, AlbedoTexture) == 96, "AlbedoTexture deve stare a 96");
 
 	static Material CreateDefaultDiffuse(glm::vec4 color = {0.4f, 0.2, 0.1f, 1.0f}) {
 		Material m;

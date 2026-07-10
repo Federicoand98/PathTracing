@@ -265,6 +265,8 @@ namespace PathTracer {
 	}
 
 	void Application::RenderUI(float deltaTime) {
+		ValidateSelection();
+
 		ImGui::Begin("Settings");
 		ImGui::Text("FPS: %f", m_FPS);
 		ImGui::Text("Last Render: %.3fms", deltaTime * 1000);
@@ -388,6 +390,11 @@ namespace PathTracer {
 		ImGui::Spacing();
 		ImGui::Text("Select the scene");
 		if (ImGui::Combo("Current Scene", &m_World.CurrentScene, "TWO SPHERES\0RANDOM SPHERES\0CORNELL BOX\0RANDOM BOXES\0CORNELL BOW WITH MESHES\0SETUP - 1\0SETUP - 2\0SETUP - 3\0\0")) {
+			// gli indici della vecchia scena non significano piu' niente: la finestra
+			// "Viewport" viene disegnata piu' avanti in QUESTO stesso frame e userebbe
+			// la selezione stale per indicizzare collezioni gia' svuotate
+			m_Selection = {};
+
 			m_World.DestroyScene();
 			m_Renderer.ResetPathTracingCounter(true);
 			m_World.LoadScene();
@@ -512,6 +519,33 @@ namespace PathTracer {
 					if (ImGui::DragFloat("Refractin Roughness", &material.RefractionRoughness, 0.05, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
 					if (ImGui::DragFloat("Emissive Strenght", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
 					if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
+
+					ImGui::Separator();
+					int checkerMode = (int)(material.Checker + 0.5f);
+					if (ImGui::Combo("Checker", &checkerMode, "Off\0UV (debug)\0World space\0\0")) {
+						material.Checker = (float)checkerMode;
+						m_Renderer.ResetPathTracingCounter();
+					}
+					if (checkerMode != 0) {
+						if (ImGui::DragFloat("Checker scale", &material.CheckerScale, 0.1f, 0.01f, 64.0f))
+							m_Renderer.ResetPathTracingCounter();
+					}
+
+					// -1 = nessuna texture; gli altri valori indicizzano i layer di TexturePaths.
+					// Con min == max ImGui disattiva il clamping, quindi senza texture
+					// il drag va nascosto del tutto invece che lasciato libero di sforare.
+					int layerCount = (int)m_World.TexturePaths.size();
+					if (layerCount > 0) {
+						if (ImGui::DragFloat("Albedo texture layer", &material.AlbedoTexture, 1.0f, -1.0f, (float)(layerCount - 1)))
+							m_Renderer.ResetPathTracingCounter();
+					}
+					else {
+						material.AlbedoTexture = -1.0f;
+						ImGui::TextDisabled("(nessuna texture caricata in questa scena)");
+					}
+
+					if (checkerMode != 0 && material.SpecularProbability > 0.5f)
+						ImGui::TextDisabled("Specular Probability alta: l'albedo si vede poco");
 
 					ImGui::TreePop();
 				}
@@ -770,6 +804,27 @@ namespace PathTracer {
 		}
 	}
 
+	// Rete di sicurezza: la selezione e' un indice in una collezione che puo' rimpicciolirsi
+	// sotto i piedi (cambio scena e, in futuro, cancellazione di oggetti). Invece di
+	// affidarsi al fatto che ogni punto di mutazione si ricordi di azzerarla, la si
+	// verifica contro il mondo corrente prima di usarla.
+	void Application::ValidateSelection() {
+		if (!m_Selection.IsValid())
+			return;
+
+		size_t count = 0;
+		switch (m_Selection.Type) {
+		case SelectionType::Sphere: count = m_World.Spheres.size(); break;
+		case SelectionType::Quad:   count = m_World.Quads.size();   break;
+		case SelectionType::Box:    count = m_World.Boxes.size();   break;
+		case SelectionType::Mesh:   count = m_World.Meshes.size();  break;
+		default: break;
+		}
+
+		if (static_cast<size_t>(m_Selection.Index) >= count)
+			m_Selection = {};
+	}
+
 	void Application::SetSelectionFromPick(int objectType, int objectIndex) {
 		if (objectType < 0 || objectIndex < 0) {
 			m_Selection = {};
@@ -793,6 +848,7 @@ namespace PathTracer {
 
 	void Application::UpdateSelection() {
 		ImGuiIO& io = ImGui::GetIO();
+
 
 
 
@@ -835,7 +891,11 @@ namespace PathTracer {
 			m_LastPickType = pickedType;
 			m_LastPickIndex = pickedIndex;
 
+			// il pick e' stato richiesto un frame fa: se nel mezzo la scena e' cambiata,
+			// l'indice si riferisce a oggetti che non esistono piu'
 			SetSelectionFromPick(pickedType, pickedIndex);
+			ValidateSelection();
+
 			if (m_Selection.IsValid())
 				m_GizmoOperation = ImGuizmo::TRANSLATE; // default alla selezione, come Blender
 		}

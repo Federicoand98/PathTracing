@@ -4,10 +4,11 @@ namespace PathTracer {
 
 	namespace {
 		// Un token di faccia OBJ puo' essere "v", "v/vt", "v//vn" o "v/vt/vn".
-		// Estrae indice di vertice e (se presente) di normale, ignorando le UV.
+		// Estrae gli indici di vertice, UV e normale (0 = assente).
 		// Ritorna false se il token non contiene un indice di vertice valido.
-		bool ParseFaceToken(const std::string& token, int& vertexIndex, int& normalIndex) {
+		bool ParseFaceToken(const std::string& token, int& vertexIndex, int& uvIndex, int& normalIndex) {
 			vertexIndex = 0;
+			uvIndex = 0;
 			normalIndex = 0;
 
 			auto toInt = [](const std::string& s, int& out) -> bool {
@@ -25,8 +26,14 @@ namespace PathTracer {
 				return false;
 
 			size_t secondSlash = token.find('/', firstSlash + 1);
-			if (secondSlash != std::string::npos)
-				toInt(token.substr(secondSlash + 1), normalIndex); // opzionale
+			if (secondSlash == std::string::npos) {
+				toInt(token.substr(firstSlash + 1), uvIndex);  // forma "v/vt"
+				return true;
+			}
+
+			// fra le due barre c'e' la UV; se vuoto ("v//vn") resta 0
+			toInt(token.substr(firstSlash + 1, secondSlash - firstSlash - 1), uvIndex);
+			toInt(token.substr(secondSlash + 1), normalIndex);
 
 			return true;
 		}
@@ -71,6 +78,11 @@ namespace PathTracer {
 				ss >> v->x >> v->y >> v->z;
 				m_Vertices.push_back(v);
 			}
+			else if (prefix == "vt") {
+				glm::vec2 uv;
+				ss >> uv.x >> uv.y;
+				m_UVs.push_back(uv);
+			}
 			else if (prefix == "vn") {
 				glm::vec3* vn = new glm::vec3;
 				ss >> vn->x >> vn->y >> vn->z;
@@ -79,19 +91,21 @@ namespace PathTracer {
 			else if (prefix == "f") {
 				// Le facce OBJ possono essere poligoni (quad, ngon), non solo triangoli:
 				// le triangoliamo a ventaglio attorno al primo vertice.
-				std::vector<int> faceVertices, faceNormals;
+				std::vector<int> faceVertices, faceUVs, faceNormals;
 				std::string token;
 
 				while (ss >> token) {
-					int v = 0, vn = 0;
-					if (!ParseFaceToken(token, v, vn))
+					int v = 0, vt = 0, vn = 0;
+					if (!ParseFaceToken(token, v, vt, vn))
 						continue;
 
 					// gli indici negativi sono relativi alla fine della lista corrente
 					if (v < 0) v = static_cast<int>(m_Vertices.size()) + v + 1;
+					if (vt < 0) vt = static_cast<int>(m_UVs.size()) + vt + 1;
 					if (vn < 0) vn = static_cast<int>(m_Normals.size()) + vn + 1;
 
 					faceVertices.push_back(v);
+					faceUVs.push_back(vt);
 					faceNormals.push_back(vn);
 				}
 
@@ -104,6 +118,10 @@ namespace PathTracer {
 					face->vertex_ins[0] = faceVertices[0];
 					face->vertex_ins[1] = faceVertices[i];
 					face->vertex_ins[2] = faceVertices[i + 1];
+
+					face->uv_ins[0] = faceUVs[0];
+					face->uv_ins[1] = faceUVs[i];
+					face->uv_ins[2] = faceUVs[i + 1];
 
 					face->normal_ins[0] = faceNormals[0];
 					face->normal_ins[1] = faceNormals[i];
@@ -177,6 +195,16 @@ namespace PathTracer {
 			triangle->NormalA = glm::vec4(vertexNormals[face->vertex_ins[0] - 1], 0.0f);
 			triangle->NormalB = glm::vec4(vertexNormals[face->vertex_ins[1] - 1], 0.0f);
 			triangle->NormalC = glm::vec4(vertexNormals[face->vertex_ins[2] - 1], 0.0f);
+
+			// UV assenti (indice 0) o fuori range -> (0,0): il modello restera' a tinta unita
+			auto uvAt = [this](int index) {
+				int i = index - 1;
+				return (i >= 0 && i < (int)m_UVs.size()) ? m_UVs[i] : glm::vec2(0.0f);
+			};
+
+			triangle->UVA = uvAt(face->uv_ins[0]);
+			triangle->UVB = uvAt(face->uv_ins[1]);
+			triangle->UVC = uvAt(face->uv_ins[2]);
 
 			m_Triangles.push_back(triangle);
 		}

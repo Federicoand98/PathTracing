@@ -28,6 +28,9 @@ namespace PathTracer {
         glm::vec4 NormalA;
         glm::vec4 NormalB;
         glm::vec4 NormalC;
+        glm::vec2 UVA{ 0.0f };
+        glm::vec2 UVB{ 0.0f };
+        glm::vec2 UVC{ 0.0f };
     };
 
     // Sulla GPU posizioni e normali stanno in due buffer distinti: il loop caldo del
@@ -44,8 +47,17 @@ namespace PathTracer {
         glm::vec4 NormalC;
     };
 
+    // Anch'esso "freddo": letto una sola volta sull'hit finale, mai nel loop del BVH.
+    // La uv sta in .xy; i vec4 evitano sorprese di stride con lo std430.
+    struct TriangleUV {
+        glm::vec4 A{ 0.0f };
+        glm::vec4 B{ 0.0f };
+        glm::vec4 C{ 0.0f };
+    };
+
     struct Face {
         int vertex_ins[3];
+        int uv_ins[3];
         int normal_ins[3];
     };
 

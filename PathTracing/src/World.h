@@ -47,6 +47,8 @@ namespace PathTracer {
 		std::vector<Triangle> Triangles;          // authoring CPU, sorgente per il BVH
 		std::vector<TrianglePosition> TriPositions; // caricati sulla GPU (binding 3)
 		std::vector<TriangleNormal> TriNormals;    // caricate sulla GPU (binding 8)
+		std::vector<TriangleUV> TriUVs;            // caricate sulla GPU (binding 10)
+		std::vector<std::string> TexturePaths;     // un layer del sampler2DArray ciascuna
         std::vector<BVHNode> Nodes;
 		std::vector<BVHNodeAlt> NodesAlt;
 		std::vector<int> TriIndex;

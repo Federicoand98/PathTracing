@@ -72,6 +72,7 @@ namespace PathTracer {
 		void UpdateSelection();
 		void DrawGizmo();
 		void SetSelectionFromPick(int objectType, int objectIndex);
+		void ValidateSelection();
 		void DrawSelectionOverlay();
 		ImGuizmo::OPERATION EffectiveGizmoOperation() const;
 		glm::vec3 GetSelectionPivot() const;

@@ -63,6 +63,8 @@ namespace PathTracer {
 		Triangles.clear();
 		TriPositions.clear();
 		TriNormals.clear();
+		TriUVs.clear();
+		TexturePaths.clear();
 		Meshes.clear();
 		MeshNames.clear();
 		Boxes.clear();
@@ -126,10 +128,33 @@ namespace PathTracer {
 			Spheres.push_back(s);
 		}
 
+		// Sfera gigante usata come terreno: scacchiera bianco/nero in world space.
+		// Una scacchiera sulle UV non andrebbe: la camera sta quasi sul polo della sfera,
+		// dove la mappatura equirettangolare degenera in spicchi convergenti.
+		{
+			Material& ground = Materials.at(0); // in questa scena il materiale 0 e' solo suo
+			ground.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+			ground.SpecularColor = ground.Color;
+			ground.Roughness = 1.0f;
+			ground.SpecularProbability = 0.0f; // terreno opaco: niente riflesso speculare
+			ground.Checker = 2.0f;             // world-space
+			ground.CheckerScale = 0.5f;        // celle da 2 unita'
+		}
+
 		//CreateBox({ 0,0,0 }, { 3,1,1 }, 1);
 
 		Model m;
 		m.LoadObj("models/guitar.obj");
+
+		// layer 0 del sampler2DArray
+		TexturePaths.push_back("textures/Albedo/uv_grid.png");
+
+		// l'albedo moltiplica material.Color: se il materiale e' colorato la texture
+		// ne esce tinta, quindi lo si porta a bianco
+		Material& guitarMaterial = Materials.at(5);
+		guitarMaterial.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
+		guitarMaterial.SpecularColor = guitarMaterial.Color;
+		guitarMaterial.AlbedoTexture = 0.0f;
 
 		UploadModel(m, { 0.0, 0.0, 0.0 }, 5);
 	}
@@ -765,16 +790,19 @@ namespace PathTracer {
 		TriIndex.clear();
 		TriPositions.clear();
 		TriNormals.clear();
+		TriUVs.clear();
 
 		if (Triangles.empty())
 			return;
 
-		// separa posizioni e normali nei due buffer che finiranno sulla GPU (local space)
+		// separa posizioni, normali e UV nei buffer che finiranno sulla GPU (local space)
 		TriPositions.reserve(Triangles.size());
 		TriNormals.reserve(Triangles.size());
+		TriUVs.reserve(Triangles.size());
 		for (const Triangle& t : Triangles) {
 			TriPositions.push_back({ t.A, t.B, t.C });
 			TriNormals.push_back({ t.NormalA, t.NormalB, t.NormalC });
+			TriUVs.push_back({ glm::vec4(t.UVA, 0.0f, 0.0f), glm::vec4(t.UVB, 0.0f, 0.0f), glm::vec4(t.UVC, 0.0f, 0.0f) });
 		}
 
 		// Un BLAS per mesh, tutti concatenati in BVHNodes/TriIndex. Gli indici prodotti

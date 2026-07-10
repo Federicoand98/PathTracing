@@ -17,6 +17,7 @@ namespace PathTracer {
 		unsigned int ssbo_q;
 		unsigned int ssbo_t;
 		unsigned int ssbo_tn;
+		unsigned int ssbo_tuv;
 		unsigned int ssbo_mesh;
 		unsigned int ssbo_cubes;
 		unsigned int ssbo_idx;
@@ -62,6 +63,7 @@ namespace PathTracer {
 			glGenBuffers(1, &ssbo_q);
 			glGenBuffers(1, &ssbo_t);
 			glGenBuffers(1, &ssbo_tn);
+			glGenBuffers(1, &ssbo_tuv);
 			glGenBuffers(1, &ssbo_mesh);
 			glGenBuffers(1, &ssbo_cubes);
 			glGenBuffers(1, &ssbo_idx);
@@ -131,6 +133,7 @@ namespace PathTracer {
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, ssbo_idx);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ssbo_tn);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, ssbo_pick);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, ssbo_tuv);
 		}
 
 		void UpdateWorldBuffer(const World& world, bool fullReset = false) {
@@ -152,6 +155,9 @@ namespace PathTracer {
 
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_tn);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TriangleNormal) * world.TriNormals.size(), world.TriNormals.data(), GL_STATIC_DRAW);
+
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_tuv);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TriangleUV) * world.TriUVs.size(), world.TriUVs.data(), GL_STATIC_DRAW);
 
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_mesh);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(MeshInfo) * world.Meshes.size(), world.Meshes.data(), GL_STATIC_DRAW);

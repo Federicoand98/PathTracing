@@ -28,6 +28,7 @@ namespace PathTracer {
 		int m_TriangleCount = 0;
 		std::string m_Name;
 		std::vector<glm::vec3*> m_Vertices;
+		std::vector<glm::vec2> m_UVs;
 		std::vector<glm::vec3*> m_Normals;
 		std::vector<Face*> m_Faces;
 		std::vector<Triangle*> m_Triangles;
