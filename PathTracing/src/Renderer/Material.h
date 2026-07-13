@@ -51,6 +51,24 @@ namespace PathTracer {
 	static_assert(offsetof(Material, NoiseColorA) == 128, "NoiseColorA deve stare a 128 (std430 allinea i vec4 a 16)");
 	static_assert(offsetof(Material, Metalness) == 160, "Metalness deve stare a 160");
 
+	// Dielettrico opaco "sano" nel senso del modello Principled: riflesso non tinto
+	// (SpecularColor bianco), F0 standard 0.04, niente trasmissione. E' il punto di
+	// partenza che l'editor Principled si aspetta.
+	static Material CreateDefaultPrincipled(glm::vec4 color = { 0.8f, 0.8f, 0.8f, 1.0f }) {
+		Material m;
+		m.Color = color;
+		m.SpecularColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // riflesso dielettrico bianco
+		m.RefractionColor = color;                    // tinta del vetro = base color
+		m.EmissiveColor = color;
+		m.Metalness = 0.0f;
+		m.Roughness = 0.5f;
+		m.RefractionRoughness = 0.5f;
+		m.RefractionRatio = 1.45f;                    // IOR tipico plastica/vetro
+		m.SpecularProbability = 0.04f;                // F0 = 0.08 * 0.5
+		m.RefractionProbability = 0.0f;               // opaco
+		return m;
+	}
+
 	static Material CreateDefaultDiffuse(glm::vec4 color = {0.4f, 0.2, 0.1f, 1.0f}) {
 		Material m;
 		m.Color = color;

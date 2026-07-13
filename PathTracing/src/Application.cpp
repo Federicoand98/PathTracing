@@ -612,7 +612,7 @@ namespace PathTracer {
 	// buffer dei materiali nello shader.
 	int Application::EnsureMaterialExists() {
 		if (m_World.Materials.empty())
-			m_World.Materials.push_back(CreateDefaultDiffuse({ 0.8f, 0.8f, 0.8f, 1.0f }));
+			m_World.Materials.push_back(CreateDefaultPrincipled());
 
 		return std::clamp(static_cast<int>(m_NewObjectMaterial), 0, (int)m_World.Materials.size() - 1);
 	}
@@ -815,42 +815,73 @@ namespace PathTracer {
 	// Corpo dell'editor, condiviso fra il tab Materials e la finestra flottante:
 	// due copie divergerebbero al primo campo aggiunto.
 	void Application::DrawMaterialEditor(Material& material, int index) {
-		if (ImGui::ColorEdit3("Color", glm::value_ptr(material.Color))) {
-			if (m_LinkColors) {
-				material.RefractionColor = material.Color;
-				material.SpecularColor = material.Color;
-			}
-			m_Renderer.ResetPathTracingCounter();
-		}
+		// Editor in stile Principled (Blender): mostra concetti da artista e scrive nei campi
+		// raw dello struct, che restano il contratto con lo shader. Le "probabilita'" di
+		// importance sampling non compaiono: le derivo qui. Cosi' non possono piu' sommare
+		// a un valore che sopprime il diffuso, che era il footgun della UI precedente.
+		bool changed = false;
+		const bool isMetal = material.Metalness > 0.001f;
 
-		if (!m_LinkColors) {
-			if (ImGui::ColorEdit3("Specular Color", glm::value_ptr(material.SpecularColor))) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::ColorEdit3("Refraction Color", glm::value_ptr(material.RefractionColor))) m_Renderer.ResetPathTracingCounter();
+		// Base color. La tinta del vetro segue la base color (assorbimento Beer-Lambert).
+		glm::vec3 baseColor = glm::vec3(material.Color);
+		if (ImGui::ColorEdit3("Base Color", glm::value_ptr(baseColor))) {
+			material.Color = glm::vec4(baseColor, 1.0f);
+			changed = true;
 		}
 
 		ImGui::SeparatorText("Surface");
-		if (ImGui::SliderFloat("Metalness", &material.Metalness, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-		if (ImGui::DragFloat("Roughness", &material.Roughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
 
-		// con Metalness a 1 la probabilita' speculare effettiva vale 1 comunque: il controllo
-		// resta vivo ma non ha piu' effetto, e lasciarlo attivo sarebbe fuorviante
-		ImGui::BeginDisabled(material.Metalness >= 0.999f);
-		if (ImGui::DragFloat("Specular Probability", &material.SpecularProbability, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+		if (ImGui::SliderFloat("Metallic", &material.Metalness, 0.0f, 1.0f)) changed = true;
+
+		// Un'unica roughness per riflesso e trasmissione, come il Principled.
+		if (ImGui::SliderFloat("Roughness", &material.Roughness, 0.0f, 1.0f)) {
+			material.RefractionRoughness = material.Roughness;
+			changed = true;
+		}
+
+		// IOR: il Fresnel lo usa anche per il riflesso dielettrico, non solo per il vetro.
+		// Su un metallo non ha effetto (rifrazione spenta, Fresnel saturo).
+		ImGui::BeginDisabled(isMetal);
+		if (ImGui::SliderFloat("IOR", &material.RefractionRatio, 1.0f, 2.5f)) changed = true;
+
+		// Transmission = quanto e' vetroso. Un metallo non trasmette.
+		float transmission = material.RefractionProbability;
+		if (ImGui::SliderFloat("Transmission", &transmission, 0.0f, 1.0f)) {
+			material.RefractionProbability = transmission;
+			changed = true;
+		}
 		ImGui::EndDisabled();
+		if (isMetal)
+			ImGui::TextDisabled("metallo: niente diffuso ne' trasmissione, riflesso tinto dall'albedo");
 
-		if (material.Metalness > 0.0f)
-			ImGui::TextDisabled("metallo: niente diffuso, il riflesso e' tinto dall'albedo");
+		// Specular level (F0 dielettrico) sepolto in Advanced, come in Blender: quasi
+		// nessuno lo tocca. F0 = 0.08 * livello, quindi 0.5 -> 0.04 (dielettrico standard).
+		if (ImGui::TreeNode("Advanced")) {
+			ImGui::BeginDisabled(isMetal);
+			float specLevel = std::clamp(material.SpecularProbability / 0.08f, 0.0f, 1.0f);
+			if (ImGui::SliderFloat("Specular", &specLevel, 0.0f, 1.0f)) {
+				material.SpecularProbability = 0.08f * specLevel;
+				changed = true;
+			}
+			ImGui::EndDisabled();
+			ImGui::TextDisabled("F0 dielettrico. 0.5 = 0.04, il valore fisico standard");
+			ImGui::TreePop();
+		}
 
-		ImGui::SeparatorText("Refraction");
-		if (ImGui::DragFloat("Refraction Index", &material.RefractionRatio, 0.01f, 1.0f, 3.0f)) m_Renderer.ResetPathTracingCounter();
-		if (ImGui::DragFloat("Refraction Probability", &material.RefractionProbability, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
-		if (ImGui::DragFloat("Refraction Roughness", &material.RefractionRoughness, 0.05f, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+		// I campi derivati si "curano" ad ogni modifica: il riflesso dielettrico e' bianco
+		// (non tinto) e la tinta del vetro segue la base color. Legacy con SpecularColor
+		// colorato vengono normalizzati alla prima modifica.
+		if (changed) {
+			material.SpecularColor = glm::vec4(1.0f);
+			material.RefractionColor = material.Color;
+			m_Renderer.ResetPathTracingCounter();
+		}
 
 		ImGui::SeparatorText("Emission");
 		if (ImGui::DragFloat("Emissive Strength", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
 		if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
 
-		ImGui::SeparatorText("Albedo");
+		ImGui::SeparatorText("Base Color texture");
 		int checkerMode = static_cast<int>(material.Checker + 0.5f);
 		if (ImGui::Combo("Checker", &checkerMode, "Off\0UV (debug)\0World space\0\0")) {
 			material.Checker = static_cast<float>(checkerMode);
@@ -861,11 +892,16 @@ namespace PathTracer {
 				m_Renderer.ResetPathTracingCounter();
 		}
 
-		// -1 = nessuna texture; gli altri valori indicizzano i layer di TexturePaths.
-		// Con min == max ImGui disattiva il clamping, quindi senza texture
-		// il drag va nascosto del tutto invece che lasciato libero di sforare.
+		// Nello shader checker e texture sono in catena else-if: il checker vince e la texture
+		// non viene mai letta. Invece di mostrarli come se si combinassero, la disabilito e lo
+		// dico, cosi' l'esclusione non e' piu' silenziosa.
+		const bool checkerWins = checkerMode != 0;
 		const int layerCount = static_cast<int>(m_World.TexturePaths.size());
+		ImGui::BeginDisabled(checkerWins);
 		if (layerCount > 0) {
+			// -1 = nessuna texture; gli altri valori indicizzano i layer di TexturePaths.
+			// Con min == max ImGui disattiva il clamping, quindi senza texture
+			// il drag va nascosto del tutto invece che lasciato libero di sforare.
 			if (ImGui::DragFloat("Albedo texture layer", &material.AlbedoTexture, 1.0f, -1.0f, (float)(layerCount - 1)))
 				m_Renderer.ResetPathTracingCounter();
 		}
@@ -873,9 +909,9 @@ namespace PathTracer {
 			material.AlbedoTexture = -1.0f;
 			ImGui::TextDisabled("(nessuna texture caricata in questa scena)");
 		}
-
-		if (checkerMode != 0 && material.SpecularProbability > 0.5f)
-			ImGui::TextDisabled("Specular Probability alta: l'albedo si vede poco");
+		ImGui::EndDisabled();
+		if (checkerWins)
+			ImGui::TextDisabled("checker attivo: ha la precedenza, la texture e' ignorata");
 
 		ImGui::SeparatorText("Procedural noise");
 		int noiseMode = static_cast<int>(material.NoiseType + 0.5f);
@@ -1017,12 +1053,10 @@ namespace PathTracer {
 		ImGui::Spacing();
 
 		if (ImGui::Button("+ Add material")) {
-			m_World.Materials.push_back(CreateDefaultDiffuse({ 0.8f, 0.8f, 0.8f, 1.0f }));
+			m_World.Materials.push_back(CreateDefaultPrincipled());
 			OpenMaterialEditor((int)m_World.Materials.size() - 1);
 			m_Renderer.ResetPathTracingCounter();
 		}
-		ImGui::SameLine();
-		ImGui::Checkbox("Linked Colors", &m_LinkColors);
 
 		if (m_World.Materials.empty()) {
 			ImGui::TextDisabled("nessun materiale in questa scena");
