@@ -128,6 +128,12 @@ namespace PathTracer {
 		bool m_DeleteRequested = false;
 		bool m_ShowDeletePopup = false;   // finche' e' vero, le scorciatoie sono sospese
 
+		// DOF: "pick per fuoco". Armato dal bottone, il click successivo nel viewport
+		// mette a fuoco il punto colpito invece di selezionare. m_PickForFocus ricorda,
+		// mentre il pick e' in volo (risultato pronto il frame dopo), che era per il fuoco.
+		bool m_FocusPickArmed = false;
+		bool m_PickForFocus = false;
+
 		// creazione oggetti
 		float m_NewObjectMaterial = 0.0f;
 		std::vector<std::string> m_ModelFiles;

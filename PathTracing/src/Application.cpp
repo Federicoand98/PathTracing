@@ -1128,6 +1128,36 @@ namespace PathTracer {
 		}
 		ImGui::TextDisabled("tasto destro + WASD per navigare");
 
+		ImGui::SeparatorText("Depth of field");
+		// Apertura e fuoco cambiano i raggi PRIMARI: vanno resettati (a differenza
+		// di esposizione/tonemap, che agiscono dopo l'accumulo).
+		if (ImGui::SliderFloat("Aperture", &m_Renderer.Aperture, 0.0f, 0.5f, "%.3f")) {
+			if (m_Renderer.Aperture < 0.0f) m_Renderer.Aperture = 0.0f;
+			m_Renderer.ResetPathTracingCounter();
+		}
+
+		const bool dofOff = m_Renderer.Aperture <= 0.0f;
+		ImGui::BeginDisabled(dofOff);
+		if (ImGui::DragFloat("Focus distance", &m_Renderer.FocusDistance, 0.05f, 0.01f, 1000.0f, "%.2f")) {
+			if (m_Renderer.FocusDistance < 0.01f) m_Renderer.FocusDistance = 0.01f;
+			m_Renderer.ResetPathTracingCounter();
+		}
+
+		// pick del punto di fuoco: arma la modalita', il prossimo click nel viewport
+		// mette a fuoco esattamente li'
+		if (m_FocusPickArmed) {
+			if (ImGui::Button("Annulla pick")) m_FocusPickArmed = false;
+			ImGui::SameLine();
+			ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "clicca un punto nella scena...");
+		}
+		else if (ImGui::Button("Pick focus (clicca un oggetto)")) {
+			m_FocusPickArmed = true;
+		}
+		ImGui::EndDisabled();
+
+		if (dofOff)
+			ImGui::TextDisabled("apertura a 0: DOF disattivato (pinhole)");
+
 		ImGui::PopItemWidth();
 
 		ImGui::SeparatorText("OpenGL");
@@ -1455,10 +1485,11 @@ namespace PathTracer {
 				m_DeleteRequested = true;
 		}
 
-		// il gizmo ha la precedenza sul picking: trascinarlo non deve deselezionare
+		// il gizmo ha la precedenza sul picking: trascinarlo non deve deselezionare.
+		// In modalita' fuoco pero' si clicca per mettere a fuoco, anche sopra il gizmo.
 		const bool gizmoBusy = m_Selection.IsValid() && (ImGuizmo::IsOver() || ImGuizmo::IsUsing());
 
-		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_ViewportHovered && !gizmoBusy) {
+		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && m_ViewportHovered && (!gizmoBusy || m_FocusPickArmed)) {
 			ImVec2 mouse = ImGui::GetMousePos();
 
 			// coordinate locali al rettangolo dell'immagine, non alla finestra OS
@@ -1471,6 +1502,11 @@ namespace PathTracer {
 				// del compute sta in BASSO, mentre il mouse ha origine in alto
 				int py = static_cast<int>(m_ViewportSize.y - 1.0f - localY);
 
+				// il pick e' in volo per un frame: ricorda ORA se e' per il fuoco, prima
+				// che il bottone/modalita' cambino
+				m_PickForFocus = m_FocusPickArmed;
+				m_FocusPickArmed = false;
+
 				m_LastPickPixel = { px, py };
 				m_PickRequestCount++;
 				m_Renderer.RequestPick(px, py);
@@ -1479,17 +1515,28 @@ namespace PathTracer {
 
 		// il risultato e' pronto il frame dopo la richiesta
 		int pickedType, pickedIndex;
-		if (m_Renderer.ConsumePickResult(pickedType, pickedIndex)) {
+		float pickedDistance;
+		if (m_Renderer.ConsumePickResult(pickedType, pickedIndex, pickedDistance)) {
 			m_LastPickType = pickedType;
 			m_LastPickIndex = pickedIndex;
 
-			// il pick e' stato richiesto un frame fa: se nel mezzo la scena e' cambiata,
-			// l'indice si riferisce a oggetti che non esistono piu'
-			SetSelectionFromPick(pickedType, pickedIndex);
-			ValidateSelection();
+			if (m_PickForFocus) {
+				m_PickForFocus = false;
+				// distanza < 0 = il raggio ha mancato tutto (sfondo): non spostare il fuoco
+				if (pickedDistance > 0.0f) {
+					m_Renderer.FocusDistance = pickedDistance;
+					m_Renderer.ResetPathTracingCounter(); // il fuoco cambia i raggi primari
+				}
+			}
+			else {
+				// il pick e' stato richiesto un frame fa: se nel mezzo la scena e' cambiata,
+				// l'indice si riferisce a oggetti che non esistono piu'
+				SetSelectionFromPick(pickedType, pickedIndex);
+				ValidateSelection();
 
-			if (m_Selection.IsValid())
-				m_GizmoOperation = ImGuizmo::TRANSLATE; // default alla selezione, come Blender
+				if (m_Selection.IsValid())
+					m_GizmoOperation = ImGuizmo::TRANSLATE; // default alla selezione, come Blender
+			}
 		}
 	}
 

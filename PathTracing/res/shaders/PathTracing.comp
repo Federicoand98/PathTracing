@@ -166,6 +166,8 @@ uniform int bvhDebug;         // 0 = off, 1 = heatmap del costo di traversata BV
 uniform float bvhHeatScale;   // n. di nodi visitati che mappa al colore "caldo" (rosso)
 uniform ivec2 pickPixel;      // pixel da campionare per il picking, (-1,-1) = nessuno
 uniform float fireflyClamp;   // luminanza massima per campione, <= 0 = off
+uniform float apertureRadius; // raggio della lente (thin-lens). <= 0 = pinhole, niente DOF
+uniform float focusDistance;  // distanza del piano di fuoco lungo il raggio
 
 layout(std430, binding = 0) buffer SpheresBuffer {
     Sphere Spheres[];
@@ -208,6 +210,7 @@ layout(std430, binding = 8) buffer TriangleNormalsBuffer {
 layout(std430, binding = 9) buffer PickBuffer {
     int pickType;   // 0 sfera, 1 quad, 2 mesh, -1 niente
     int pickIndex;
+    float pickDistance; // t del raggio primario al punto colpito, < 0 = niente
 };
 
 layout(std430, binding = 10) buffer TriangleUVsBuffer {
@@ -233,6 +236,7 @@ void main() {
         HitInfo pickHit = TraceRay(pickRay);
         pickType = pickHit.ObjectType;
         pickIndex = pickHit.ObjectIndex;
+        pickDistance = pickHit.HitDistance; // < 0 se il raggio non colpisce niente
     }
 
     // BVH debugger: colora ogni pixel in base a quanti nodi BVH testa il raggio
@@ -284,8 +288,33 @@ void main() {
     imageStore(imgOutput, texelCoord, value);
 }
 
+// Punto uniforme nel disco unitario (mappatura concentrica polare, niente rejection).
+vec2 RandomInUnitDisk() {
+    float r = sqrt(GetRandomFloat());
+    float theta = 2.0 * PI * GetRandomFloat();
+    return r * vec2(cos(theta), sin(theta));
+}
+
 vec4 PerPixel(vec2 ndc) {
     Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
+
+    // Depth of field, modello thin-lens. Il raggio pinhole parte dal centro camera; con
+    // apertura > 0 lo faccio partire da un punto sul disco della lente e lo ripunto verso
+    // il punto di fuoco (a focusDistance lungo il raggio pinhole). Ogni campione pesca un
+    // punto diverso della lente: mediandoli nasce lo sfocato. Va SOLO qui, nel raggio di
+    // render: il picking e il BVH debug restano pinhole (altrimenti il pick sarebbe impreciso).
+    if(apertureRadius > 0.0) {
+        vec3 focusPoint = ray.Origin + ray.Direction * focusDistance;
+
+        // assi camera in world space: colonne dell'inversa della view
+        vec3 right = normalize(vec3(inverseView[0]));
+        vec3 up    = normalize(vec3(inverseView[1]));
+
+        vec2 lens = apertureRadius * RandomInUnitDisk();
+        vec3 origin = ray.Origin + right * lens.x + up * lens.y;
+
+        ray = Ray(origin, normalize(focusPoint - origin), 0);
+    }
 
     Material material;
     vec3 light = vec3(0.0);         // colore finale del pixel dato dall'accumulazione

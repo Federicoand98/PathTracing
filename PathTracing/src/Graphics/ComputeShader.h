@@ -73,21 +73,26 @@ namespace PathTracer {
 			ResetPickBuffer();
 		}
 
+		// Layout std430 del PickBuffer: due int + un float, tutti scalari 4 byte, packing
+		// naturale senza padding (12 byte). Tenuto in sync con lo struct nello shader.
+		struct PickData { int type; int index; float distance; };
+
 		// Azzera il risultato prima del dispatch. La sentinella e' -2, non -1: cosi'
 		// "lo shader non ha scritto" (-2) si distingue da "raggio a vuoto" (-1).
 		void ResetPickBuffer() {
-			const int empty[2] = { -2, -2 };
+			const PickData empty = { -2, -2, -1.0f };
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_pick);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(empty), empty, GL_DYNAMIC_DRAW);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(empty), &empty, GL_DYNAMIC_DRAW);
 		}
 
-		void ReadPickBuffer(int& objectType, int& objectIndex) {
-			int result[2] = { -1, -1 };
+		void ReadPickBuffer(int& objectType, int& objectIndex, float& distance) {
+			PickData result = { -1, -1, -1.0f };
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_pick);
-			glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(result), result);
+			glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(result), &result);
 
-			objectType = result[0];
-			objectIndex = result[1];
+			objectType = result.type;
+			objectIndex = result.index;
+			distance = result.distance;
 		}
 		
 		void Bind() {

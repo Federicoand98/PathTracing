@@ -24,10 +24,11 @@ namespace PathTracer {
 
 		// Picking: si richiede un pixel, e il frame successivo il risultato e' pronto.
 		void RequestPick(int x, int y) { m_PickX = x; m_PickY = y; m_PickRequested = true; }
-		bool ConsumePickResult(int& objectType, int& objectIndex) {
+		bool ConsumePickResult(int& objectType, int& objectIndex, float& distance) {
 			if (!m_PickAvailable) return false;
 			objectType = m_PickType;
 			objectIndex = m_PickIndex;
+			distance = m_PickDistance;
 			m_PickAvailable = false;
 			return true;
 		}
@@ -40,6 +41,8 @@ namespace PathTracer {
 		bool BVHDebug = false;
 		float BVHHeatScale = 64.0f;
 		float FireflyClamp = 0.0f;   // 0 = off
+		float Aperture = 0.0f;       // raggio lente; 0 = pinhole, niente DOF
+		float FocusDistance = 5.0f;  // distanza del piano di fuoco
 		float Exposure = 1.0;
 		int m_SamplesPerPixel = 1;
 		int m_RayDepth = 5;
@@ -62,6 +65,7 @@ namespace PathTracer {
 		bool m_PickAvailable = false;
 		int m_PickX = -1, m_PickY = -1;
 		int m_PickType = -1, m_PickIndex = -1;
+		float m_PickDistance = -1.0f;
 	};
 }
 

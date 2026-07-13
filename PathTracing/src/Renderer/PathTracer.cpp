@@ -53,10 +53,10 @@ namespace PathTracer {
 		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	}
 
-	void PathTracer::ReadPickResult(int& objectType, int& objectIndex) {
+	void PathTracer::ReadPickResult(int& objectType, int& objectIndex, float& distance) {
 		// il dispatch ha appena scritto l'SSBO: serve la barriera prima di rileggerlo
 		glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
-		m_ComputeShader->ReadPickBuffer(objectType, objectIndex);
+		m_ComputeShader->ReadPickBuffer(objectType, objectIndex, distance);
 	}
 
 	void PathTracer::UploadUniforms(const ComputeUniformContainer& container) {
@@ -79,6 +79,8 @@ namespace PathTracer {
 		m_ComputeShader->SetInt("bvhDebug", container.BVHDebug ? 1 : 0);
 		m_ComputeShader->SetFloat("bvhHeatScale", container.BVHHeatScale);
 		m_ComputeShader->SetFloat("fireflyClamp", container.FireflyClamp);
+		m_ComputeShader->SetFloat("apertureRadius", container.ApertureRadius);
+		m_ComputeShader->SetFloat("focusDistance", container.FocusDistance);
 		m_ComputeShader->SetIVec2("pickPixel", container.PickPixel.x, container.PickPixel.y);
 
 		if (container.PickPixel.x >= 0)

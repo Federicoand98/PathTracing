@@ -18,8 +18,10 @@ namespace PathTracer {
 		bool EnvironmentMapping;
 		bool BVHDebug;
 		float BVHHeatScale;
-		float FireflyClamp;   // luminanza massima per campione, <= 0 = off
-		glm::ivec2 PickPixel; // (-1,-1) = nessuna richiesta di picking
+		float FireflyClamp;    // luminanza massima per campione, <= 0 = off
+		float ApertureRadius;  // raggio lente thin-lens, <= 0 = pinhole (niente DOF)
+		float FocusDistance;   // distanza del piano di fuoco
+		glm::ivec2 PickPixel;  // (-1,-1) = nessuna richiesta di picking
 		const class World& World;
 		const class Camera& Camera;
 	};
@@ -34,7 +36,7 @@ namespace PathTracer {
 
 		void DispatchCompute(unsigned int numGroupX, unsigned int numGroupY);
 		void UploadUniforms(const ComputeUniformContainer& container);
-		void ReadPickResult(int& objectType, int& objectIndex);
+		void ReadPickResult(int& objectType, int& objectIndex, float& distance);
 	private:
 		std::shared_ptr<ComputeShader> m_ComputeShader;
 		std::shared_ptr<Texture> m_SkyBox;
