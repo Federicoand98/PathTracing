@@ -319,9 +319,12 @@ namespace PathTracer {
 		green = CreateDefaultDiffuse({ 0.0, 1.0, 0.0, 1.0 });
 		Material glass1 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.45f);
 		Material glass2 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.01f);
-		Material metal1 = CreateDefaultGlossy({ 0.8549, 0.5490, 0.4, 1.0 }, 0.5, 0.3);
-		Material metal2 = CreateDefaultGlossy({ 0.8549, 0.5490, 0.4, 1.0 }, 0.5, 0.6);
-		Material metal3 = CreateDefaultGlossy({ 0.8549, 0.5490, 0.4, 1.0 }, 0.5, 1);
+		// Metalli ramati veri (Metalness = 1): nel modello PBR il riflesso e' tinto dalla
+		// base color. Prima erano Glossy dielettrici che fingevano il rame con lo specular
+		// colorato; il roughness scalato ridà il gradiente nitido->satinato che davano.
+		Material metal1 = CreateDefaultMetal({ 0.8549, 0.5490, 0.4, 1.0 }); metal1.Roughness = 0.05f;
+		Material metal2 = CreateDefaultMetal({ 0.8549, 0.5490, 0.4, 1.0 }); metal2.Roughness = 0.25f;
+		Material metal3 = CreateDefaultMetal({ 0.8549, 0.5490, 0.4, 1.0 }); metal3.Roughness = 0.45f;
 
 		Materials.push_back(white_diffuse);
 		Materials.push_back(metal);

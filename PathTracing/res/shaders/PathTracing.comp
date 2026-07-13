@@ -107,7 +107,8 @@ struct Material {
     float NoiseTurbulence; // peso della turbolenza nella fase del marmo
     vec4 NoiseColorA;
     vec4 NoiseColorB;
-    float Metalness;   // 0 = dielettrico, 1 = metallo
+    float Metalness;     // 0 = dielettrico, 1 = metallo
+    float SpecularTint;  // 0 = riflesso bianco, 1 = tinto verso base color (solo dielettrici)
 };
 
 struct HitInfo {
@@ -122,7 +123,7 @@ struct HitInfo {
 
 Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc);
 vec4 PerPixel(vec2 ndc);
-float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive, out bool isSpecular);
+vec3 BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive);
 HitInfo TraceRay(Ray ray);
 HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit, float u, float v);
 HitInfo NoHit();
@@ -319,9 +320,7 @@ vec4 PerPixel(vec2 ndc) {
     Material material;
     vec3 light = vec3(0.0);         // colore finale del pixel dato dall'accumulazione
     vec3 contribution = vec3(1.0);  // contributo di ogni intersezione al colore finale
-    float rayProbability;
     bool isRefractive;
-    bool isSpecular;
 
     vec4 col = vec4(0.0);
 
@@ -359,26 +358,14 @@ vec4 PerPixel(vec2 ndc) {
             contribution *= exp(-vec3(material.RefractionColor) * hit.HitDistance);
         }
 
-        rayProbability = BSDF(ray, hit, material, isRefractive, isSpecular);
+        // Il BSDF ritorna gia' il peso completo del campione (BRDF*cos/pdf diviso per la
+        // probabilita' di scelta del lobo): Fresnel, masking-shadowing e tinta del metallo
+        // sono dentro. Qui basta moltiplicarlo nel throughput.
+        vec3 bsdfWeight = BSDF(ray, hit, material, isRefractive);
 
         light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
 
-        if(!isRefractive) {
-            vec3 albedo = SampleAlbedo(material, hit.UV, hit.HitPosition);
-
-            // Un dielettrico riflette senza tingere (il riflesso su una plastica rossa e'
-            // bianco) e ha una componente diffusa. Un metallo fa l'opposto: niente diffuso,
-            // e il riflesso porta il colore dell'albedo. Metalness interpola fra i due.
-            vec3 diffuseColor  = vec3(material.Color) * albedo * (1.0 - material.Metalness);
-            vec3 specularColor = mix(vec3(material.SpecularColor),
-                                     vec3(material.Color) * albedo,
-                                     material.Metalness);
-
-            contribution *= isSpecular ? specularColor : diffuseColor;
-        }
-
-        // normalizzazione del colore in base alla probabilità del raggio, in modo da avere una rappresentazione accurata dell'intensità di lice che rggiunge il pixel
-        contribution /= rayProbability;
+        contribution *= bsdfWeight;
 
         // if(hit.ObjectType == 5)
         //     return vec4(1.0, 0.0, 1.0, 1.0);
@@ -400,70 +387,147 @@ vec4 PerPixel(vec2 ndc) {
     // return col;
 }
 
-float BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive, out bool isSpecular) {
+// ---- BRDF microfacet GGX (Trowbridge-Reitz) + Fresnel RGB ------------------
+
+float Luminance(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+
+// Fresnel di Schlick vettoriale: F0 e' un colore. Per un dielettrico e' grigio (~0.04),
+// per un metallo e' l'albedo -> il riflesso e' tinto al centro e bianco ai bordi radenti.
+vec3 FresnelSchlickRGB(vec3 F0, float cosTheta) {
+    float m = clamp(1.0 - cosTheta, 0.0, 1.0);
+    float m5 = (m * m) * (m * m) * m;
+    return F0 + (1.0 - F0) * m5;
+}
+
+// Base ortonormale branchless attorno a n (Duff et al. 2017): niente casi degeneri.
+void BuildBasis(vec3 n, out vec3 t, out vec3 b) {
+    float s = n.z >= 0.0 ? 1.0 : -1.0;
+    float a = -1.0 / (s + n.z);
+    float c = n.x * n.y * a;
+    t = vec3(1.0 + s * n.x * n.x * a, s * c, -s * n.x);
+    b = vec3(c, s + n.y * n.y * a, -n.y);
+}
+
+// Termine Lambda di Smith per GGX: entra nel masking-shadowing G.
+float SmithLambda(float cosTheta, float alpha) {
+    float c2 = cosTheta * cosTheta;
+    float tan2 = (1.0 - c2) / max(c2, 1e-8);
+    return 0.5 * (-1.0 + sqrt(1.0 + alpha * alpha * tan2));
+}
+
+// Sampling della distribuzione delle NORMALI VISIBILI (Heitz 2018): campiona solo micro-
+// normali effettivamente viste da V, molta meno varianza del sampling della sola NDF.
+// Spazio locale con la macro-normale = (0,0,1). alpha isotropo.
+vec3 SampleGGXVNDF(vec3 Ve, float alpha, float u1, float u2) {
+    vec3 Vh = normalize(vec3(alpha * Ve.x, alpha * Ve.y, Ve.z));
+    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+    vec3 T1 = lensq > 0.0 ? vec3(-Vh.y, Vh.x, 0.0) * inversesqrt(lensq) : vec3(1.0, 0.0, 0.0);
+    vec3 T2 = cross(Vh, T1);
+    float r = sqrt(u1);
+    float phi = 2.0 * PI * u2;
+    float t1 = r * cos(phi);
+    float t2 = r * sin(phi);
+    float s = 0.5 * (1.0 + Vh.z);
+    t2 = (1.0 - s) * sqrt(max(0.0, 1.0 - t1 * t1)) + s * t2;
+    vec3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0, 1.0 - t1 * t1 - t2 * t2)) * Vh;
+    return normalize(vec3(alpha * Nh.x, alpha * Nh.y, max(1e-6, Nh.z)));
+}
+
+// Emisfero pesato sul coseno attorno a n: la pdf e' cos/PI, cosi' per un diffuso
+// lambertiano il peso BRDF*cos/pdf si semplifica esattamente all'albedo.
+vec3 CosineSampleHemisphere(vec3 n, float u1, float u2) {
+    vec3 t, b;
+    BuildBasis(n, t, b);
+    float r = sqrt(u1);
+    float phi = 2.0 * PI * u2;
+    float z = sqrt(max(0.0, 1.0 - u1));
+    return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * z);
+}
+
+// Ritorna il peso del campione (throughput multiplier) e imposta ray.Origin/Direction.
+vec3 BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive) {
     isRefractive = false;
-    isSpecular = false;
 
-    float rayProbability = 1.0;
+    vec3 N = hit.Normal;         // orientata verso il viewer (vedi HandleHit / flip Inside)
+    vec3 V = -ray.Direction;     // dal punto verso la camera
+    vec3 hitPos = ray.Origin + ray.Direction * hit.HitDistance;
 
-    // Un metallo non ha componente diffusa: ogni rimbalzo e' speculare. La metalness
-    // porta quindi la probabilita' speculare a 1, qualunque sia SpecularProbability.
-    float baseSpecular = mix(material.SpecularProbability, 1.0, material.Metalness);
+    float metalness = clamp(material.Metalness, 0.0, 1.0);
+    vec3 albedo = SampleAlbedo(material, hit.UV, hitPos);
+    vec3 baseColor = vec3(material.Color) * albedo;
 
-    float specularProbability = baseSpecular;
-    float refractionProbability = material.RefractionProbability * (1.0 - material.Metalness);
+    // F0: dielettrico grigio, metallo = albedo. SpecularProbability e' l'F0 dielettrico
+    // (l'editor Principled ci scrive 0.08*livello). Clampato a 0.08 = massimo Principled:
+    // salva anche i materiali legacy che avevano il vecchio default 1.0 (era una
+    // probabilita', non un F0) e altrimenti diventerebbero specchi bianchi.
+    float dielF0 = min(material.SpecularProbability, 0.08);
 
-    if(specularProbability > 0.0) {
-        specularProbability = FresnelSchlick(
-            hit.Inside ? material.RefractionRatio : 1.0,
-            !hit.Inside ? material.RefractionRatio : 1.0,
-            ray.Direction, hit.Normal, baseSpecular, 1.0
-        );
+    // Specular tint (Disney): l'F0 dielettrico può essere spinto verso la HUE della base
+    // color (luminanza normalizzata a 1) invece del grigio neutro. tint=0 -> bianco fisico,
+    // tint=1 -> riflesso colorato su un non-metallo. Il metallo lo ignora: mix con metalness
+    // porta comunque F0 alla base color piena.
+    vec3 tintHue = baseColor / max(Luminance(baseColor), 1e-4);
+    vec3 dielSpec = dielF0 * mix(vec3(1.0), tintHue, clamp(material.SpecularTint, 0.0, 1.0));
+    vec3 F0 = mix(dielSpec, baseColor, metalness);
 
-        // Con baseSpecular == 1 il denominatore e' zero e Fresnel restituisce 1 comunque:
-        // il rapporto sarebbe 0/0 = NaN, e refractionProbability diventerebbe NaN.
-        // NaN > 0.0 e' falso, quindi il bug si nascondeva saltando sempre la rifrazione.
-        float denom = 1.0 - baseSpecular;
-        float probabilityMultiplier = denom > 0.0 ? (1.0 - specularProbability) / denom : 0.0;
-        refractionProbability *= probabilityMultiplier;
-    }
+    float roughness = clamp(material.Roughness, 0.0, 1.0);
+    float alpha = max(roughness * roughness, 1e-3); // roughness percettiva -> alpha GGX
 
-    float doSpecular = 0.0;
-    float doRefraction = 0.0;
-    float raySelectRoll = GetRandomFloat();
+    float pRefr = material.RefractionProbability * (1.0 - metalness);
+    float roll = GetRandomFloat();
 
-    if(specularProbability > 0.0 && raySelectRoll < specularProbability) {
-        doSpecular = 1.0;
-        isSpecular = true;
-        rayProbability = specularProbability;
-    } else if(refractionProbability > 0.0 && raySelectRoll < specularProbability + refractionProbability) {
-        doRefraction = 1.0;
+    // ---- lobo di rifrazione (vetro): logica invariata, solo instradata nel peso ----
+    if(pRefr > 0.0 && roll < pRefr) {
         isRefractive = true;
-        rayProbability = refractionProbability;
-    } else {
-        rayProbability = 1.0 - (specularProbability + refractionProbability);
+        ray.Origin = hitPos - N * 0.001;
+        vec3 refr = refract(ray.Direction, N, hit.Inside ? material.RefractionRatio : 1.0 / material.RefractionRatio);
+        refr = normalize(mix(refr, normalize(-N + GetRandomVector(rndSeed)),
+                             material.RefractionRoughness * material.RefractionRoughness));
+        ray.Direction = refr;
+        return vec3(1.0 / pRefr); // la tinta arriva dal Beer-Lambert nel segmento interno
     }
 
-    rayProbability = max(rayProbability, 0.001);
+    // ---- scelta speculare / diffuso, proporzionale all'importanza (throughput-aware) ----
+    float specImp = Luminance(F0);
+    float diffImp = Luminance(baseColor) * (1.0 - metalness);
+    float budget = 1.0 - pRefr;
+    // niente diffuso su un metallo -> tutto speculare
+    float pSpec = (diffImp <= 0.0) ? budget
+                : budget * clamp(specImp / max(specImp + diffImp, 1e-4), 0.05, 0.95);
+    float pDiff = budget - pSpec;
 
-    if(doRefraction == 1.0) {
-        ray.Origin = (ray.Origin + ray.Direction * hit.HitDistance) - hit.Normal * 0.001;
-    } else {
-        ray.Origin = (ray.Origin + ray.Direction * hit.HitDistance) + hit.Normal * 0.001;
+    ray.Origin = hitPos + N * 0.001;
+
+    if(roll < pRefr + pSpec) {
+        // ---- speculare: microfacet GGX con VNDF ----
+        vec3 T, B;
+        BuildBasis(N, T, B);
+        vec3 Vl = vec3(dot(V, T), dot(V, B), dot(V, N)); // V in spazio locale (Vl.z = NoV)
+        vec3 Hl = SampleGGXVNDF(Vl, alpha, GetRandomFloat(), GetRandomFloat());
+        vec3 Ll = reflect(-Vl, Hl); // direzione di luce riflessa attorno alla micro-normale
+
+        if(Ll.z <= 0.0)             // sotto l'orizzonte: campione non valido
+            return vec3(0.0);
+
+        float NoV = max(Vl.z, 1e-4);
+        float NoL = max(Ll.z, 1e-4);
+        float VoH = max(dot(Vl, Hl), 0.0);
+
+        // Peso VNDF: BRDF*cos/pdf = F * G2/G1. Con Smith height-correlated
+        // G2/G1 = (1+Lv) / (1+Lv+Ll). La NDF si cancella nel rapporto.
+        vec3 F = FresnelSchlickRGB(F0, VoH);
+        float Lv = SmithLambda(NoV, alpha);
+        float Ll_ = SmithLambda(NoL, alpha);
+        float gRatio = (1.0 + Lv) / (1.0 + Lv + Ll_);
+
+        ray.Direction = normalize(T * Ll.x + B * Ll.y + N * Ll.z);
+        return F * gRatio / pSpec;
     }
-
-    vec3 diffuseDirection = normalize(hit.Normal + GetRandomVector(rndSeed));
-
-    vec3 specularDirection = reflect(ray.Direction, hit.Normal);
-    specularDirection = normalize(mix(specularDirection, diffuseDirection, material.Roughness * material.Roughness));
-
-    vec3 refractionDirection = refract(ray.Direction, hit.Normal, hit.Inside ? material.RefractionRatio : 1.0 / material.RefractionRatio);
-    refractionDirection = normalize(mix(refractionDirection, normalize(-hit.Normal + GetRandomVector(rndSeed)), material.RefractionRoughness * material.RefractionRoughness));
-
-    ray.Direction = mix(diffuseDirection, specularDirection, doSpecular);
-    ray.Direction = mix(ray.Direction, refractionDirection, doRefraction);
-
-    return rayProbability;
+    else {
+        // ---- diffuso lambertiano, cosine-weighted ----
+        ray.Direction = CosineSampleHemisphere(N, GetRandomFloat(), GetRandomFloat());
+        return baseColor * (1.0 - metalness) / pDiff;
+    }
 }
 
 // Ritorna la distanza d'ingresso nella AABB, oppure FLOAT_MAX se il raggio la manca

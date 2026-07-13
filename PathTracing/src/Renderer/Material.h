@@ -42,7 +42,11 @@ namespace PathTracer {
 		// 0 = dielettrico (plastica, vetro, intonaco): riflesso non tinto, componente diffusa
 		// 1 = metallo: nessuna componente diffusa, il riflesso e' tinto dall'albedo
 		float Metalness = 0.0f;
-		glm::vec3 _pad2{ 0.0f }; // porta la dimensione a 176, multiplo di 16
+		// 0 = riflesso dielettrico bianco (fisico), 1 = tinto verso la base color (Disney).
+		// Ridà i riflessi colorati sui NON metalli senza abbandonare il PBR. I metalli lo
+		// ignorano (il loro F0 è già la base color). Occupa il padding: la dimensione resta 176.
+		float SpecularTint = 0.0f;
+		glm::vec2 _pad2{ 0.0f }; // porta la dimensione a 176, multiplo di 16
 	};
 
 	static_assert(sizeof(Material) == 176, "Material deve essere 176 byte per combaciare con lo std430");
@@ -50,6 +54,7 @@ namespace PathTracer {
 	static_assert(offsetof(Material, AlbedoTexture) == 96, "AlbedoTexture deve stare a 96");
 	static_assert(offsetof(Material, NoiseColorA) == 128, "NoiseColorA deve stare a 128 (std430 allinea i vec4 a 16)");
 	static_assert(offsetof(Material, Metalness) == 160, "Metalness deve stare a 160");
+	static_assert(offsetof(Material, SpecularTint) == 164, "SpecularTint deve stare a 164");
 
 	// Dielettrico opaco "sano" nel senso del modello Principled: riflesso non tinto
 	// (SpecularColor bianco), F0 standard 0.04, niente trasmissione. E' il punto di

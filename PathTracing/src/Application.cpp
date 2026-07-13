@@ -839,6 +839,12 @@ namespace PathTracer {
 			changed = true;
 		}
 
+		// Specular tint: colora il riflesso di un dielettrico verso la base color. Un metallo
+		// lo ignora (il riflesso e' gia' tinto dall'albedo), quindi si grigia a metallo pieno.
+		ImGui::BeginDisabled(material.Metalness >= 0.999f);
+		if (ImGui::SliderFloat("Specular tint", &material.SpecularTint, 0.0f, 1.0f)) changed = true;
+		ImGui::EndDisabled();
+
 		// IOR: il Fresnel lo usa anche per il riflesso dielettrico, non solo per il vetro.
 		// Su un metallo non ha effetto (rifrazione spenta, Fresnel saturo).
 		ImGui::BeginDisabled(isMetal);
