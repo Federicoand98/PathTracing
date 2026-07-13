@@ -1102,8 +1102,20 @@ namespace PathTracer {
 		ImGui::SeparatorText("Output");
 		if (ImGui::Checkbox("Vsync", &m_Vsync))
 			glfwSwapInterval(m_Vsync);
-		ImGui::Checkbox("Post Processing", &m_Renderer.PostProcessing);
-		ImGui::DragFloat("HDR exposure", &m_Renderer.Exposure, 0.01f, 0.0f, 10.0f);
+
+		// Esposizione e tonemap agiscono DOPO l'accumulo (fragment di post): cambiarli non
+		// invalida i campioni gia' accumulati, quindi niente ResetPathTracingCounter.
+		ImGui::Checkbox("ACES tonemap", &m_Renderer.PostProcessing);
+		ImGui::DragFloat("Exposure", &m_Renderer.Exposure, 0.01f, 0.0f, 10.0f);
+
+		// Il firefly clamp invece vive nel path tracer e cambia i campioni: va resettato.
+		// Etichetta come luminanza massima; 0 = off. Sotto ~2 inizia a mangiare i riflessi.
+		if (ImGui::DragFloat("Firefly clamp", &m_Renderer.FireflyClamp, 0.1f, 0.0f, 50.0f, "%.1f")) {
+			if (m_Renderer.FireflyClamp < 0.0f) m_Renderer.FireflyClamp = 0.0f;
+			m_Renderer.ResetPathTracingCounter();
+		}
+		if (m_Renderer.FireflyClamp <= 0.0f)
+			ImGui::TextDisabled("firefly clamp off");
 
 		ImGui::SeparatorText("Camera");
 		if (ImGui::SliderFloat("Vertical FOV", &m_Camera.m_VerticalFOV, 30.0f, 140.0f)) {

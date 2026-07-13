@@ -37,7 +37,7 @@ namespace PathTracer {
 
 		glm::ivec2 pickPixel = m_PickRequested ? glm::ivec2(m_PickX, m_PickY) : glm::ivec2(-1, -1);
 
-		ComputeUniformContainer container = { m_Width, m_Height, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, pickPixel, *m_World, *m_Camera };
+		ComputeUniformContainer container = { m_Width, m_Height, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, FireflyClamp, pickPixel, *m_World, *m_Camera };
 
 		m_PathTracer->Begin();
 		m_PathTracer->UploadUniforms(container);

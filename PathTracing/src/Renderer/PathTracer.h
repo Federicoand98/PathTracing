@@ -18,6 +18,7 @@ namespace PathTracer {
 		bool EnvironmentMapping;
 		bool BVHDebug;
 		float BVHHeatScale;
+		float FireflyClamp;   // luminanza massima per campione, <= 0 = off
 		glm::ivec2 PickPixel; // (-1,-1) = nessuna richiesta di picking
 		const class World& World;
 		const class Camera& Camera;

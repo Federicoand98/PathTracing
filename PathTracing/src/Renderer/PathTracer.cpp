@@ -78,6 +78,7 @@ namespace PathTracer {
 		m_ComputeShader->SetBool("EnvironmentMapping", container.EnvironmentMapping);
 		m_ComputeShader->SetInt("bvhDebug", container.BVHDebug ? 1 : 0);
 		m_ComputeShader->SetFloat("bvhHeatScale", container.BVHHeatScale);
+		m_ComputeShader->SetFloat("fireflyClamp", container.FireflyClamp);
 		m_ComputeShader->SetIVec2("pickPixel", container.PickPixel.x, container.PickPixel.y);
 
 		if (container.PickPixel.x >= 0)

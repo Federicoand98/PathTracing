@@ -12,20 +12,21 @@ vec3 LinearToSRGB(vec3 rgb, float gamma);
 vec3 SRGBToLinear(vec3 rgb, float gamma);
 vec3 ACESFilm(vec3 x);
 	
-void main() {             
-    vec3 texCol = texture(tex, TexCoords).rgb;      
-    const float gamma = 2.2;
-    
-    if(PostProcessing) {
-		texCol *= 0.5;
-        texCol = ACESFilm(texCol);
-        texCol = LinearToSRGB(texCol, 2.4);
-    }
+void main() {
+    // Pipeline unica: HDR lineare -> esposizione -> [ACES] -> encoding sRGB.
+    vec3 color = texture(tex, TexCoords).rgb;   // colore lineare accumulato dal path tracer
 
-    vec3 mapped = vec3(1.0) - exp(-texCol * Exposure);
-    mapped = pow(mapped, vec3(1.0 / gamma));
+    color *= Exposure;                          // esposizione: moltiplicatore lineare
 
-    FragColor = vec4(texCol, 1.0);
+    if(PostProcessing)
+        color = ACESFilm(color);                // tonemap HDR -> [0,1] (clampa gia' lui)
+
+    // Encoding sRGB SEMPRE: il framebuffer non e' sRGB e ImGui non converte, quindi senza
+    // questo l'immagine uscirebbe scura. Senza tonemap i valori > 1 vengono troncati netti
+    // da LinearToSRGB (clipping atteso: e' cosa vuol dire "niente tonemap").
+    color = LinearToSRGB(color, 2.4);
+
+    FragColor = vec4(color, 1.0);
 }
 
 vec3 LessThan(vec3 f, float value) {

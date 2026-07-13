@@ -39,6 +39,7 @@ namespace PathTracer {
 		bool EnvironmentMapping = true;
 		bool BVHDebug = false;
 		float BVHHeatScale = 64.0f;
+		float FireflyClamp = 0.0f;   // 0 = off
 		float Exposure = 1.0;
 		int m_SamplesPerPixel = 1;
 		int m_RayDepth = 5;
