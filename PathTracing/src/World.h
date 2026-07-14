@@ -85,6 +85,12 @@ namespace PathTracer {
 		void PrepareSetup3();
 
 		void UploadModel(const Model& model, const glm::vec3& Position, int material);
+
+		// Traduzione MTL -> engine. Vivono qui perche' toccano Materials e TexturePaths.
+		int RegisterMtlMaterials(const Model& model);      // appende i materiali MTL, ritorna l'indice base (-1 se l'OBJ non ha MTL)
+		int RegisterTexture(const std::string& path);      // dedup in TexturePaths, ritorna il layer
+		Material MaterialFromMtl(const MtlMaterial& mtl);  // MtlMaterial -> Material dell'engine
+
 		void BuildBVH();
 		int ComputeBVHDepth(int rootNode) const;
 

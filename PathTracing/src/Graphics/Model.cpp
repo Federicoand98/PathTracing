@@ -69,12 +69,28 @@ namespace PathTracer {
 			return;
 		}
 
+		int currentMaterial = -1; // materiale attivo dall'ultimo "usemtl"
+
 		while (std::getline(ifile, line)) {
 			ss.clear();
 			ss.str(line);
 			ss >> prefix;
 
-			if (prefix == "v") {
+			if (prefix == "mtllib") {
+				// il .mtl e' relativo alla cartella dell'OBJ
+				std::string mtlName;
+				ss >> mtlName;
+				const std::string mtlPath = (std::filesystem::path(filePath).parent_path() / mtlName).lexically_normal().string();
+				ParseMtl(mtlPath);
+			}
+			else if (prefix == "usemtl") {
+				std::string matName;
+				ss >> matName;
+				currentMaterial = -1;
+				for (size_t i = 0; i < m_Materials.size(); i++)
+					if (m_Materials[i].Name == matName) { currentMaterial = (int)i; break; }
+			}
+			else if (prefix == "v") {
 				glm::vec3* v = new glm::vec3;
 				ss >> v->x >> v->y >> v->z;
 				m_Vertices.push_back(v);
@@ -127,6 +143,8 @@ namespace PathTracer {
 					face->normal_ins[0] = faceNormals[0];
 					face->normal_ins[1] = faceNormals[i];
 					face->normal_ins[2] = faceNormals[i + 1];
+
+					face->material = currentMaterial;
 
 					m_Faces.push_back(face);
 					m_TriangleCount++;
@@ -207,8 +225,62 @@ namespace PathTracer {
 			triangle->UVB = uvAt(face->uv_ins[1]);
 			triangle->UVC = uvAt(face->uv_ins[2]);
 
+			// indice LOCALE nel MTL del modello; World lo rimappa al globale. -1 resta -1
+			// (nessun usemtl) e a valle diventa il fallback al materiale della mesh.
+			triangle->MaterialIndex = (float)face->material;
+
 			m_Triangles.push_back(triangle);
 		}
+	}
+
+	// Parser MTL: legge SOLO i campi che il nostro Material sa rappresentare (vedi MtlMaterial).
+	// I path delle texture sono risolti rispetto alla cartella del .mtl. Ka, map_Bump, map_d,
+	// illum, ecc. sono deliberatamente ignorati (non hanno un equivalente, per ora).
+	void Model::ParseMtl(const std::string& mtlPath) {
+		std::ifstream file(mtlPath);
+		if (!file.is_open()) {
+			std::cerr << "MTL non trovato: " << mtlPath << " (le mesh useranno il materiale della mesh)" << std::endl;
+			return;
+		}
+
+		const std::filesystem::path mtlDir = std::filesystem::path(mtlPath).parent_path();
+		std::string line, prefix;
+		std::stringstream ss;
+
+		while (std::getline(file, line)) {
+			ss.clear();
+			ss.str(line);
+			ss >> prefix;
+
+			if (prefix == "newmtl") {
+				MtlMaterial m;
+				ss >> m.Name;
+				m_Materials.push_back(m);
+			}
+			else if (m_Materials.empty()) {
+				continue; // proprieta' prima di qualsiasi newmtl: ignora
+			}
+			else {
+				MtlMaterial& m = m_Materials.back();
+				if (prefix == "Kd") ss >> m.Kd.x >> m.Kd.y >> m.Kd.z;
+				else if (prefix == "Ke") ss >> m.Ke.x >> m.Ke.y >> m.Ke.z;
+				else if (prefix == "Ns") ss >> m.Ns;
+				else if (prefix == "Ni") ss >> m.Ni;
+				else if (prefix == "d") ss >> m.d;
+				else if (prefix == "Tr") { float tr; ss >> tr; m.d = 1.0f - tr; } // Tr = 1 - d
+				else if (prefix == "Pr") ss >> m.Pr;
+				else if (prefix == "Pm") ss >> m.Pm;
+				else if (prefix == "map_Kd") {
+					// map_Kd puo' avere opzioni (-o, -s, ...): il filename e' l'ULTIMO token
+					std::string token, last;
+					while (ss >> token) last = token;
+					if (!last.empty())
+						m.map_Kd = (mtlDir / last).lexically_normal().string();
+				}
+			}
+		}
+
+		std::cout << "MTL caricato: " << mtlPath << " (" << m_Materials.size() << " materiali)" << std::endl;
 	}
 
 	void Model::CalculateBoundingBox() {

@@ -735,6 +735,62 @@ namespace PathTracer {
 
 	}
 
+	// Un layer del sampler2DArray per path, deduplicato: due materiali con la stessa
+	// texture condividono il layer.
+	int World::RegisterTexture(const std::string& path) {
+		for (size_t i = 0; i < TexturePaths.size(); i++)
+			if (TexturePaths[i] == path)
+				return static_cast<int>(i);
+		TexturePaths.push_back(path);
+		return static_cast<int>(TexturePaths.size()) - 1;
+	}
+
+	Material World::MaterialFromMtl(const MtlMaterial& mm) {
+		Material m;
+		m.Color = glm::vec4(mm.Kd, 1.0f);
+
+		// Ns (esponente Phong 0..1000) -> roughness percettiva. Pr, se presente, la sovrascrive.
+		m.Roughness = glm::clamp(std::sqrt(2.0f / (mm.Ns + 2.0f)), 0.0f, 1.0f);
+		if (mm.Pr >= 0.0f) m.Roughness = glm::clamp(mm.Pr, 0.0f, 1.0f);
+		m.RefractionRoughness = m.Roughness;
+
+		m.Metalness = (mm.Pm >= 0.0f) ? glm::clamp(mm.Pm, 0.0f, 1.0f) : 0.0f;
+		m.RefractionRatio = glm::clamp(mm.Ni, 1.0f, 3.0f);
+		m.SpecularProbability = 0.04f;       // F0 dielettrico standard
+		m.SpecularColor = glm::vec4(1.0f);   // riflesso dielettrico non tinto (fisico)
+		m.RefractionColor = m.Color;
+
+		// emissione: la magnitudine di Ke diventa la forza, il resto e' il colore
+		float ke = glm::max(mm.Ke.x, glm::max(mm.Ke.y, mm.Ke.z));
+		if (ke > 0.0f) {
+			m.EmissiveColor = glm::vec4(mm.Ke / ke, 1.0f);
+			m.EmissiveStrenght = ke;
+		}
+
+		// map_Kd: la texture porta il colore, quindi Color va a bianco per non tingerla due volte
+		if (!mm.map_Kd.empty()) {
+			m.AlbedoTexture = static_cast<float>(RegisterTexture(mm.map_Kd));
+			m.Color = glm::vec4(1.0f);
+		}
+		return m;
+	}
+
+	// Appende i materiali del MTL in coda a Materials e ritorna l'indice del primo. I triangoli
+	// del modello portano indici LOCALI (0..N-1): il chiamante li somma a questa base.
+	int World::RegisterMtlMaterials(const Model& model) {
+		const std::vector<MtlMaterial>& mtls = model.GetMaterials();
+		if (mtls.empty())
+			return -1;
+
+		const int base = static_cast<int>(Materials.size());
+		for (const MtlMaterial& mm : mtls)
+			Materials.push_back(MaterialFromMtl(mm));
+
+		std::cout << "MTL: registrati " << mtls.size() << " materiali (base " << base << ")"
+			<< ", texture totali " << TexturePaths.size() << std::endl;
+		return base;
+	}
+
 	void World::UploadModel(const Model& model, const glm::vec3& Position, int material) {
 		std::vector<Triangle*> triangles = model.GetTriangles();
 
@@ -743,17 +799,26 @@ namespace PathTracer {
 			return;
 		}
 
+		// OBJ multi-materiale: registra i materiali del MTL e ottieni l'indice base a cui
+		// rimappare gli indici locali dei triangoli. -1 = OBJ senza MTL (comportamento legacy).
+		const int matBase = RegisterMtlMaterials(model);
+
 		MeshInfo mesh;
 		mesh.FirstTriangle = static_cast<float>(Triangles.size());
 		mesh.NumTriangles = static_cast<float>(triangles.size());
-		mesh.MaterialIndex = static_cast<float>(material);
+		mesh.MaterialIndex = static_cast<float>(material); // usato dai triangoli senza usemtl (-1)
 
 		glm::vec4 localMin(1e30f);
 		glm::vec4 localMax(-1e30f);
 
 		// i triangoli restano in LOCAL SPACE: la posizione vive nella Transform
 		for (const Triangle* t : triangles) {
-			const Triangle& tri = *t;
+			Triangle tri = *t;
+
+			// rimappa l'indice materiale da locale (nel MTL) a globale (in Materials).
+			// -1 resta -1 e a valle diventa il fallback al materiale della mesh.
+			if (matBase >= 0 && tri.MaterialIndex >= 0.0f)
+				tri.MaterialIndex = static_cast<float>(matBase + static_cast<int>(tri.MaterialIndex));
 
 			localMin = glm::min(localMin, glm::min(tri.A, glm::min(tri.B, tri.C)));
 			localMax = glm::max(localMax, glm::max(tri.A, glm::max(tri.B, tri.C)));

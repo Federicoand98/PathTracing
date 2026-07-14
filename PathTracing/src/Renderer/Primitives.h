@@ -62,6 +62,7 @@ namespace PathTracer {
         int vertex_ins[3];
         int uv_ins[3];
         int normal_ins[3];
+        int material = -1; // indice LOCALE nel MTL del modello, -1 = nessun usemtl
     };
 
     // Istanza di mesh in un BVH a due livelli: i triangoli restano in LOCAL SPACE e
