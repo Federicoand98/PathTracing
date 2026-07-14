@@ -225,6 +225,98 @@ namespace PathTracer {
         int nodeUsed = 1;
         static constexpr int maxTrianglesInLeaf = 4;
     };
+
+    // ---- Wide BVH (4 vie) -----------------------------------------------------
+    // Nodo a 4 figli in layout SoA (Structure of Arrays): le 4 AABB sono
+    // impacchettate per componente, cosi' lo shader testa i 4 box con una manciata
+    // di operazioni vec4 invece di 4 slab test scalari. Dimezza i livelli rispetto
+    // al binario -> meno fetch di nodi e meno latenza di memoria per raggio.
+    //
+    // 128 byte, tutti membri di 16 byte: gli offset cadono naturalmente a multipli
+    // di 16, quindi il layout C++ e quello std430 dello shader coincidono senza padding.
+    struct BVH4Node {
+        glm::vec4 bminx, bminy, bminz;   // min.{x,y,z} dei 4 figli (componente per componente)
+        glm::vec4 bmaxx, bmaxy, bmaxz;   // max.{x,y,z} dei 4 figli
+        glm::ivec4 child;  // interno: indice del nodo figlio | foglia: primo indice in TriIndex
+        glm::ivec4 count;  // 0 = figlio interno, >0 = foglia con N triangoli, <0 = slot vuoto
+    };
+
+    static_assert(sizeof(BVH4Node) == 128, "BVH4Node deve essere 128 byte per lo std430 dello shader");
+
+    // Collassa un BVH binario (BVHNodeNew, radice a 0) in un BVH a 4 vie. Ogni nodo
+    // wide raccoglie fino a 4 "nipoti" del nodo binario di partenza: si parte dai 2
+    // figli e si espande ricorsivamente il figlio interno di area maggiore finche' non
+    // si arriva a 4 (o restano solo foglie). Gli indici prodotti sono LOCALI al BLAS:
+    // World li rimappa ai globali (child interni += offset nodi, foglie += offset TriIndex).
+    class WideBVH {
+    public:
+        static std::vector<BVH4Node> Collapse(const std::vector<BVHNodeNew>& bin, int& outMaxDepth) {
+            std::vector<BVH4Node> wide;
+            outMaxDepth = 0;
+            if (bin.empty()) return wide;
+            wide.reserve(bin.size()); // il wide ha meno nodi del binario
+            BuildWide(bin, 0, wide, 1, outMaxDepth);
+            return wide;
+        }
+
+    private:
+        static float SurfaceArea(const BVHNodeNew& n) {
+            glm::vec3 e = n.aabbMax - n.aabbMin;
+            return e.x * e.y + e.y * e.z + e.z * e.x;
+        }
+
+        // Crea il nodo wide per il sottoalbero binario 'binIndex' e ritorna il suo indice
+        // in 'wide'. Riserva prima il proprio slot (wi), poi ricorre: la ricorsione fa
+        // crescere 'wide', ma wi resta valido perche' e' un indice, non un puntatore.
+        static int BuildWide(const std::vector<BVHNodeNew>& bin, int binIndex,
+                             std::vector<BVH4Node>& wide, int depth, int& maxDepth) {
+            maxDepth = std::max(maxDepth, depth);
+            const int wi = static_cast<int>(wide.size());
+            wide.emplace_back();
+
+            // raccogli fino a 4 figli binari
+            std::vector<int> children;
+            if (bin[binIndex].triCount > 0) {
+                children.push_back(binIndex); // sottoalbero degenere: una sola foglia
+            } else {
+                children.push_back(bin[binIndex].left);
+                children.push_back(bin[binIndex].left + 1);
+                while (children.size() < 4) {
+                    int bestSlot = -1; float bestArea = -1.0f;
+                    for (int s = 0; s < static_cast<int>(children.size()); s++) {
+                        const BVHNodeNew& c = bin[children[s]];
+                        if (c.triCount == 0) { // interno: espandibile
+                            float a = SurfaceArea(c);
+                            if (a > bestArea) { bestArea = a; bestSlot = s; }
+                        }
+                    }
+                    if (bestSlot < 0) break; // restano solo foglie
+                    int ci = children[bestSlot];
+                    children[bestSlot] = bin[ci].left;    // sostituisci col figlio sinistro...
+                    children.push_back(bin[ci].left + 1); // ...e aggiungi il destro
+                }
+            }
+
+            BVH4Node out{};
+            for (int s = 0; s < 4; s++) {
+                if (s >= static_cast<int>(children.size())) { out.count[s] = -1; continue; } // vuoto
+
+                const BVHNodeNew& c = bin[children[s]];
+                out.bminx[s] = c.aabbMin.x; out.bminy[s] = c.aabbMin.y; out.bminz[s] = c.aabbMin.z;
+                out.bmaxx[s] = c.aabbMax.x; out.bmaxy[s] = c.aabbMax.y; out.bmaxz[s] = c.aabbMax.z;
+
+                if (c.triCount > 0) {          // foglia: indici invariati dal binario
+                    out.child[s] = c.left;
+                    out.count[s] = c.triCount;
+                } else {                        // interno: ricorri
+                    out.child[s] = BuildWide(bin, children[s], wide, depth + 1, maxDepth);
+                    out.count[s] = 0;
+                }
+            }
+            wide[wi] = out;
+            return wi;
+        }
+    };
 }
 
 #endif // !PATHTRACING_BVH_BUILDER_H

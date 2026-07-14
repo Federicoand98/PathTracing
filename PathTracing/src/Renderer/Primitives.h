@@ -79,7 +79,7 @@ namespace PathTracer {
         float FirstTriangle = 0;
         float NumTriangles = 0;
         float MaterialIndex = 0;
-        float RootNode = 0;           // indice della radice del BLAS in BVHNodes
+        float RootNode = 0;           // indice della radice del BLAS in BVH4Nodes
     };
 
     struct Sphere {

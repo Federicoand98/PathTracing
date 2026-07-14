@@ -17,13 +17,14 @@ uniform samplerCube SamplerEnvironment;
 // "dynamically uniform" e' undefined behavior; il layer di un sampler2DArray no.
 uniform sampler2DArray AlbedoTextures;
 
-// 32 byte invece di 48: in std430 vec3 ha allineamento 16 ma dimensione 12,
-// quindi l'int seguente entra nel "buco" e il nodo occupa meno cache line.
-struct BVHNode {
-    vec3 aabbMin;
-    int left;      // foglia: primo indice in TriIndex | interno: indice figlio sinistro
-    vec3 aabbMax;
-    int triCount;  // 0 => nodo interno
+// Nodo BVH a 4 vie in layout SoA (128 byte): le AABB dei 4 figli sono impacchettate
+// per componente, cosi' lo slab test dei 4 box si fa con poche operazioni vec4 invece
+// di 4 test scalari. Deve combaciare bit-per-bit con BVH4Node lato C++ (BVHBuilder.h).
+struct BVH4Node {
+    vec4 bminx; vec4 bminy; vec4 bminz;  // min.{x,y,z} dei 4 figli
+    vec4 bmaxx; vec4 bmaxy; vec4 bmaxz;  // max.{x,y,z} dei 4 figli
+    ivec4 child;  // interno: indice nodo | foglia: primo indice in TriIndex
+    ivec4 count;  // 0 = interno, >0 = foglia con N triangoli, <0 = slot vuoto
 };
 
 struct Ray {
@@ -195,7 +196,7 @@ layout(std430, binding = 5) buffer CubeBuffer {
 };
 
 layout(std430, binding = 6) buffer BVHBuffer {
-    BVHNode BVHNodes[];
+    BVH4Node BVH4Nodes[];
 };
 
 layout(std430, binding = 7) buffer TriIndexBuffer {
@@ -543,69 +544,81 @@ float hitAABB(Ray ray, vec3 invDir, vec3 bmin, vec3 bmax) {
     return (tExit >= tEnter && tEnter < ray.t) ? tEnter : FLOAT_MAX;
 }
 
-// Traversata ordinata front-to-back: si scende sempre prima nel figlio piu' vicino,
-// cosi' ray.t si restringe il prima possibile e il figlio lontano viene spesso
-// scartato senza mai essere visitato.
+// Traversata del BVH a 4 vie. Per ogni nodo si testano i 4 box figli in parallelo
+// (op vec4 sul layout SoA), poi si intersecano subito le foglie colpite (restringe
+// ray.t) e si impilano i figli interni dal piu' lontano al piu' vicino, cosi' il piu'
+// vicino sta in cima allo stack ed e' esplorato per primo (front-to-back).
 float hitBVH(inout Ray ray, int rootNode, out int hitTriIndex, out float outU, out float outV) {
-    // 64: il BVH usa split spaziale a meta' AABB, che su mesh grandi e non uniformi
-    // (Sponza, ~262k triangoli) puo' produrre alberi profondi. Con lo stack pieno il
-    // figlio lontano verrebbe scartato -> buchi nella geometria. Deve restare allineato
-    // a SHADER_MAX_STACK in World::BuildBVH().
+    // Lo stack e' fisso: il BVH4 impila fino a 3 figli interni per nodo, quindi puo'
+    // servire piu' spazio della sola profondita'. Deve restare allineato a SHADER_MAX_STACK
+    // in World::BuildBVH(). I push oltre il limite vengono scartati (niente overflow).
     const int MAX_STACK = 64;
     int stack[MAX_STACK];
     int stackPtr = 0;
-
-    vec3 invDir = 1.0 / ray.Direction;
-    int nodeIndex = rootNode;
 
     hitTriIndex = -1;
     outU = 0.0;
     outV = 0.0;
 
-    while(true) {
-        BVHNode node = BVHNodes[nodeIndex];
+    vec3 invDir = 1.0 / ray.Direction;
+    stack[stackPtr++] = rootNode;
+
+    while(stackPtr > 0) {
+        BVH4Node node = BVH4Nodes[stack[--stackPtr]];
         gNodeVisits++;
 
-        if(node.triCount > 0) { // foglia
-            for(int i = 0; i < node.triCount; i++) {
-                int triIndex = TriIndex[node.left + i];
-                TrianglePosition tri = TriPositions[triIndex];
+        // slab test dei 4 figli in parallelo (SoA -> vec4)
+        vec4 tminx = (node.bminx - ray.Origin.x) * invDir.x;
+        vec4 tmaxx = (node.bmaxx - ray.Origin.x) * invDir.x;
+        vec4 tminy = (node.bminy - ray.Origin.y) * invDir.y;
+        vec4 tmaxy = (node.bmaxy - ray.Origin.y) * invDir.y;
+        vec4 tminz = (node.bminz - ray.Origin.z) * invDir.z;
+        vec4 tmaxz = (node.bmaxz - ray.Origin.z) * invDir.z;
 
-                float u, v;
-                // i triangoli sono gia' in world space (offset bakato in fase di upload)
-                float distance = HitTriangle(ray, vec3(tri.A), vec3(tri.B), vec3(tri.C), u, v);
+        vec4 tEnter = max(max(min(tminx, tmaxx), min(tminy, tmaxy)), max(min(tminz, tmaxz), vec4(0.0)));
+        vec4 tExit  = min(min(max(tminx, tmaxx), max(tminy, tmaxy)), max(tminz, tmaxz));
 
-                if(distance >= 0.0 && distance < ray.t) {
-                    ray.t = distance;
-                    outU = u;
-                    outV = v;
-                    hitTriIndex = triIndex;
-                }
-            }
+        // Da qui i 4 figli si trattano SROTOLATI con swizzle statico (.x/.y/.z/.w).
+        // Niente indicizzazione dinamica dei vettori (node.count[c], tEnter[c], ...): sulla
+        // GPU costringerebbe il compilatore a spillare i vettori in memoria locale -> lento.
+        // Un figlio e' colpito se: box centrato (tEnter<=tExit) e davanti al hit (tEnter<ray.t);
+        // count>0 => foglia, count==0 => interno, count<0 => slot vuoto (mai colpito).
 
-            if(stackPtr == 0) break;
-            nodeIndex = stack[--stackPtr];
-            continue;
-        }
+        // FOGLIE: intersecale subito, cosi' restringono ray.t per i figli interni.
+        // (LANE = componente del nodo: non uso 'C' perche' collide con tri.C del triangolo)
+        #define LEAF(LANE) if(node.count.LANE > 0 && tEnter.LANE <= tExit.LANE && tEnter.LANE < ray.t) { \
+            int firstTri = node.child.LANE; \
+            for(int k = 0; k < node.count.LANE; k++) { \
+                int triIndex = TriIndex[firstTri + k]; \
+                TrianglePosition tri = TriPositions[triIndex]; \
+                float u, v; \
+                float d = HitTriangle(ray, vec3(tri.A), vec3(tri.B), vec3(tri.C), u, v); \
+                if(d >= 0.0 && d < ray.t) { ray.t = d; outU = u; outV = v; hitTriIndex = triIndex; } \
+            } }
+        LEAF(x) LEAF(y) LEAF(z) LEAF(w)
+        #undef LEAF
 
-        int nearChild = node.left;
-        int farChild = node.left + 1;
-        float distNear = hitAABB(ray, invDir, BVHNodes[nearChild].aabbMin, BVHNodes[nearChild].aabbMax);
-        float distFar = hitAABB(ray, invDir, BVHNodes[farChild].aabbMin, BVHNodes[farChild].aabbMax);
+        // INTERNI: raccogli i figli interni colpiti come scalari (t = FLOAT_MAX se non valido).
+        // ray.t e' gia' quello aggiornato dalle foglie, quindi il test esclude i rami dietro.
+        int   ci0 = node.child.x, ci1 = node.child.y, ci2 = node.child.z, ci3 = node.child.w;
+        float ct0 = (node.count.x == 0 && tEnter.x <= tExit.x && tEnter.x < ray.t) ? tEnter.x : FLOAT_MAX;
+        float ct1 = (node.count.y == 0 && tEnter.y <= tExit.y && tEnter.y < ray.t) ? tEnter.y : FLOAT_MAX;
+        float ct2 = (node.count.z == 0 && tEnter.z <= tExit.z && tEnter.z < ray.t) ? tEnter.z : FLOAT_MAX;
+        float ct3 = (node.count.w == 0 && tEnter.w <= tExit.w && tEnter.w < ray.t) ? tEnter.w : FLOAT_MAX;
 
-        if(distNear > distFar) { // scambia: il piu' vicino va visitato per primo
-            float dTmp = distNear; distNear = distFar; distFar = dTmp;
-            int iTmp = nearChild; nearChild = farChild; farChild = iTmp;
-        }
+        // rete di sort a 4 elementi (5 compare-swap): ct0<=ct1<=ct2<=ct3
+        float ft; int fi;
+        if(ct0 > ct1) { ft=ct0; ct0=ct1; ct1=ft; fi=ci0; ci0=ci1; ci1=fi; }
+        if(ct2 > ct3) { ft=ct2; ct2=ct3; ct3=ft; fi=ci2; ci2=ci3; ci3=fi; }
+        if(ct0 > ct2) { ft=ct0; ct0=ct2; ct2=ft; fi=ci0; ci0=ci2; ci2=fi; }
+        if(ct1 > ct3) { ft=ct1; ct1=ct3; ct3=ft; fi=ci1; ci1=ci3; ci3=fi; }
+        if(ct1 > ct2) { ft=ct1; ct1=ct2; ct2=ft; fi=ci1; ci1=ci2; ci2=fi; }
 
-        if(distNear == FLOAT_MAX) { // entrambi i figli mancati o troppo lontani
-            if(stackPtr == 0) break;
-            nodeIndex = stack[--stackPtr];
-        } else {
-            nodeIndex = nearChild;
-            if(distFar != FLOAT_MAX && stackPtr < MAX_STACK)
-                stack[stackPtr++] = farChild;
-        }
+        // push dal piu' lontano al piu' vicino: il piu' vicino (ct0) finisce in cima allo stack
+        if(ct3 < FLOAT_MAX && stackPtr < MAX_STACK) stack[stackPtr++] = ci3;
+        if(ct2 < FLOAT_MAX && stackPtr < MAX_STACK) stack[stackPtr++] = ci2;
+        if(ct1 < FLOAT_MAX && stackPtr < MAX_STACK) stack[stackPtr++] = ci1;
+        if(ct0 < FLOAT_MAX && stackPtr < MAX_STACK) stack[stackPtr++] = ci0;
     }
 
     return hitTriIndex >= 0 ? ray.t : -1.0;
@@ -620,7 +633,7 @@ float TraceMeshes(inout Ray ray, out int hitTriIndex, out float outU, out float 
     outU = 0.0;
     outV = 0.0;
 
-    if(BVHNodes.length() == 0)
+    if(BVH4Nodes.length() == 0)
         return -1.0;
 
     vec3 invDirWorld = 1.0 / ray.Direction;
@@ -698,7 +711,7 @@ HitInfo TraceRay(Ray ray) {
         }
     }
 
-    if(BVHNodes.length() > 0) {
+    if(BVH4Nodes.length() > 0) {
         // il test AABB usa ray.t per scartare i nodi oltre l'hit piu' vicino gia' trovato
         ray.t = hitDistance;
 

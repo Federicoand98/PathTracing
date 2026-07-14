@@ -67,7 +67,7 @@ namespace PathTracer {
 		std::vector<TriangleUV> TriUVs;            // caricate sulla GPU (binding 10)
 		std::vector<std::string> TexturePaths;     // un layer del sampler2DArray ciascuna
 		std::vector<int> TriIndex;
-		std::vector<BVHNodeNew> BVHNodes;
+		std::vector<BVH4Node> BVH4Nodes;   // BVH a 4 vie, caricato sulla GPU (binding 6)
 		int CurrentScene = 0;
 	private:
 		void PrepareMaterials();
@@ -89,7 +89,6 @@ namespace PathTracer {
 		Material MaterialFromMtl(const MtlMaterial& mtl);  // MtlMaterial -> Material dell'engine
 
 		void BuildBVH();
-		int ComputeBVHDepth(int rootNode) const;
 
 		void CreateCornellBox();
 	};

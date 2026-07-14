@@ -171,7 +171,7 @@ namespace PathTracer {
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Box) * world.Boxes.size(), world.Boxes.data(), GL_STATIC_DRAW);
 
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_bvh);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVHNodeNew) * world.BVHNodes.size(), world.BVHNodes.data(), GL_STATIC_DRAW);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVH4Node) * world.BVH4Nodes.size(), world.BVH4Nodes.data(), GL_STATIC_DRAW);
 
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_idx);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.TriIndex.size(), world.TriIndex.data(), GL_STATIC_DRAW);

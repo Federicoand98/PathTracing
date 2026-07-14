@@ -72,7 +72,7 @@ namespace PathTracer {
 		MeshNames.clear();
 		MeshPaths.clear();
 		Boxes.clear();
-		BVHNodes.clear();
+		BVH4Nodes.clear();
 		TriIndex.clear();
 	}
 
@@ -867,7 +867,7 @@ namespace PathTracer {
 			<< material << ")" << std::endl;
 	}
 
-	// Carica un OBJ a runtime. I BLAS vivono tutti in BVHNodes con offset per mesh,
+	// Carica un OBJ a runtime. I BLAS vivono tutti in BVH4Nodes con offset per mesh,
 	// quindi aggiungerne uno impone di ricostruire l'intero BVH: gli offset dei nodi
 	// e gli indici in TriIndex cambiano. Costoso, ma e' un'azione esplicita dell'utente.
 	int World::AddMesh(const std::string& objPath, const glm::vec3& position, int material) {
@@ -946,7 +946,7 @@ namespace PathTracer {
 	// punta con FirstTriangle. Togliendone una si apre un buco: vanno rimossi i suoi
 	// triangoli e va sottratto il conteggio a tutte le mesh che stavano dopo, altrimenti
 	// le rimanenti indicherebbero triangoli altrui. Poi BuildBVH() rifa' tutto il resto
-	// (TriPositions/Normals/UVs, TriIndex, BVHNodes, RootNode) da Triangles + Meshes.
+	// (TriPositions/Normals/UVs, TriIndex, BVH4Nodes, RootNode) da Triangles + Meshes.
 	bool World::RemoveMesh(int meshIndex) {
 		if (meshIndex < 0 || meshIndex >= static_cast<int>(Meshes.size()))
 			return false;
@@ -997,7 +997,7 @@ namespace PathTracer {
 	}
 
 	void World::BuildBVH() {
-		BVHNodes.clear();
+		BVH4Nodes.clear();
 		TriIndex.clear();
 		TriPositions.clear();
 		TriNormals.clear();
@@ -1017,8 +1017,9 @@ namespace PathTracer {
 			TriUVs.push_back({ glm::vec4(t.UVA, t.MaterialIndex, 0.0f), glm::vec4(t.UVB, 0.0f, 0.0f), glm::vec4(t.UVC, 0.0f, 0.0f) });
 		}
 
-		// Un BLAS per mesh, tutti concatenati in BVHNodes/TriIndex. Gli indici prodotti
-		// dal builder sono relativi al singolo BLAS: qui vengono rimappati ai globali.
+		// Un BLAS per mesh. Ogni BLAS si costruisce binario (binned SAH) e poi si COLLASSA
+		// in un BVH a 4 vie: meta' dei livelli, meno fetch di nodi per raggio. I nodi wide
+		// e gli indici sono locali al BLAS: qui vengono concatenati e rimappati ai globali.
 		int maxDepth = 0;
 
 		for (MeshInfo& mesh : Meshes) {
@@ -1027,57 +1028,40 @@ namespace PathTracer {
 			if (count == 0) continue;
 
 			BVH builder(Triangles, first, count);
-			std::vector<BVHNodeNew>& blasNodes = builder.GetNodes();
+			int wideDepth = 0;
+			std::vector<BVH4Node> wide = WideBVH::Collapse(builder.GetNodes(), wideDepth);
 
-			const int nodeOffset = static_cast<int>(BVHNodes.size());
+			const int nodeOffset = static_cast<int>(BVH4Nodes.size());
 			const int triOffset = static_cast<int>(TriIndex.size());
 
 			mesh.RootNode = static_cast<float>(nodeOffset);
 
-			for (BVHNodeNew node : blasNodes) {
-				if (node.triCount == 0)
-					node.left += nodeOffset; // indice del figlio sinistro
-				else
-					node.left += triOffset;  // primo indice dentro TriIndex
-
-				BVHNodes.push_back(node);
+			for (BVH4Node node : wide) {
+				for (int c = 0; c < 4; c++) {
+					if (node.count[c] < 0) continue;               // slot vuoto
+					if (node.count[c] == 0) node.child[c] += nodeOffset; // figlio interno
+					else node.child[c] += triOffset;               // foglia: primo indice in TriIndex
+				}
+				BVH4Nodes.push_back(node);
 			}
 
 			for (int localIdx : builder.GetTrianglesIndices())
 				TriIndex.push_back(first + localIdx);
 
-			maxDepth = std::max(maxDepth, ComputeBVHDepth(nodeOffset));
+			maxDepth = std::max(maxDepth, wideDepth);
 		}
 
 		std::cout << "BVH built: " << Triangles.size() << " triangles, "
-			<< BVHNodes.size() << " nodes, " << Meshes.size() << " BLAS, max depth "
+			<< BVH4Nodes.size() << " wide nodes, " << Meshes.size() << " BLAS, max depth "
 			<< maxDepth << std::endl;
 
-		// deve restare allineato a MAX_STACK in hitBVH() dentro PathTracing.comp
+		// lo stack per-thread in hitBVH() dentro PathTracing.comp e' fisso a MAX_STACK.
+		// Il BVH4 impila fino a 3 figli interni per nodo, quindi puo' servire piu' spazio
+		// della sola profondita': tengo il margine allineato a MAX_STACK.
 		constexpr int SHADER_MAX_STACK = 64;
-		if (maxDepth > SHADER_MAX_STACK)
-			std::cerr << "Warning: BVH depth (" << maxDepth << ") exceeds shader stack ("
+		if (maxDepth * 3 > SHADER_MAX_STACK)
+			std::cerr << "Warning: BVH depth (" << maxDepth << ") too deep for shader stack ("
 				<< SHADER_MAX_STACK << "): parts of the mesh may not render" << std::endl;
-	}
-
-	// Profondita' massima del BLAS con radice in rootNode (lo shader ha uno stack fisso).
-	int World::ComputeBVHDepth(int rootNode) const {
-		int maxDepth = 0;
-		std::vector<std::pair<int, int>> stack{ {rootNode, 1} }; // (nodo, profondita')
-
-		while (!stack.empty()) {
-			auto [nodeIndex, depth] = stack.back();
-			stack.pop_back();
-			maxDepth = std::max(maxDepth, depth);
-
-			const BVHNodeNew& node = BVHNodes.at(nodeIndex);
-			if (node.triCount == 0) { // nodo interno
-				stack.push_back({ node.left, depth + 1 });
-				stack.push_back({ node.left + 1, depth + 1 });
-			}
-		}
-
-		return maxDepth;
 	}
 
 	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex) {
