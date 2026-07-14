@@ -119,6 +119,7 @@ struct HitInfo {
     int ObjectType;
     bool Inside;
     vec2 UV;
+    int MaterialIndex; // materiale gia' risolto: per-triangolo sulle mesh, altrimenti dell'oggetto
 };
 
 Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc);
@@ -335,12 +336,9 @@ vec4 PerPixel(vec2 ndc) {
             break;
         }
 
-        if(hit.ObjectType == 0)
-            material = Materials[int(Spheres[hit.ObjectIndex].Mat)];
-        else if(hit.ObjectType == 1)
-            material = Materials[int(Quads[hit.ObjectIndex].MaterialIndex)];
-        else if(hit.ObjectType == 2)
-            material = Materials[int(Meshes[hit.ObjectIndex].MaterialIndex)];
+        // Materiale gia' risolto in HandleHit (per-triangolo sulle mesh). Il clamp protegge
+        // da indici fuori range, es. un MTL malformato in un OBJ multi-materiale.
+        material = Materials[clamp(hit.MaterialIndex, 0, Materials.length() - 1)];
 
         // if(hit.ObjectType == 0) {
         //     col = vec4(0.0, 1.0, 0.0, 1.0);
@@ -735,7 +733,7 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         vec3 normal = normalize(hitPosition);
         hitPosition += closestPosition;
 
-        hit = HitInfo(hitDistance, hitPosition, normal, index, 0, insideHit, SphereUV(normal));
+        hit = HitInfo(hitDistance, hitPosition, normal, index, 0, insideHit, SphereUV(normal), int(Spheres[index].Mat));
     }
     else if(objType == 1) { // QUAD
         Quad quad = Quads[index];
@@ -754,7 +752,7 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
 
         hitPosition += closestPosition;
 
-        hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit, uv);
+        hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit, uv, int(Quads[index].MaterialIndex));
     }
     else if(objType == 2) { // MESH
         int meshIndex = -1;
@@ -781,6 +779,10 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         TriangleUV tuv = TriUVs[index];
         vec2 uv = tuv.A.xy * w + tuv.B.xy * u + tuv.C.xy * v;
 
+        // Materiale per-triangolo in tuv.A.z: < 0 = usa quello della mesh (comportamento
+        // legacy delle mesh mono-materiale); >= 0 = OBJ multi-materiale (usemtl).
+        int triMaterial = tuv.A.z >= 0.0 ? int(tuv.A.z) : int(Meshes[meshIndex].MaterialIndex);
+
         // local -> world con l'inversa trasposta: con scale non uniformi la normale
         // non si trasforma come una direzione, altrimenti smette di essere ortogonale
         mat3 normalMatrix = meshIndex >= 0 ? transpose(mat3(Meshes[meshIndex].InvTransform)) : mat3(1.0);
@@ -792,14 +794,14 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         if(dot(ray.Direction, normal) > 0.0)
             normal = -normal;
 
-        hit = HitInfo(hitDistance, hitPosition, normal, meshIndex, 2, insideHit, uv);
+        hit = HitInfo(hitDistance, hitPosition, normal, meshIndex, 2, insideHit, uv, triMaterial);
     }
 
     return hit;
 }
 
 HitInfo NoHit() {
-    return HitInfo(-1.0, vec3(0.0), vec3(0.0), -1, -1, false, vec2(0.0));
+    return HitInfo(-1.0, vec3(0.0), vec3(0.0), -1, -1, false, vec2(0.0), -1);
 }
 
 bool HitSphere(Ray ray, Sphere sphere, out float t1, out float t2) {

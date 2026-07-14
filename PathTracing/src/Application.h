@@ -134,6 +134,9 @@ namespace PathTracer {
 		bool m_FocusPickArmed = false;
 		bool m_PickForFocus = false;
 
+		// salva/carica scena
+		char m_SceneFilename[128] = "scene";
+
 		// creazione oggetti
 		float m_NewObjectMaterial = 0.0f;
 		std::vector<std::string> m_ModelFiles;

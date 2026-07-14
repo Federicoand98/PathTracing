@@ -60,6 +60,7 @@ namespace PathTracer {
 		std::vector<Material> Materials;
 		std::vector<MeshInfo> Meshes;
 		std::vector<std::string> MeshNames;       // solo CPU, per la UI
+		std::vector<std::string> MeshPaths;       // solo CPU, path OBJ per la serializzazione
 		std::vector<Triangle> Triangles;          // authoring CPU, sorgente per il BVH
 		std::vector<TrianglePosition> TriPositions; // caricati sulla GPU (binding 3)
 		std::vector<TriangleNormal> TriNormals;    // caricate sulla GPU (binding 8)

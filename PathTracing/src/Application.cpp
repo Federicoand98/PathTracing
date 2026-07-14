@@ -5,6 +5,7 @@
 #include "imgui_internal.h"
 #include "Input.h"
 #include "Random.h"
+#include "Serialization/SceneSerializer.h"
 
 namespace PathTracer {
 
@@ -365,6 +366,28 @@ namespace PathTracer {
 		if (!m_Renderer.EnvironmentMapping)
 			if (ImGui::ColorEdit3("Background", glm::value_ptr(m_World.BackgroundColor)))
 				m_Renderer.ResetPathTracingCounter();
+
+		ImGui::SeparatorText("Scene file");
+		ImGui::PushItemWidth(200.0f);
+		ImGui::InputText("Name", m_SceneFilename, sizeof(m_SceneFilename));
+		ImGui::PopItemWidth();
+
+		const std::string scenePath = std::string("scenes/") + m_SceneFilename + ".json";
+		if (ImGui::Button("Save")) {
+			std::filesystem::create_directories("scenes");
+			SceneSerializer(m_World).Serialize(scenePath);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Load")) {
+			// Deserialize riscrive i vettori del world ma non i buffer GPU: il re-upload
+			// lo fa ResetPathTracingCounter(true), esattamente come un cambio scena.
+			if (SceneSerializer(m_World).Deserialize(scenePath)) {
+				m_Selection = {};
+				m_Renderer.ResetPathTracingCounter(true);
+			}
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("%s", scenePath.c_str());
 
 		ImGui::SeparatorText("Add");
 		DrawAddObjectMenu();

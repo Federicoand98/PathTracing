@@ -67,6 +67,7 @@ namespace PathTracer {
 		TexturePaths.clear();
 		Meshes.clear();
 		MeshNames.clear();
+		MeshPaths.clear();
 		Boxes.clear();
 		BVHNodes.clear();
 		TriIndex.clear();
@@ -765,6 +766,7 @@ namespace PathTracer {
 
 		Meshes.push_back(mesh);
 		MeshNames.push_back(model.GetName());
+		MeshPaths.push_back(model.GetPath());
 		SetMeshTransform(static_cast<int>(Meshes.size()) - 1, glm::translate(glm::mat4(1.0f), Position));
 
 		std::cout << "Model uploaded: " << triangles.size() << " triangles (material "
@@ -863,6 +865,8 @@ namespace PathTracer {
 		Meshes.erase(Meshes.begin() + meshIndex);
 		if (meshIndex < static_cast<int>(MeshNames.size()))
 			MeshNames.erase(MeshNames.begin() + meshIndex);
+		if (meshIndex < static_cast<int>(MeshPaths.size()))
+			MeshPaths.erase(MeshPaths.begin() + meshIndex);
 
 		for (int i = meshIndex; i < static_cast<int>(Meshes.size()); i++)
 			Meshes[i].FirstTriangle -= static_cast<float>(count);
@@ -915,7 +919,8 @@ namespace PathTracer {
 		for (const Triangle& t : Triangles) {
 			TriPositions.push_back({ t.A, t.B, t.C });
 			TriNormals.push_back({ t.NormalA, t.NormalB, t.NormalC });
-			TriUVs.push_back({ glm::vec4(t.UVA, 0.0f, 0.0f), glm::vec4(t.UVB, 0.0f, 0.0f), glm::vec4(t.UVC, 0.0f, 0.0f) });
+			// A.z porta il materiale per-triangolo (-1 = eredita dalla mesh); B/C restano liberi
+			TriUVs.push_back({ glm::vec4(t.UVA, t.MaterialIndex, 0.0f), glm::vec4(t.UVB, 0.0f, 0.0f), glm::vec4(t.UVC, 0.0f, 0.0f) });
 		}
 
 		// Un BLAS per mesh, tutti concatenati in BVHNodes/TriIndex. Gli indici prodotti

@@ -31,6 +31,9 @@ namespace PathTracer {
         glm::vec2 UVA{ 0.0f };
         glm::vec2 UVB{ 0.0f };
         glm::vec2 UVC{ 0.0f };
+        // -1 = eredita il materiale della mesh (mono-materiale); >= 0 = materiale esplicito
+        // per triangolo, per gli OBJ multi-materiale (usemtl). Finisce in TriangleUV.A.z.
+        float MaterialIndex = -1.0f;
     };
 
     // Sulla GPU posizioni e normali stanno in due buffer distinti: il loop caldo del

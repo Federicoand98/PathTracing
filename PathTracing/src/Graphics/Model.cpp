@@ -55,6 +55,7 @@ namespace PathTracer {
 		std::ifstream ifile(filePath);
 
 		m_Name = std::filesystem::path(filePath).filename().string();
+		m_Path = filePath;
 
 		std::cout << "Loading model: " << filePath << std::endl;
 
