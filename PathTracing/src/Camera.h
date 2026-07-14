@@ -32,6 +32,7 @@ namespace PathTracer {
 		void OnResize(uint32_t width, uint32_t height);
 		void RecalculateProjection();
 		void ResetPosition();
+		void SetView(const glm::vec3& position, const glm::vec3& forward);
 
 		const glm::mat4& GetProjection() const { return m_Projection; }
 		const glm::mat4& GetInverseProjection() const { return m_InverseProjection; }

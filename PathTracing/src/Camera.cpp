@@ -20,6 +20,14 @@ namespace PathTracer {
 		RecalculateView();
 	}
 
+	// Spawn esplicito (usato dalle scene che vogliono una camera iniziale diversa
+	// dal default, es. dentro il corridoio di Sponza invece che all'esterno).
+	void Camera::SetView(const glm::vec3& position, const glm::vec3& forward) {
+		m_Position = position;
+		m_ForwardDirection = glm::normalize(forward);
+		RecalculateView();
+	}
+
 	bool Camera::OnUpdate(float ts) {
 		glm::vec2 mousePos = Input::GetMousePosition();
 		glm::vec2 delta = (mousePos - m_LastMousePosition) * 0.002f;

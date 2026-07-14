@@ -45,7 +45,11 @@ namespace PathTracer {
 		m_Layers = std::max(static_cast<int>(paths.size()), 1); // almeno un layer valido
 
 		glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, &m_Texture);
-		glTextureStorage3D(m_Texture, 1, GL_RGBA8, m_Size, m_Size, m_Layers);
+		// GL_SRGB8_ALPHA8: le texture diffuse sono authored in spazio sRGB (gamma ~2.2).
+		// Con questo formato interno il sampler le decodifica in lineare in hardware, cosi'
+		// il path tracer lavora sempre in lineare. L'alpha resta lineare (non e' colore).
+		// Il tonemap finale (fScreenQuad.frag) fa la ri-codifica lineare->sRGB in uscita.
+		glTextureStorage3D(m_Texture, 1, GL_SRGB8_ALPHA8, m_Size, m_Size, m_Layers);
 
 		glTextureParameteri(m_Texture, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTextureParameteri(m_Texture, GL_TEXTURE_WRAP_T, GL_REPEAT);

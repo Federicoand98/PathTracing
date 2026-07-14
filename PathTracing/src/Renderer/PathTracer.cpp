@@ -70,7 +70,6 @@ namespace PathTracer {
 		m_ComputeShader->SetInt("AlbedoTextures", 1);
 		m_AlbedoTextures.AttachSampler(1); // la cubemap occupa gia' l'unit 0
 		m_ComputeShader->SetInt("width", container.Width);
-        m_ComputeShader->SetInt("nNodes", container.World.Nodes.size());
 		m_ComputeShader->SetInt("height", container.Height);
 		m_ComputeShader->SetInt("rendererFrame", container.NumFrames);
 		m_ComputeShader->SetInt("samplesPerPixel", container.SamplesPerPixel);

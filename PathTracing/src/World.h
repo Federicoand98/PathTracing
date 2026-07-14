@@ -9,7 +9,6 @@
 #include "Renderer/Material.h"
 #include "Renderer/Primitives.h"
 #include "Graphics/Model.h"
-#include "Graphics/BVH.h"
 #include "Graphics/BVHBuilder.h"
 
 namespace PathTracer {
@@ -24,7 +23,8 @@ namespace PathTracer {
 		CORNELL_BOX_MESH = 4,
 		SETUP_1 = 5,
 		SETUP_2 = 6,
-		SETUP_3 = 7
+		SETUP_3 = 7,
+		SPONZA = 8
 	};
 
 	class World {
@@ -66,12 +66,8 @@ namespace PathTracer {
 		std::vector<TriangleNormal> TriNormals;    // caricate sulla GPU (binding 8)
 		std::vector<TriangleUV> TriUVs;            // caricate sulla GPU (binding 10)
 		std::vector<std::string> TexturePaths;     // un layer del sampler2DArray ciascuna
-        std::vector<BVHNode> Nodes;
-		std::vector<BVHNodeAlt> NodesAlt;
 		std::vector<int> TriIndex;
 		std::vector<BVHNodeNew> BVHNodes;
-		BVHNodeNew* root;
-		std::unique_ptr<BVH> bvh;
 		int CurrentScene = 0;
 	private:
 		void PrepareMaterials();
@@ -83,6 +79,7 @@ namespace PathTracer {
 		void PrepareSetup1();
 		void PrepareSetup2();
 		void PrepareSetup3();
+		void PrepareSponza();
 
 		void UploadModel(const Model& model, const glm::vec3& Position, int material);
 

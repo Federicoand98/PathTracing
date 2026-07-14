@@ -48,6 +48,9 @@ namespace PathTracer {
 		case SceneType::SETUP_3:
 			PrepareSetup3();
 			break;
+		case SceneType::SPONZA:
+			PrepareSponza();
+			break;
 		default:
 			break;
 		}
@@ -735,6 +738,32 @@ namespace PathTracer {
 
 	}
 
+	// Scena di esempio per il modello Sponza (crytek/jimmiebergmann): una mesh sola con
+	// il suo MTL a 25 materiali + texture .tga, montata via UploadModel (che registra
+	// materiali e texture e rimappa gli indici per-triangolo).
+	void World::PrepareSponza() {
+		// L'OBJ e' in unita' enormi (~3700 di larghezza): lo scalo a ~37 unita', in linea
+		// con le altre scene. Sponza non ha materiali emissivi, quindi la luce arriva tutta
+		// dal cielo: l'atrio e' aperto in alto, un background luminoso lo illumina in modo
+		// naturale (i raggi che mancano la geometria ritornano BackgroundColor come radianza).
+		BackgroundColor = glm::vec3(1.0f, 1.0f, 1.0f);
+
+		Model sponza;
+		sponza.LoadObj("models/Sponza/sponza.obj");
+
+		// il material di fallback (0) serve solo ai triangoli senza usemtl; qui quasi tutti
+		// ce l'hanno, ma 0 e' comunque un indice MTL valido dopo la registrazione.
+		UploadModel(sponza, { 0.0f, 0.0f, 0.0f }, 0);
+
+		// scala 0.01 + centratura su X/Z (il pavimento resta a y ~ -1.26)
+		const int meshIndex = static_cast<int>(Meshes.size()) - 1;
+		if (meshIndex >= 0) {
+			glm::mat4 t = glm::translate(glm::mat4(1.0f), glm::vec3(0.6f, 0.0f, 0.4f));
+			t = glm::scale(t, glm::vec3(0.01f));
+			SetMeshTransform(meshIndex, t);
+		}
+	}
+
 	// Un layer del sampler2DArray per path, deduplicato: due materiali con la stessa
 	// texture condividono il layer.
 	int World::RegisterTexture(const std::string& path) {
@@ -1025,7 +1054,7 @@ namespace PathTracer {
 			<< maxDepth << std::endl;
 
 		// deve restare allineato a MAX_STACK in hitBVH() dentro PathTracing.comp
-		constexpr int SHADER_MAX_STACK = 32;
+		constexpr int SHADER_MAX_STACK = 64;
 		if (maxDepth > SHADER_MAX_STACK)
 			std::cerr << "Warning: BVH depth (" << maxDepth << ") exceeds shader stack ("
 				<< SHADER_MAX_STACK << "): parts of the mesh may not render" << std::endl;

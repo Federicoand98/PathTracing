@@ -153,7 +153,6 @@ int rootNodeIndex = 0;
 // contatore di nodi BVH visitati (test AABB) usato dal debugger BVH
 int gNodeVisits = 0;
 
-uniform int nNodes;
 uniform int width;
 uniform int height;
 uniform int rendererFrame;
@@ -548,7 +547,11 @@ float hitAABB(Ray ray, vec3 invDir, vec3 bmin, vec3 bmax) {
 // cosi' ray.t si restringe il prima possibile e il figlio lontano viene spesso
 // scartato senza mai essere visitato.
 float hitBVH(inout Ray ray, int rootNode, out int hitTriIndex, out float outU, out float outV) {
-    const int MAX_STACK = 32;
+    // 64: il BVH usa split spaziale a meta' AABB, che su mesh grandi e non uniformi
+    // (Sponza, ~262k triangoli) puo' produrre alberi profondi. Con lo stack pieno il
+    // figlio lontano verrebbe scartato -> buchi nella geometria. Deve restare allineato
+    // a SHADER_MAX_STACK in World::BuildBVH().
+    const int MAX_STACK = 64;
     int stack[MAX_STACK];
     int stackPtr = 0;
 

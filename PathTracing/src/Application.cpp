@@ -349,7 +349,7 @@ namespace PathTracer {
 		ImGui::Spacing();
 
 		if (ImGui::Combo("Scene", &m_World.CurrentScene,
-			"Two Spheres\0Random Spheres\0Cornell Box\0Random Boxes\0Cornell Box (meshes)\0Setup 1\0Setup 2\0Setup 3\0\0")) {
+			"Two Spheres\0Random Spheres\0Cornell Box\0Random Boxes\0Cornell Box (meshes)\0Setup 1\0Setup 2\0Setup 3\0Sponza\0\0")) {
 			// gli indici della vecchia scena non significano piu' niente: la finestra
 			// "Viewport" viene disegnata piu' avanti in QUESTO stesso frame e userebbe
 			// la selezione stale per indicizzare collezioni gia' svuotate
@@ -358,6 +358,12 @@ namespace PathTracer {
 			m_World.DestroyScene();
 			m_Renderer.ResetPathTracingCounter(true);
 			m_World.LoadScene();
+
+			// Sponza e' enorme e centrata sull'origine: lo spawn di default (0,0,6) cade
+			// fuori dall'edificio. La posiziono dentro il corridoio, a un'estremita' della
+			// navata lunga (asse X), all'altezza occhi del piano terra, guardando lungo +X.
+			if (static_cast<SceneType>(m_World.CurrentScene) == SceneType::SPONZA)
+				m_Camera.SetView({ -11.0f, -0.2f, 0.0f }, { 1.0f, 0.0f, 0.0f });
 		}
 
 		if (ImGui::Checkbox("Environment Mapping", &m_Renderer.EnvironmentMapping))
