@@ -22,6 +22,11 @@ namespace PathTracer {
 		void OnResize(uint32_t width, uint32_t height);
 		void ResetPathTracingCounter(bool sceneReset = false) { m_PTCounter = 1; m_sceneReset = sceneReset; }
 
+		// L'app segnala se la camera si sta muovendo: con RenderScale < 1 questo abbassa
+		// la risoluzione di render mentre ci si muove (piu' fluido), tornando a piena
+		// risoluzione da fermi. Vedi Render().
+		void SetInteracting(bool interacting) { m_Interacting = interacting; }
+
 		// Picking: si richiede un pixel, e il frame successivo il risultato e' pronto.
 		void RequestPick(int x, int y) { m_PickX = x; m_PickY = y; m_PickRequested = true; }
 		bool ConsumePickResult(int& objectType, int& objectIndex, float& distance) {
@@ -44,6 +49,7 @@ namespace PathTracer {
 		float Aperture = 0.0f;       // raggio lente; 0 = pinhole, niente DOF
 		float FocusDistance = 5.0f;  // distanza del piano di fuoco
 		float Exposure = 1.0;
+		float RenderScale = 1.0f;    // 1 = piena risoluzione; < 1 = ridotta mentre ci si muove
 		int m_SamplesPerPixel = 1;
 		int m_RayDepth = 5;
 	private:
@@ -59,6 +65,8 @@ namespace PathTracer {
 		unsigned int m_QuadVAO = 0;
 		unsigned int m_QuadVBO = 0;
 		uint32_t m_Width = 0, m_Height = 0;
+		uint32_t m_RenderW = 0, m_RenderH = 0;  // risoluzione effettiva dell'ultimo dispatch
+		bool m_Interacting = false;
 		int m_PTCounter = 1;
 		bool m_sceneReset = false;
 		bool m_PickRequested = false;

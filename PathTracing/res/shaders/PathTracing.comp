@@ -226,6 +226,10 @@ void main() {
     ivec2 imageResultSize = imageSize(imgOutput);
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
 
+    // il dispatch arrotonda in su alla work group (8x8): i thread fuori dall'immagine escono
+    if(any(greaterThanEqual(texelCoord, imageResultSize)))
+        return;
+
     rndSeed = gl_GlobalInvocationID.x * 1973 + gl_GlobalInvocationID.y * 9277 + rendererFrame * 2699 | 1;
 
     // Picking: la sola invocazione che copre il pixel richiesto lancia un raggio

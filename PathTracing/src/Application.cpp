@@ -176,8 +176,11 @@ namespace PathTracer {
 		while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
 			glfwPollEvents();
 
-			if (m_Camera.OnUpdate(m_DeltaTime))
+			bool cameraMoved = m_Camera.OnUpdate(m_DeltaTime);
+			if (cameraMoved)
 				m_Renderer.ResetPathTracingCounter();
+			// mentre la camera si muove il renderer puo' abbassare la risoluzione (render scale)
+			m_Renderer.SetInteracting(cameraMoved);
 
 			ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -1133,6 +1136,17 @@ namespace PathTracer {
 		if (ImGui::SliderInt("Samples per pixel", &m_Renderer.m_SamplesPerPixel, 1, 16)) m_Renderer.ResetPathTracingCounter();
 		if (ImGui::SliderInt("Ray depth", &m_Renderer.m_RayDepth, 1, 50)) m_Renderer.ResetPathTracingCounter();
 		if (ImGui::Button("Reset Accumulation")) m_Renderer.ResetPathTracingCounter();
+
+		// Render scale: risoluzione ridotta SOLO mentre la camera si muove (piu' fluido),
+		// piena risoluzione + accumulo da fermi. Nessun reset qui: agisce al prossimo movimento.
+		{
+			const char* labels[] = { "1.0 (piena)", "0.75", "0.5", "0.25" };
+			const float values[] = { 1.0f, 0.75f, 0.5f, 0.25f };
+			int idx = 0;
+			for (int i = 0; i < 4; i++) if (m_Renderer.RenderScale == values[i]) idx = i;
+			if (ImGui::Combo("Render scale (in movimento)", &idx, labels, 4))
+				m_Renderer.RenderScale = values[idx];
+		}
 
 		ImGui::SeparatorText("Output");
 		if (ImGui::Checkbox("Vsync", &m_Vsync))

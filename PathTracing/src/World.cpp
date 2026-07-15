@@ -1,6 +1,7 @@
 #include "World.h"
 #include "Renderer/Material.h"
 #include <glm/gtc/matrix_transform.hpp>
+#include <chrono>
 
 namespace PathTracer {
 
@@ -997,6 +998,8 @@ namespace PathTracer {
 	}
 
 	void World::BuildBVH() {
+		const auto buildStart = std::chrono::high_resolution_clock::now();
+
 		BVH4Nodes.clear();
 		TriIndex.clear();
 		TriPositions.clear();
@@ -1027,7 +1030,7 @@ namespace PathTracer {
 			const int count = static_cast<int>(mesh.NumTriangles);
 			if (count == 0) continue;
 
-			BVH builder(Triangles, first, count);
+			SBVH builder(Triangles, first, count);
 			int wideDepth = 0;
 			std::vector<BVH4Node> wide = WideBVH::Collapse(builder.GetNodes(), wideDepth);
 
@@ -1051,9 +1054,14 @@ namespace PathTracer {
 			maxDepth = std::max(maxDepth, wideDepth);
 		}
 
+		const double buildMs = std::chrono::duration<double, std::milli>(
+			std::chrono::high_resolution_clock::now() - buildStart).count();
+
 		std::cout << "BVH built: " << Triangles.size() << " triangles, "
+			<< TriIndex.size() << " refs (dup x"
+			<< (Triangles.empty() ? 0.0f : (float)TriIndex.size() / Triangles.size()) << "), "
 			<< BVH4Nodes.size() << " wide nodes, " << Meshes.size() << " BLAS, max depth "
-			<< maxDepth << std::endl;
+			<< maxDepth << " in " << buildMs << " ms" << std::endl;
 
 		// lo stack per-thread in hitBVH() dentro PathTracing.comp e' fisso a MAX_STACK.
 		// Il BVH4 impila fino a 3 figli interni per nodo, quindi puo' servire piu' spazio

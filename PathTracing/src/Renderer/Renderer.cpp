@@ -14,6 +14,8 @@ namespace PathTracer {
 			m_Width = width;
 			m_Height = height;
 			m_RenderedImage->Resize(width, height);
+			m_RenderW = width;   // l'immagine e' ora a piena risoluzione
+			m_RenderH = height;
 			m_FrameBuffer->Rescale(width, height);
 		} else {
 			m_RenderedImage = std::make_shared<Texture>(GL_TEXTURE_2D);
@@ -32,16 +34,34 @@ namespace PathTracer {
 	}
 
 	void Renderer::Render(const Camera& camera, const World& world) {
+		// Render scale: mentre la camera si muove si renderizza a risoluzione ridotta (meno
+		// raggi -> piu' fluido), poi da fermi si torna a piena risoluzione e riparte l'accumulo.
+		// L'immagine ridotta viene poi upscalata dal sampler (GL_LINEAR) sull'intero viewport.
+		// Il picking forza la piena risoluzione: pickPixel e' in coordinate viewport e su una
+		// griglia ridotta non corrisponderebbe a nessun texel.
+		bool reduce = m_Interacting && RenderScale < 1.0f && !m_PickRequested;
+		uint32_t rw = m_Width, rh = m_Height;
+		if (reduce) {
+			rw = std::max(8u, static_cast<uint32_t>(m_Width * RenderScale));
+			rh = std::max(8u, static_cast<uint32_t>(m_Height * RenderScale));
+		}
+		if (rw != m_RenderW || rh != m_RenderH) {
+			m_RenderW = rw;
+			m_RenderH = rh;
+			m_RenderedImage->Resize(rw, rh); // cambio risoluzione: l'accumulo precedente non e' piu' valido
+			ResetPathTracingCounter();
+		}
+
 		m_RenderedImage->Bind();
 		m_RenderedImage->AttachImage(0, 0);
 
 		glm::ivec2 pickPixel = m_PickRequested ? glm::ivec2(m_PickX, m_PickY) : glm::ivec2(-1, -1);
 
-		ComputeUniformContainer container = { m_Width, m_Height, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, FireflyClamp, Aperture, FocusDistance, pickPixel, *m_World, *m_Camera };
+		ComputeUniformContainer container = { rw, rh, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, FireflyClamp, Aperture, FocusDistance, pickPixel, *m_World, *m_Camera };
 
 		m_PathTracer->Begin();
 		m_PathTracer->UploadUniforms(container);
-		m_PathTracer->DispatchCompute(m_Width, m_Height);
+		m_PathTracer->DispatchCompute(rw, rh);
 
 		if (m_PickRequested) {
 			m_PathTracer->ReadPickResult(m_PickType, m_PickIndex, m_PickDistance);

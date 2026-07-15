@@ -48,7 +48,9 @@ namespace PathTracer {
 	}
 
 	void PathTracer::DispatchCompute(unsigned int numGroupX, unsigned int numGroupY) {
-		glDispatchCompute(numGroupX / 8, numGroupY / 8, 1);
+		// ceil: con risoluzioni non multiple di 8 (es. render scale) la divisione intera
+		// perderebbe i pixel di bordo. I thread in eccesso escono subito (bounds-guard nello shader).
+		glDispatchCompute((numGroupX + 7) / 8, (numGroupY + 7) / 8, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	}

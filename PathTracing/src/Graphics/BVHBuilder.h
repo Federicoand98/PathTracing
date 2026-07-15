@@ -226,6 +226,293 @@ namespace PathTracer {
         static constexpr int maxTrianglesInLeaf = 4;
     };
 
+    // ---- SBVH (Spatial split BVH, Stich et al. 2009) --------------------------
+    // Un BVH a object-split (come BVH) mette ogni triangolo interamente da un lato: se i
+    // triangoli sono grandi/diagonali (tende, pavimenti di Sponza) le AABB dei due figli si
+    // SOVRAPPONGONO e i raggi scendono in entrambi = lavoro sprecato (il "giallo" in heatmap).
+    // L'SBVH aggiunge gli SPATIAL SPLIT: puo' tagliare un triangolo lungo il piano, mettendone
+    // un riferimento in ENTRAMBI i figli ma con bounds clippati (piu' stretti) -> meno overlap.
+    // Il prezzo e' la duplicazione dei riferimenti (un triangolo puo' stare in piu' foglie),
+    // limitata dalla restrizione alpha (spatial solo dove l'object split ha overlap notevole).
+    //
+    // Espone la STESSA interfaccia di BVH (GetNodes/GetTrianglesIndices), quindi il collapse a
+    // BVH4 e la traversal restano identici. GetTrianglesIndices() puo' contenere duplicati: un
+    // triangolo testato due volte da' lo stesso hit, ray.t se ne occupa.
+    class SBVH {
+    public:
+        SBVH(const std::vector<Triangle>& triangles, int firstTriangle, int count)
+            : tris(&triangles), firstTri(firstTriangle) {
+            if (count == 0) return;
+
+            std::vector<Ref> refs;
+            refs.reserve(count);
+            for (int i = 0; i < count; i++) {
+                const Triangle& t = triangles[firstTriangle + i];
+                AABB b;
+                b.expand(glm::vec3(t.A)); b.expand(glm::vec3(t.B)); b.expand(glm::vec3(t.C));
+                refs.push_back({ i, b });
+            }
+
+            AABB rootBounds;
+            for (const Ref& r : refs) rootBounds.expand(r.box);
+            rootArea = rootBounds.area();
+
+            nodes.reserve(count * 2);
+            nodes.emplace_back();          // radice
+            Subdivide(0, refs, 0);
+        }
+
+        std::vector<BVHNodeNew>& GetNodes() { return nodes; }
+        std::vector<int>& GetTrianglesIndices() { return triIndices; } // indici LOCALI, con duplicati
+
+    private:
+        struct Ref { int tri; AABB box; };   // tri = indice locale (0..count-1); box = bounds (clippati)
+        struct Bin { AABB bounds; int enter = 0, exit = 0; };
+        struct Split { int axis = -1; float pos = 0.0f; float cost = 1e30f; };
+
+        const Triangle& Tri(int local) const { return (*tris)[firstTri + local]; }
+
+        static float HalfArea(const AABB& b) {
+            glm::vec3 e = b.max - b.min;
+            if (e.x < 0.0f) return 0.0f;
+            return e.x * e.y + e.y * e.z + e.z * e.x;
+        }
+
+        // Clip di un poligono (n vertici in 'in') contro un piano assiale, risultato in 'out'.
+        // keepBelow: tieni la parte con coord <= pos. Ritorna il nuovo numero di vertici.
+        // Niente heap: 'in'/'out' sono array su stack (Sutherland-Hodgman a un piano).
+        static int ClipPlane(const glm::vec3* in, int n, int axis, float pos, bool keepBelow, glm::vec3* out) {
+            int m = 0;
+            for (int i = 0; i < n; i++) {
+                const glm::vec3& a = in[i];
+                const glm::vec3& b = in[(i + 1) % n];
+                float da = a[axis] - pos, db = b[axis] - pos;
+                bool ina = keepBelow ? (da <= 0.0f) : (da >= 0.0f);
+                bool inb = keepBelow ? (db <= 0.0f) : (db >= 0.0f);
+                if (ina) out[m++] = a;
+                if (ina != inb) {
+                    float t = da / (da - db);
+                    out[m++] = a + t * (b - a);
+                }
+            }
+            return m;
+        }
+
+        // AABB della parte di triangolo dentro lo slab [lo,hi] sull'asse, intersecata con la box
+        // del riferimento (che puo' gia' essere clippata da split precedenti). Box vuota se niente.
+        // Un triangolo clippato da 2 piani ha al massimo 5 vertici: gli array da 8 bastano.
+        AABB ClipToSlab(int local, int axis, float lo, float hi, const AABB& refBox) const {
+            const Triangle& t = Tri(local);
+            glm::vec3 bufA[8], bufB[8];
+            bufA[0] = glm::vec3(t.A); bufA[1] = glm::vec3(t.B); bufA[2] = glm::vec3(t.C);
+            int n = ClipPlane(bufA, 3, axis, lo, false, bufB);      // tieni >= lo
+            AABB out;
+            if (n == 0) return out;                                  // vuoto (min>max)
+            n = ClipPlane(bufB, n, axis, hi, true, bufA);           // tieni <= hi
+            for (int i = 0; i < n; i++) out.expand(bufA[i]);
+            out.min = glm::max(out.min, refBox.min);
+            out.max = glm::min(out.max, refBox.max);
+            return out;
+        }
+
+        // Object split: SAH binned sui centroidi dei riferimenti (nessun clipping).
+        Split FindObjectSplit(const std::vector<Ref>& refs, const AABB& centroidB) const {
+            Split best;
+            for (int axis = 0; axis < 3; axis++) {
+                float lo = centroidB.min[axis], hi = centroidB.max[axis];
+                if (hi - lo < 1e-9f) continue;
+                float scale = BINS / (hi - lo);
+
+                Bin bins[BINS];
+                for (const Ref& r : refs) {
+                    glm::vec3 c = (r.box.min + r.box.max) * 0.5f;
+                    int bi = glm::clamp(int((c[axis] - lo) * scale), 0, BINS - 1);
+                    bins[bi].bounds.expand(r.box);
+                    bins[bi].enter++;
+                }
+
+                float leftArea[BINS - 1], rightArea[BINS - 1];
+                int leftCount[BINS - 1], rightCount[BINS - 1];
+                AABB lb, rb; int ls = 0, rs = 0;
+                for (int i = 0; i < BINS - 1; i++) {
+                    ls += bins[i].enter; leftCount[i] = ls; lb.expand(bins[i].bounds); leftArea[i] = HalfArea(lb);
+                    rs += bins[BINS - 1 - i].enter; rightCount[BINS - 2 - i] = rs; rb.expand(bins[BINS - 1 - i].bounds); rightArea[BINS - 2 - i] = HalfArea(rb);
+                }
+                for (int i = 0; i < BINS - 1; i++) {
+                    float cost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+                    if (cost > 0.0f && cost < best.cost) {
+                        best.cost = cost; best.axis = axis;
+                        best.pos = lo + (hi - lo) * (i + 1) / BINS;
+                    }
+                }
+            }
+            return best;
+        }
+
+        // Spatial split: binned con clipping dei triangoli agli slab (Stich). Valutato SOLO
+        // sull'asse piu' lungo del nodo (dove il taglio riduce di piu' l'area): il clipping e'
+        // la parte costosa, farlo su un asse invece che 3 dimezza abbondantemente il build con
+        // perdita di qualita' trascurabile.
+        Split FindSpatialSplit(const std::vector<Ref>& refs, const AABB& nodeB) const {
+            Split best;
+            glm::vec3 e = nodeB.max - nodeB.min;
+            int axis = (e.x >= e.y && e.x >= e.z) ? 0 : (e.y >= e.z ? 1 : 2);
+            float lo = nodeB.min[axis], hi = nodeB.max[axis];
+            if (hi - lo < 1e-9f) return best;
+            float scale = SPATIAL_BINS / (hi - lo);
+
+            Bin bins[SPATIAL_BINS];
+            for (const Ref& r : refs) {
+                int b0 = glm::clamp(int((r.box.min[axis] - lo) * scale), 0, SPATIAL_BINS - 1);
+                int b1 = glm::clamp(int((r.box.max[axis] - lo) * scale), 0, SPATIAL_BINS - 1);
+                for (int b = b0; b <= b1; b++) {
+                    float blo = lo + (hi - lo) * b / SPATIAL_BINS;
+                    float bhi = lo + (hi - lo) * (b + 1) / SPATIAL_BINS;
+                    AABB c = ClipToSlab(r.tri, axis, blo, bhi, r.box);
+                    if (c.max[axis] >= c.min[axis]) bins[b].bounds.expand(c);
+                }
+                bins[b0].enter++; bins[b1].exit++;
+            }
+
+            float leftArea[SPATIAL_BINS - 1], rightArea[SPATIAL_BINS - 1];
+            int leftCount[SPATIAL_BINS - 1], rightCount[SPATIAL_BINS - 1];
+            AABB lb, rb; int ls = 0, rs = 0;
+            for (int i = 0; i < SPATIAL_BINS - 1; i++) {
+                ls += bins[i].enter; leftCount[i] = ls; lb.expand(bins[i].bounds); leftArea[i] = HalfArea(lb);
+                rs += bins[SPATIAL_BINS - 1 - i].exit; rightCount[SPATIAL_BINS - 2 - i] = rs; rb.expand(bins[SPATIAL_BINS - 1 - i].bounds); rightArea[SPATIAL_BINS - 2 - i] = HalfArea(rb);
+            }
+            for (int i = 0; i < SPATIAL_BINS - 1; i++) {
+                float cost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+                if (cost > 0.0f && cost < best.cost) {
+                    best.cost = cost; best.axis = axis;
+                    best.pos = lo + (hi - lo) * (i + 1) / SPATIAL_BINS;
+                }
+            }
+            return best;
+        }
+
+        void MakeLeaf(int nodeIndex, const std::vector<Ref>& refs) {
+            nodes[nodeIndex].left = static_cast<int>(triIndices.size());
+            nodes[nodeIndex].triCount = static_cast<int>(refs.size());
+            for (const Ref& r : refs) triIndices.push_back(r.tri);
+        }
+
+        void Subdivide(int nodeIndex, std::vector<Ref>& refs, int depth) {
+            AABB bounds, centroidB;
+            for (const Ref& r : refs) {
+                bounds.expand(r.box);
+                centroidB.expand((r.box.min + r.box.max) * 0.5f);
+            }
+            nodes[nodeIndex].aabbMin = bounds.min;
+            nodes[nodeIndex].aabbMax = bounds.max;
+
+            if (static_cast<int>(refs.size()) <= maxTrianglesInLeaf || depth >= MAX_DEPTH) {
+                MakeLeaf(nodeIndex, refs);
+                return;
+            }
+
+            Split object = FindObjectSplit(refs, centroidB);
+
+            // restrizione alpha: valuta lo spatial split solo se i due figli dell'object split
+            // si sovrappongono in modo non trascurabile (altrimenti duplicare non conviene)
+            Split spatial;
+            if (object.axis >= 0) {
+                AABB lB, rB;
+                for (const Ref& r : refs) {
+                    float c = (r.box.min[object.axis] + r.box.max[object.axis]) * 0.5f;
+                    if (c < object.pos) lB.expand(r.box); else rB.expand(r.box);
+                }
+                AABB ov; ov.min = glm::max(lB.min, rB.min); ov.max = glm::min(lB.max, rB.max);
+                float overlap = (ov.max.x >= ov.min.x && ov.max.y >= ov.min.y && ov.max.z >= ov.min.z) ? HalfArea(ov) : 0.0f;
+                if (overlap > ALPHA * rootArea)
+                    spatial = FindSpatialSplit(refs, bounds);
+            }
+
+            float leafCost = refs.size() * HalfArea(bounds);
+            if (object.axis < 0 && spatial.axis < 0) { MakeLeaf(nodeIndex, refs); return; }
+            if (leafCost <= object.cost && leafCost <= spatial.cost) { MakeLeaf(nodeIndex, refs); return; }
+
+            std::vector<Ref> leftRefs, rightRefs;
+            bool useSpatial = spatial.axis >= 0 && spatial.cost < object.cost;
+
+            if (useSpatial) {
+                int axis = spatial.axis; float pos = spatial.pos;
+
+                // pass 1: assegna i riferimenti che NON attraversano il piano, accumula i bounds
+                // dei due lati e raccogli quelli che lo attraversano (candidati alla duplicazione)
+                AABB bL, bR;
+                std::vector<Ref> straddlers;
+                for (const Ref& r : refs) {
+                    bool toLeft = r.box.min[axis] < pos;
+                    bool toRight = r.box.max[axis] > pos;
+                    if (toLeft && toRight) straddlers.push_back(r);
+                    else if (toLeft) { leftRefs.push_back(r); bL.expand(r.box); }
+                    else { rightRefs.push_back(r); bR.expand(r.box); }
+                }
+
+                // pass 2: reference unsplitting (Stich). Per ogni ref che attraversa, confronta il
+                // costo (in area) di 3 scelte e prende la piu' economica: duplicare (split), o
+                // metterlo tutto a sinistra/destra. Cosi' si duplica solo quando conviene davvero.
+                for (const Ref& r : straddlers) {
+                    AABB lc = ClipToSlab(r.tri, axis, -1e30f, pos, r.box);
+                    AABB rc = ClipToSlab(r.tri, axis, pos, 1e30f, r.box);
+                    bool lcValid = lc.max[axis] >= lc.min[axis];
+                    bool rcValid = rc.max[axis] >= rc.min[axis];
+
+                    AABB blSplit = bL; if (lcValid) blSplit.expand(lc);
+                    AABB brSplit = bR; if (rcValid) brSplit.expand(rc);
+                    AABB blLeft = bL; blLeft.expand(r.box);
+                    AABB brRight = bR; brRight.expand(r.box);
+
+                    float cSplit = HalfArea(blSplit) + HalfArea(brSplit);
+                    float cLeft = HalfArea(blLeft) + HalfArea(bR);
+                    float cRight = HalfArea(bL) + HalfArea(brRight);
+
+                    if (cSplit <= cLeft && cSplit <= cRight) {           // duplica
+                        if (lcValid) { leftRefs.push_back({ r.tri, lc }); bL = blSplit; }
+                        if (rcValid) { rightRefs.push_back({ r.tri, rc }); bR = brSplit; }
+                    } else if (cLeft <= cRight) {                        // tutto a sinistra
+                        leftRefs.push_back(r); bL = blLeft;
+                    } else {                                             // tutto a destra
+                        rightRefs.push_back(r); bR = brRight;
+                    }
+                }
+            } else {
+                int axis = object.axis; float pos = object.pos;
+                for (const Ref& r : refs) {
+                    float c = (r.box.min[axis] + r.box.max[axis]) * 0.5f;
+                    if (c < pos) leftRefs.push_back(r); else rightRefs.push_back(r);
+                }
+            }
+
+            if (leftRefs.empty() || rightRefs.empty()) { MakeLeaf(nodeIndex, refs); return; }
+
+            refs.clear(); refs.shrink_to_fit(); // libera memoria prima di ricorrere
+
+            int l = static_cast<int>(nodes.size());
+            nodes.emplace_back();          // figlio sinistro
+            nodes.emplace_back();          // figlio destro (indice l+1, consecutivo: lo pretende il collapse)
+            nodes[nodeIndex].left = l;
+            nodes[nodeIndex].triCount = 0;
+
+            Subdivide(l, leftRefs, depth + 1);
+            Subdivide(l + 1, rightRefs, depth + 1);
+        }
+
+    private:
+        static constexpr int BINS = 12;
+        static constexpr int SPATIAL_BINS = 16;
+        static constexpr int MAX_DEPTH = 48;
+        static constexpr int maxTrianglesInLeaf = 4;
+        static constexpr float ALPHA = 1e-5f; // soglia di overlap per abilitare lo spatial split
+
+        std::vector<BVHNodeNew> nodes;
+        std::vector<int> triIndices;
+        const std::vector<Triangle>* tris = nullptr;
+        int firstTri = 0;
+        float rootArea = 0.0f;
+    };
+
     // ---- Wide BVH (4 vie) -----------------------------------------------------
     // Nodo a 4 figli in layout SoA (Structure of Arrays): le 4 AABB sono
     // impacchettate per componente, cosi' lo shader testa i 4 box con una manciata
