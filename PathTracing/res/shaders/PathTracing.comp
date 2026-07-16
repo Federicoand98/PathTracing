@@ -356,8 +356,12 @@ vec4 PerPixel(vec2 ndc) {
 
         if(hit.Inside) {
             hit.Normal *= -1.0;
-            // attenuation, Beer-Lambert law -> intesità di luce diminuisce exp con la distanza percorsa attraverso il materiale
-            contribution *= exp(-vec3(material.RefractionColor) * hit.HitDistance);
+            // Beer-Lambert: la trasmittanza sul segmento interno e' RefractionColor^distanza,
+            // cioe' RefractionColor e' il colore trasmesso a distanza unitaria (rosso -> vetro
+            // rosso; bianco -> trasparente). L'assorbimento e' -log(colore): usare RefractionColor
+            // direttamente come coefficiente invertirebbe la tinta (rosso -> ciano).
+            vec3 absorption = -log(clamp(vec3(material.RefractionColor), vec3(1e-3), vec3(1.0)));
+            contribution *= exp(-absorption * hit.HitDistance);
         }
 
         // Il BSDF ritorna gia' il peso completo del campione (BRDF*cos/pdf diviso per la

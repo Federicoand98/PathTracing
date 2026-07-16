@@ -23,7 +23,9 @@ namespace PathTracer {
 		float RefractionProbability = 0.0f;
 		float RefractionRoughness = 1.0f;
 		glm::vec2 _pad0{ 0.0f };     // porta RefractionColor all'offset 80 (multiplo di 16)
-		glm::vec4 RefractionColor{0.0f};
+		// bianco = vetro trasparente (colore trasmesso a distanza unitaria). Nero darebbe
+		// vetro completamente assorbente: vedi il Beer-Lambert in PathTracing.comp.
+		glm::vec4 RefractionColor{1.0f};
 
 		float AlbedoTexture = -1.0f; // layer nel sampler2DArray, -1 = nessuna texture
 		float Checker = 0.0f;        // 0 = off, 1 = scacchiera UV, 2 = scacchiera world-space
