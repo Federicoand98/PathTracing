@@ -1220,6 +1220,16 @@ namespace PathTracer {
 	void Application::DrawDebugTab() {
 		ImGui::Spacing();
 
+		ImGui::SeparatorText("AOV / Denoiser");
+		// Vista dei feature buffer del primo hit (fondamenta del denoiser). Beauty = immagine
+		// normale; gli altri mostrano l'AOV crudo (senza esposizione/ACES).
+		// reset dell'accumulo al cambio vista: le viste AOV scrivono in imgOutput (condiviso
+		// con l'accumulatore del colore), quindi tornando a Beauty il colore va ripartito da capo.
+		if (ImGui::Combo("View", &m_Renderer.AOVView, "Beauty\0Albedo\0Normal\0Depth\0\0"))
+			m_Renderer.ResetPathTracingCounter();
+		if (m_Renderer.AOVView != 0)
+			ImGui::TextDisabled("vista AOV di debug: nessun tonemap");
+
 		ImGui::SeparatorText("BVH");
 		if (ImGui::Checkbox("BVH Heatmap", &m_Renderer.BVHDebug))
 			m_Renderer.ResetPathTracingCounter();

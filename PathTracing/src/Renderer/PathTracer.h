@@ -21,6 +21,7 @@ namespace PathTracer {
 		float FireflyClamp;    // luminanza massima per campione, <= 0 = off
 		float ApertureRadius;  // raggio lente thin-lens, <= 0 = pinhole (niente DOF)
 		float FocusDistance;   // distanza del piano di fuoco
+		int AOVView;           // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth (vista di debug)
 		glm::ivec2 PickPixel;  // (-1,-1) = nessuna richiesta di picking
 		const class World& World;
 		const class Camera& Camera;

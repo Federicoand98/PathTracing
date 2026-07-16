@@ -6,6 +6,7 @@ in vec2 TexCoords;
 uniform sampler2D tex;
 uniform float Exposure;
 uniform bool PostProcessing;
+uniform int aovView;   // 0 = beauty (tonemap normale); != 0 = vista AOV (niente esposizione/ACES)
 
 vec3 LessThan(vec3 f, float value);
 vec3 LinearToSRGB(vec3 rgb, float gamma);
@@ -13,6 +14,14 @@ vec3 SRGBToLinear(vec3 rgb, float gamma);
 vec3 ACESFilm(vec3 x);
 	
 void main() {
+    // Vista di debug degli AOV: il compute ha gia' scritto valori visualizzabili in imgOutput.
+    // Vanno mostrati senza esposizione ne' tonemap (falserebbero normali/depth); solo l'encoding
+    // sRGB per coerenza col framebuffer non-sRGB.
+    if(aovView != 0) {
+        FragColor = vec4(LinearToSRGB(texture(tex, TexCoords).rgb, 2.4), 1.0);
+        return;
+    }
+
     // Pipeline unica: HDR lineare -> esposizione -> [ACES] -> encoding sRGB.
     vec3 color = texture(tex, TexCoords).rgb;   // colore lineare accumulato dal path tracer
 

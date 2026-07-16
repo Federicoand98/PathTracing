@@ -78,6 +78,7 @@ namespace PathTracer {
 		m_ComputeShader->SetInt("rayDepth", container.RayDepth);
 		m_ComputeShader->SetBool("EnvironmentMapping", container.EnvironmentMapping);
 		m_ComputeShader->SetInt("bvhDebug", container.BVHDebug ? 1 : 0);
+		m_ComputeShader->SetInt("aovView", container.AOVView);
 		m_ComputeShader->SetFloat("bvhHeatScale", container.BVHHeatScale);
 		m_ComputeShader->SetFloat("fireflyClamp", container.FireflyClamp);
 		m_ComputeShader->SetFloat("apertureRadius", container.ApertureRadius);

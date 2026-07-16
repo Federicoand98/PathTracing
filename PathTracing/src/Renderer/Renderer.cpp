@@ -6,6 +6,19 @@
 
 namespace PathTracer {
 
+	// Il colore e i tre AOV vivono alla stessa risoluzione e vanno ridimensionati insieme:
+	// lo shader li scrive con lo stesso texelCoord e imageSize().
+	void Renderer::ResizeRenderTargets(uint32_t width, uint32_t height) {
+		auto ensure = [&](std::shared_ptr<Texture>& t) {
+			if (!t) t = std::make_shared<Texture>(GL_TEXTURE_2D);
+			t->Resize(width, height); // Resize gestisce anche la prima allocazione (imposta GL_LINEAR)
+		};
+		ensure(m_RenderedImage);
+		ensure(m_AlbedoAOV);
+		ensure(m_NormalAOV);
+		ensure(m_DepthAOV);
+	}
+
 	void Renderer::OnResize(uint32_t width, uint32_t height) {
 		if(m_FrameBuffer) {
 			if (m_FrameBuffer->GetWidth() == width && m_FrameBuffer->GetHeight() == height)
@@ -13,14 +26,16 @@ namespace PathTracer {
 
 			m_Width = width;
 			m_Height = height;
-			m_RenderedImage->Resize(width, height);
-			m_RenderW = width;   // l'immagine e' ora a piena risoluzione
+			ResizeRenderTargets(width, height);
+			m_RenderW = width;   // i target sono ora a piena risoluzione
 			m_RenderH = height;
 			m_FrameBuffer->Rescale(width, height);
 		} else {
-			m_RenderedImage = std::make_shared<Texture>(GL_TEXTURE_2D);
-			m_RenderedImage->MutableAllocate(m_Width, m_Height);
-
+			m_Width = width;
+			m_Height = height;
+			ResizeRenderTargets(width, height);
+			m_RenderW = width;
+			m_RenderH = height;
 			m_FrameBuffer = std::make_shared<FrameBuffer>(width, height);
 		}
 	}
@@ -48,16 +63,19 @@ namespace PathTracer {
 		if (rw != m_RenderW || rh != m_RenderH) {
 			m_RenderW = rw;
 			m_RenderH = rh;
-			m_RenderedImage->Resize(rw, rh); // cambio risoluzione: l'accumulo precedente non e' piu' valido
+			ResizeRenderTargets(rw, rh); // cambio risoluzione: l'accumulo precedente non e' piu' valido
 			ResetPathTracingCounter();
 		}
 
 		m_RenderedImage->Bind();
 		m_RenderedImage->AttachImage(0, 0);
+		m_AlbedoAOV->AttachImage(1, 0); // AOV: image unit 1/2/3, scritti dal compute (load+store)
+		m_NormalAOV->AttachImage(2, 0);
+		m_DepthAOV->AttachImage(3, 0);
 
 		glm::ivec2 pickPixel = m_PickRequested ? glm::ivec2(m_PickX, m_PickY) : glm::ivec2(-1, -1);
 
-		ComputeUniformContainer container = { rw, rh, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, FireflyClamp, Aperture, FocusDistance, pickPixel, *m_World, *m_Camera };
+		ComputeUniformContainer container = { rw, rh, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, FireflyClamp, Aperture, FocusDistance, AOVView, pickPixel, *m_World, *m_Camera };
 
 		m_PathTracer->Begin();
 		m_PathTracer->UploadUniforms(container);
@@ -75,7 +93,7 @@ namespace PathTracer {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		m_PostProcesser->Begin();
-		m_PostProcesser->UploadUniforms(PostProcessing, Exposure);
+		m_PostProcesser->UploadUniforms(PostProcessing, Exposure, AOVView);
 		DrawSceneQuad();
 		m_PostProcesser->End();
 

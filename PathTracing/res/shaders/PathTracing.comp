@@ -10,6 +10,12 @@
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
+
+// AOV (feature buffer) del primo hit, accumulati in lockstep col colore. Sono le guide del
+// denoiser: albedo (base color senza luce), normal (world space), depth (distanza lineare).
+layout(rgba32f, binding = 1) uniform image2D imgAlbedo;
+layout(rgba32f, binding = 2) uniform image2D imgNormal;
+layout(rgba32f, binding = 3) uniform image2D imgDepth;
 uniform samplerCube SamplerEnvironment;
 
 // Un array invece di N sampler2D: l'indice della texture dipende dal materiale colpito,
@@ -124,7 +130,7 @@ struct HitInfo {
 };
 
 Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc);
-vec4 PerPixel(vec2 ndc);
+vec4 PerPixel(vec2 ndc, out vec3 aovAlbedo, out vec3 aovNormal, out float aovDepth);
 vec3 BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive);
 HitInfo TraceRay(Ray ray);
 HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit, float u, float v);
@@ -166,6 +172,7 @@ uniform vec3 BackgroundColor;
 uniform bool EnvironmentMapping;
 uniform int bvhDebug;         // 0 = off, 1 = heatmap del costo di traversata BVH
 uniform float bvhHeatScale;   // n. di nodi visitati che mappa al colore "caldo" (rosso)
+uniform int aovView;          // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth (vista di debug)
 uniform ivec2 pickPixel;      // pixel da campionare per il picking, (-1,-1) = nessuno
 uniform float fireflyClamp;   // luminanza massima per campione, <= 0 = off
 uniform float apertureRadius; // raggio della lente (thin-lens). <= 0 = pinhole, niente DOF
@@ -265,12 +272,16 @@ void main() {
     }
 
     vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
+    vec3 aovAlbedo = vec3(0.0), aovNormal = vec3(0.0);
+    float aovDepth = 0.0;
     for(int i = 0; i < samplesPerPixel; i++) {
         // anti aliasing
         vec2 subPixelOffset = vec2(GetRandomFloat(), GetRandomFloat());
         vec2 ndc = (texelCoord + subPixelOffset) / imageResultSize * 2.0 - 1.0;
 
-        vec3 sampleColor = PerPixel(ndc).rgb;
+        vec3 sAlbedo, sNormal;
+        float sDepth;
+        vec3 sampleColor = PerPixel(ndc, sAlbedo, sNormal, sDepth).rgb;
 
         // Firefly clamp: limita la luminanza del singolo campione PRIMA dell'accumulo.
         // Va fatto qui e non nel post-processing: dopo la media temporale i puntini sono
@@ -283,13 +294,28 @@ void main() {
         }
 
         value.rgb += sampleColor;
+        aovAlbedo += sAlbedo; aovNormal += sNormal; aovDepth += sDepth;
     }
 
     value /= samplesPerPixel;
+    aovAlbedo /= samplesPerPixel; aovNormal /= samplesPerPixel; aovDepth /= samplesPerPixel;
 
-    // accumulazione path tracing
-    vec4 lastFrameColor = imageLoad(imgOutput, texelCoord).rgba;
-    value = mix(lastFrameColor, value, 1.0 / (rendererFrame));
+    // accumulazione in lockstep: colore e AOV condividono lo stesso peso temporale 1/frame
+    float blend = 1.0 / rendererFrame;
+    value = mix(imageLoad(imgOutput, texelCoord), value, blend);
+    vec3 accAlbedo = mix(imageLoad(imgAlbedo, texelCoord).rgb, aovAlbedo, blend);
+    vec3 accNormal = mix(imageLoad(imgNormal, texelCoord).rgb, aovNormal, blend);
+    float accDepth = mix(imageLoad(imgDepth, texelCoord).r, aovDepth, blend);
+
+    imageStore(imgAlbedo, texelCoord, vec4(accAlbedo, 1.0));
+    imageStore(imgNormal, texelCoord, vec4(accNormal, 1.0));
+    imageStore(imgDepth,  texelCoord, vec4(vec3(accDepth), 1.0));
+
+    // Vista di debug: al posto del beauty scrive un AOV, in forma visualizzabile. Il fragment
+    // finale (aovView != 0) lo mostra saltando esposizione/ACES. Gli AOV veri sono gia' scritti.
+    if(aovView == 1) { imageStore(imgOutput, texelCoord, vec4(accAlbedo, 1.0)); return; }
+    if(aovView == 2) { imageStore(imgOutput, texelCoord, vec4(accNormal * 0.5 + 0.5, 1.0)); return; }
+    if(aovView == 3) { float d = accDepth / (accDepth + 10.0); imageStore(imgOutput, texelCoord, vec4(vec3(d), 1.0)); return; }
 
     imageStore(imgOutput, texelCoord, value);
 }
@@ -301,8 +327,14 @@ vec2 RandomInUnitDisk() {
     return r * vec2(cos(theta), sin(theta));
 }
 
-vec4 PerPixel(vec2 ndc) {
+vec4 PerPixel(vec2 ndc, out vec3 aovAlbedo, out vec3 aovNormal, out float aovDepth) {
     Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
+
+    // Default: se il raggio primario manca tutto (sfondo). Albedo neutro (1) cosi' una futura
+    // demodulazione lascia lo sfondo invariato; normale nulla; profondita' grande.
+    aovAlbedo = vec3(1.0);
+    aovNormal = vec3(0.0);
+    aovDepth  = 1e4;
 
     // Depth of field, modello thin-lens. Il raggio pinhole parte dal centro camera; con
     // apertura > 0 lo faccio partire da un punto sul disco della lente e lo ripunto verso
@@ -343,6 +375,17 @@ vec4 PerPixel(vec2 ndc) {
         // Materiale gia' risolto in HandleHit (per-triangolo sulle mesh). Il clamp protegge
         // da indici fuori range, es. un MTL malformato in un OBJ multi-materiale.
         material = Materials[clamp(hit.MaterialIndex, 0, Materials.length() - 1)];
+
+        // AOV del primo hit: le feature che guidano il denoiser (base color, normale, profondita').
+        // Catturati qui, prima dell'eventuale flip della normale per i raggi interni.
+        if(i == 0) {
+            vec3 hitPos = ray.Origin + ray.Direction * hit.HitDistance;
+            // stessa base color del BSDF: material.Color * modulatore per-pixel (SampleAlbedo
+            // e' solo texture/checker/noise, default bianco). Senza il *Color l'AOV era bianco.
+            aovAlbedo = vec3(material.Color) * SampleAlbedo(material, hit.UV, hitPos);
+            aovNormal = hit.Normal;        // normale di shading, world space (non normalizzata dopo la media)
+            aovDepth  = hit.HitDistance;   // profondita' lineare = distanza camera->primo hit
+        }
 
         // if(hit.ObjectType == 0) {
         //     col = vec4(0.0, 1.0, 0.0, 1.0);

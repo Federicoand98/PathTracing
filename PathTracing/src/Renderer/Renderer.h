@@ -49,12 +49,14 @@ namespace PathTracer {
 		float Aperture = 0.0f;       // raggio lente; 0 = pinhole, niente DOF
 		float FocusDistance = 5.0f;  // distanza del piano di fuoco
 		float Exposure = 1.0;
+		int AOVView = 0;             // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth (vista di debug)
 		float RenderScale = 1.0f;    // 1 = piena risoluzione; < 1 = ridotta mentre ci si muove
 		int m_SamplesPerPixel = 1;
 		int m_RayDepth = 5;
 	private:
 		void DrawSceneQuad();
 		void UpdateAccumulationCounter();
+		void ResizeRenderTargets(uint32_t width, uint32_t height); // colore + AOV, stessa risoluzione
 	private:
 		const Camera* m_Camera = nullptr;
 		const World* m_World = nullptr;
@@ -62,6 +64,12 @@ namespace PathTracer {
 		std::shared_ptr<PostProcesser> m_PostProcesser;
 		std::shared_ptr<FrameBuffer> m_FrameBuffer;
 		std::shared_ptr<Texture> m_RenderedImage;
+		// AOV (feature buffer): albedo/normale/profondita' del primo hit, scritti dal compute
+		// (image unit 1/2/3) e accumulati in lockstep. Fondamenta del denoiser. Stessa
+		// risoluzione di m_RenderedImage: vengono ridimensionati insieme.
+		std::shared_ptr<Texture> m_AlbedoAOV;
+		std::shared_ptr<Texture> m_NormalAOV;
+		std::shared_ptr<Texture> m_DepthAOV;
 		unsigned int m_QuadVAO = 0;
 		unsigned int m_QuadVBO = 0;
 		uint32_t m_Width = 0, m_Height = 0;
