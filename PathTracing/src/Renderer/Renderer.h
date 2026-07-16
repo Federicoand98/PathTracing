@@ -10,6 +10,7 @@
 #include "../Camera.h"
 #include "PathTracer.h"
 #include "PostProcesser.h"
+#include "Denoiser.h"
 
 namespace PathTracer {
 
@@ -50,6 +51,18 @@ namespace PathTracer {
 		float FocusDistance = 5.0f;  // distanza del piano di fuoco
 		float Exposure = 1.0;
 		int AOVView = 0;             // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth (vista di debug)
+		// Denoiser à-trous (view filter read-only): agisce solo sulla vista Beauty, si attenua
+		// da solo con l'accumulo. I sigma sono gli edge-stop (luminanza/normale/profondita').
+		bool Denoise = false;
+		float DenoiseStrength = 1.0f; // [0,1] peso del blend col beauty grezzo (1 = tutto denoised)
+		// Auto-attenuazione: scala lo strength ~1/sqrt(N) col numero di campioni. A immagine
+		// convergente il denoiser si spegne (niente perdita di ombre soft/AO sul frame pulito);
+		// resta forte solo quando serve, cioe' sui frame rumorosi (interattivo, pochi spp).
+		bool DenoiseAutoFade = true;
+		float DenoiseCPhi = 1.0f;    // sigma luminanza (grande = piu' sfoca ombre/rumore)
+		float DenoiseNPhi = 64.0f;   // esponente normale (grande = spigoli piu' netti)
+		float DenoisePPhi = 1.0f;    // sigma profondita' in unita' mondo (separa le silhouette)
+		float DenoiseAPhi = 0.2f;    // sigma albedo (piccolo = blocca i bordi di materiale/tinta)
 		float RenderScale = 1.0f;    // 1 = piena risoluzione; < 1 = ridotta mentre ci si muove
 		int m_SamplesPerPixel = 1;
 		int m_RayDepth = 5;
@@ -62,6 +75,7 @@ namespace PathTracer {
 		const World* m_World = nullptr;
 		std::shared_ptr<PathTracer> m_PathTracer;
 		std::shared_ptr<PostProcesser> m_PostProcesser;
+		std::shared_ptr<Denoiser> m_Denoiser;
 		std::shared_ptr<FrameBuffer> m_FrameBuffer;
 		std::shared_ptr<Texture> m_RenderedImage;
 		// AOV (feature buffer): albedo/normale/profondita' del primo hit, scritti dal compute

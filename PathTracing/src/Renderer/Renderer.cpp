@@ -4,6 +4,9 @@
 
 #include "Renderer.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace PathTracer {
 
 	// Il colore e i tre AOV vivono alla stessa risoluzione e vanno ridimensionati insieme:
@@ -17,6 +20,10 @@ namespace PathTracer {
 		ensure(m_AlbedoAOV);
 		ensure(m_NormalAOV);
 		ensure(m_DepthAOV);
+		// Le ping-pong del denoiser vivono alla stessa risoluzione. Guard: OnResize gira prima
+		// di Initialize, quando il denoiser non esiste ancora (Initialize lo ridimensiona poi).
+		if (m_Denoiser)
+			m_Denoiser->Resize(width, height);
 	}
 
 	void Renderer::OnResize(uint32_t width, uint32_t height) {
@@ -46,6 +53,8 @@ namespace PathTracer {
 
 		m_PathTracer = std::make_shared<PathTracer>(world);
 		m_PostProcesser = std::make_shared<PostProcesser>(*m_FrameBuffer);
+		m_Denoiser = std::make_shared<Denoiser>();
+		m_Denoiser->Resize(m_Width, m_Height); // OnResize ha gia' fissato m_Width/m_Height
 	}
 
 	void Renderer::Render(const Camera& camera, const World& world) {
@@ -88,6 +97,24 @@ namespace PathTracer {
 		}
 
 		m_PathTracer->End();
+
+		// Denoiser à-trous (view filter): gira solo sulla vista Beauty, non in debug AOV/BVH.
+		// L'output rimpiazza m_RenderedImage come sampler di display (binding point GL_TEXTURE_2D
+		// dell'unit 0, distinto dalla cubemap che occupa lo stesso unit). 'strength' e' manuale
+		// (slider): un peso costante mantiene visibile e tarabile il filtro. Nota: l'irradianza e'
+		// gia' demodulata (liscia), quindi filtrare anche a immagine accumulata non distrugge
+		// dettaglio d'albedo, che viene reintrodotto nitido in rimodulazione.
+		if (Denoise && AOVView == 0 && !BVHDebug) {
+			// Auto-fade: sul frame convergente (N grande) lo strength -> 0, cosi' le ombre soft
+			// e l'AO tornano intatte; forte solo quando c'e' rumore da coprire (N piccolo).
+			float strength = DenoiseStrength;
+			if (DenoiseAutoFade)
+				strength *= std::clamp(1.0f / std::sqrt(static_cast<float>(m_PTCounter)), 0.0f, 1.0f);
+
+			auto denoised = m_Denoiser->Run(*m_RenderedImage, *m_AlbedoAOV, *m_NormalAOV, *m_DepthAOV,
+			                                strength, DenoiseCPhi, DenoiseNPhi, DenoisePPhi, DenoiseAPhi);
+			denoised->Bind(); // TEXTURE0 (2D) = immagine ripulita, campionata dal fragment di display
+		}
 
 		glViewport(0, 0, m_Width, m_Height);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

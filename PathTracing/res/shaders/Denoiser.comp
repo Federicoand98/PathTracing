@@ -1,0 +1,129 @@
+#version 430 core
+
+// À-trous edge-avoiding wavelet filter (Dammertz et al. 2010), guidato dagli AOV.
+//
+// E' un *view filter* read-only (vedi docs/adr/0001): NON tocca il buffer di accumulo del
+// path tracer, legge il beauty accumulato + gli AOV e produce un'immagine ripulita da mostrare.
+// Cosi' l'accumulazione converge comunque al ground truth e il denoiser puo' spegnersi da solo
+// man mano che i campioni crescono (vedi 'strength').
+//
+// Una sola iterazione à-trous: il driver la dispatcha 5 volte in ping-pong con stepSize
+// 1,2,4,8,16 (kernel 5x5 B3-spline "bucato" che raddoppia il passo ad ogni iterazione ->
+// supporto crescente a costo costante). Demodulazione e rimodulazione sono ripiegate nella
+// prima e nell'ultima passata via flag, cosi' le passate intermedie filtrano irradianza pura.
+//
+//   irradianza = beauty / albedo   (demodulate, 1a passata)
+//   ... 5 passate à-trous su irradianza, edge-stop su luminanza/normale/profondita' ...
+//   finale = mix(beauty, irradianza_filtrata * albedo, strength)   (remodulate, ultima passata)
+//
+// Demodulare toglie il dettaglio d'albedo (texture, tinte) dal segnale da filtrare: si sfoca
+// solo l'illuminazione, e il dettaglio ad alta frequenza viene reintrodotto intatto in uscita.
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// Colore ping-pong: irradianza in ingresso/uscita (beauty grezzo quando demodulate == 1).
+layout(rgba32f, binding = 0) uniform readonly  image2D imgIn;
+layout(rgba32f, binding = 1) uniform writeonly image2D imgOut;
+// AOV del primo hit (accumulati in lockstep col beauty dal path tracer).
+layout(rgba32f, binding = 2) uniform readonly  image2D imgAlbedo;
+layout(rgba32f, binding = 3) uniform readonly  image2D imgNormal;
+layout(rgba32f, binding = 4) uniform readonly  image2D imgDepth;
+// Beauty grezzo accumulato: serve solo all'ultima passata per il blend di convergenza.
+layout(rgba32f, binding = 5) uniform readonly  image2D imgBeauty;
+
+uniform int   stepSize;    // passo à-trous: 1,2,4,8,16 lungo le 5 iterazioni
+uniform float cPhi;        // sigma edge-stop luminanza (grande = piu' sfoca)
+uniform float nPhi;        // esponente edge-stop normale (grande = bordi di normale piu' netti)
+uniform float pPhi;        // sigma edge-stop profondita' (unita' mondo)
+uniform float aPhi;        // sigma edge-stop albedo (piccolo = blocca i bordi di materiale)
+uniform int   demodulate;  // 1 = prima passata: dividi ogni tap per il suo albedo
+uniform int   remodulate;  // 1 = ultima passata: rimoltiplica per albedo e fai il blend
+uniform float strength;    // [0,1] peso del denoise nel blend finale (0 = beauty grezzo)
+
+const float EPS = 1e-3;
+// Floor della demodulazione: dividere per un albedo vicino a zero amplifica a dismisura il
+// rumore nei canali scuri (es. il verde di un tessuto rosso). Un floor piu' alto lo contiene.
+const float ALBEDO_FLOOR = 0.05;
+
+float Luminance(vec3 c) {
+    return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+
+// Carica il colore del tap gia' in spazio irradianza. Alla prima passata imgIn contiene il
+// beauty: va demodulato per l'albedo DEL TAP (non del centro), altrimenti il filtro lavorerebbe
+// ancora su segnale modulato dalla texture.
+vec3 LoadIrradiance(ivec2 p) {
+    vec3 c = imageLoad(imgIn, p).rgb;
+    if(demodulate == 1) {
+        vec3 a = max(imageLoad(imgAlbedo, p).rgb, vec3(ALBEDO_FLOOR));
+        c /= a;
+    }
+    return c;
+}
+
+void main() {
+    ivec2 size = imageSize(imgIn);
+    ivec2 uv = ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(uv, size)))
+        return;
+
+    // Kernel B3-spline separabile 5x5 (outer product dei pesi 1D).
+    const float h[5] = float[5](1.0/16.0, 1.0/4.0, 3.0/8.0, 1.0/4.0, 1.0/16.0);
+
+    // Guide del pixel centrale per le funzioni edge-stop.
+    vec3  cCenter = LoadIrradiance(uv);
+    vec3  nCenter = imageLoad(imgNormal, uv).rgb;
+    float dCenter = imageLoad(imgDepth,  uv).r;
+    vec3  aCenter = imageLoad(imgAlbedo, uv).rgb;
+    float lCenter = Luminance(cCenter);
+
+    // Un pixel di sfondo (nessun hit: normale nulla, depth enorme) non ha vicini coerenti:
+    // lo lascio passare intatto per non trascinarci dentro il colore della geometria.
+    bool background = dot(nCenter, nCenter) < 1e-6;
+
+    vec3  sum  = vec3(0.0);
+    float wsum = 0.0;
+
+    for(int dy = -2; dy <= 2; dy++) {
+        for(int dx = -2; dx <= 2; dx++) {
+            ivec2 q = uv + ivec2(dx, dy) * stepSize;
+            q = clamp(q, ivec2(0), size - 1); // gli imageLoad non fanno clamp: lo faccio a mano
+
+            vec3  ct = LoadIrradiance(q);
+            vec3  nt = imageLoad(imgNormal, q).rgb;
+            float dt = imageLoad(imgDepth,  q).r;
+            vec3  at = imageLoad(imgAlbedo, q).rgb;
+
+            // Edge-stopping: pesa il tap in base a quanto e' "simile" al centro.
+            // Luminanza: taglia sui bordi d'illuminazione (ombre, caustiche).
+            float wl = exp(-abs(Luminance(ct) - lCenter) / (cPhi + EPS));
+            // Normale: taglia sugli spigoli geometrici (dot^n, cade in fretta se n grande).
+            float wn = pow(max(dot(nCenter, nt), 0.0), nPhi);
+            // Profondita': separa superfici a distanze diverse (silhouette, compenetrazioni).
+            float wd = exp(-abs(dt - dCenter) / (pPhi + EPS));
+            // Albedo: NON mediare attraverso i bordi di materiale. Senza questo l'irradianza
+            // demodulata sborda oltre i confini di tinta e la rimodulazione crea aloni colorati.
+            float wa = exp(-length(at - aCenter) / (aPhi + EPS));
+
+            float w = h[dx + 2] * h[dy + 2] * wl * wn * wd * wa;
+            sum  += ct * w;
+            wsum += w;
+        }
+    }
+
+    vec3 filtered = (wsum > 0.0) ? sum / wsum : cCenter;
+
+    if(remodulate == 1) {
+        // Rimonta l'albedo e mescola col beauty grezzo. 'strength' scende col numero di campioni
+        // (calcolata CPU-side ~1/sqrt(N)): appena l'accumulo converge il denoiser sparisce e
+        // resta il ground truth, senza over-blur permanente.
+        vec3 albedo   = imageLoad(imgAlbedo, uv).rgb;
+        vec3 denoised = filtered * albedo;
+        vec3 raw      = imageLoad(imgBeauty, uv).rgb;
+        vec3 outColor = background ? raw : mix(raw, denoised, strength);
+        imageStore(imgOut, uv, vec4(outColor, 1.0));
+    } else {
+        // Passate intermedie: resta in spazio irradianza per la successiva.
+        imageStore(imgOut, uv, vec4(background ? cCenter : filtered, 1.0));
+    }
+}

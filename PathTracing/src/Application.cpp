@@ -1230,6 +1230,25 @@ namespace PathTracer {
 		if (m_Renderer.AOVView != 0)
 			ImGui::TextDisabled("vista AOV di debug: nessun tonemap");
 
+		// Denoiser à-trous: e' un view filter read-only, non tocca l'accumulo -> niente reset.
+		ImGui::Spacing();
+		ImGui::Checkbox("Denoise (a-trous)", &m_Renderer.Denoise);
+		if (m_Renderer.Denoise) {
+			if (m_Renderer.AOVView != 0) {
+				ImGui::TextDisabled("attivo solo in vista Beauty");
+			} else {
+				ImGui::SliderFloat("Strength", &m_Renderer.DenoiseStrength, 0.0f, 1.0f, "%.2f");
+				ImGui::Checkbox("Attenua con accumulo", &m_Renderer.DenoiseAutoFade);
+				if (m_Renderer.DenoiseAutoFade)
+					ImGui::TextDisabled("si spegne a immagine convergente (~1/sqrt N)");
+				ImGui::SliderFloat("Sigma luminanza", &m_Renderer.DenoiseCPhi, 0.05f, 10.0f, "%.2f");
+				ImGui::SliderFloat("Sigma normale", &m_Renderer.DenoiseNPhi, 1.0f, 128.0f, "%.0f");
+				ImGui::SliderFloat("Sigma profondita", &m_Renderer.DenoisePPhi, 0.05f, 10.0f, "%.2f");
+				ImGui::SliderFloat("Sigma albedo", &m_Renderer.DenoiseAPhi, 0.02f, 1.0f, "%.2f");
+				ImGui::TextDisabled("view filter: non tocca l'accumulo");
+			}
+		}
+
 		ImGui::SeparatorText("BVH");
 		if (ImGui::Checkbox("BVH Heatmap", &m_Renderer.BVHDebug))
 			m_Renderer.ResetPathTracingCounter();
