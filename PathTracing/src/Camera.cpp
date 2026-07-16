@@ -64,6 +64,15 @@ namespace PathTracer {
 			moved = true;
 		}
 
+		// Q/E: alza/abbassa la camera lungo l'asse verticale del mondo (in questo motore e' Y)
+		if (Input::IsKeyDown(KeyCode::Q)) {
+			m_Position += upDirection * speed * ts;
+			moved = true;
+		} else if (Input::IsKeyDown(KeyCode::E)) {
+			m_Position -= upDirection * speed * ts;
+			moved = true;
+		}
+
 		// Rotation
 		if (delta.x != 0.0f || delta.y != 0.0f) {
 			float pitchDelta = delta.y * GetRotationSpeed();
