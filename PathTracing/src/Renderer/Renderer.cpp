@@ -20,6 +20,7 @@ namespace PathTracer {
 		ensure(m_AlbedoAOV);
 		ensure(m_NormalAOV);
 		ensure(m_DepthAOV);
+		ensure(m_IrradianceAccum);
 		// Le ping-pong del denoiser vivono alla stessa risoluzione. Guard: OnResize gira prima
 		// di Initialize, quando il denoiser non esiste ancora (Initialize lo ridimensiona poi).
 		if (m_Denoiser)
@@ -81,6 +82,8 @@ namespace PathTracer {
 		m_AlbedoAOV->AttachImage(1, 0); // AOV: image unit 1/2/3, scritti dal compute (load+store)
 		m_NormalAOV->AttachImage(2, 0);
 		m_DepthAOV->AttachImage(3, 0);
+		m_IrradianceAccum->AttachImage(4, 0); // accumulatore: il compute lo legge e riscrive
+
 
 		glm::ivec2 pickPixel = m_PickRequested ? glm::ivec2(m_PickX, m_PickY) : glm::ivec2(-1, -1);
 
@@ -104,13 +107,17 @@ namespace PathTracer {
 		// (slider): un peso costante mantiene visibile e tarabile il filtro. Nota: l'irradianza e'
 		// gia' demodulata (liscia), quindi filtrare anche a immagine accumulata non distrugge
 		// dettaglio d'albedo, che viene reintrodotto nitido in rimodulazione.
-		if (Denoise && AOVView == 0 && !BVHDebug) {
-			// Auto-fade: sul frame convergente (N grande) lo strength -> 0, cosi' le ombre soft
-			// e l'AO tornano intatte; forte solo quando c'e' rumore da coprire (N piccolo).
-			float strength = DenoiseStrength;
-			if (DenoiseAutoFade)
-				strength *= std::clamp(1.0f / std::sqrt(static_cast<float>(m_PTCounter)), 0.0f, 1.0f);
+		// Auto-fade: sul frame convergente (N grande) lo strength -> 0, cosi' le ombre soft
+		// e l'AO tornano intatte; forte solo quando c'e' rumore da coprire (N piccolo).
+		float strength = DenoiseStrength;
+		if (DenoiseAutoFade)
+			strength *= std::clamp(1.0f / std::sqrt(static_cast<float>(m_PTCounter)), 0.0f, 1.0f);
 
+		// Sotto la soglia il risultato sarebbe indistinguibile dal beauty, ma le 5 passate
+		// full-screen si pagherebbero comunque: sono frame rubati al path tracer, che accumula
+		// piu' lentamente e quindi RESTA piu' rumoroso. Con l'auto-fade e' il caso normale
+		// a immagine convergente, quindi il salto vale parecchio.
+		if (Denoise && AOVView == 0 && !BVHDebug && strength > 0.01f) {
 			auto denoised = m_Denoiser->Run(*m_RenderedImage, *m_AlbedoAOV, *m_NormalAOV, *m_DepthAOV,
 			                                strength, DenoiseCPhi, DenoiseNPhi, DenoisePPhi, DenoiseAPhi);
 			denoised->Bind(); // TEXTURE0 (2D) = immagine ripulita, campionata dal fragment di display

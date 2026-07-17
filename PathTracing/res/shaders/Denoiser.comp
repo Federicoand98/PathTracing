@@ -114,10 +114,12 @@ void main() {
     vec3 filtered = (wsum > 0.0) ? sum / wsum : cCenter;
 
     if(remodulate == 1) {
-        // Rimonta l'albedo e mescola col beauty grezzo. 'strength' scende col numero di campioni
-        // (calcolata CPU-side ~1/sqrt(N)): appena l'accumulo converge il denoiser sparisce e
-        // resta il ground truth, senza over-blur permanente.
-        vec3 albedo   = imageLoad(imgAlbedo, uv).rgb;
+        // Rimonta l'albedo e mescola col beauty grezzo. 'strength' e' pesata CPU-side
+        // (slider, opzionalmente attenuata ~1/sqrt(N) a immagine convergente).
+        // ATTENZIONE: va rimoltiplicato per lo STESSO valore clampato usato in demodulazione.
+        // Con l'albedo grezzo il giro demod->remod non e' invertibile sotto il floor e i
+        // materiali scuri perdono energia (a=0.01 -> restituisce il 20% del colore).
+        vec3 albedo   = max(imageLoad(imgAlbedo, uv).rgb, vec3(ALBEDO_FLOOR));
         vec3 denoised = filtered * albedo;
         vec3 raw      = imageLoad(imgBeauty, uv).rgb;
         vec3 outColor = background ? raw : mix(raw, denoised, strength);

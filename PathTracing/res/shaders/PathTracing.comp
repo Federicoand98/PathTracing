@@ -9,6 +9,8 @@
 
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
+// Contratto del display: imgOutput contiene sempre BEAUTY (colore finale lineare). Non e' piu'
+// l'accumulatore: e' derivato ogni frame rimodulando l'irradianza accumulata. Vedi ADR 0002.
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
 
 // AOV (feature buffer) del primo hit, accumulati in lockstep col colore. Sono le guide del
@@ -16,6 +18,16 @@ layout(rgba32f, binding = 0) uniform image2D imgOutput;
 layout(rgba32f, binding = 1) uniform image2D imgAlbedo;
 layout(rgba32f, binding = 2) uniform image2D imgNormal;
 layout(rgba32f, binding = 3) uniform image2D imgDepth;
+
+// L'ACCUMULATORE vero: integra irradianza (luce senza dettaglio di superficie), non beauty.
+// Serve alla riproiezione temporale, che deve trasportare solo la luce: riproiettare il beauty
+// porterebbe dietro anche l'albedo del pixel vecchio -> ghosting di texture. Vedi ADR 0002.
+layout(rgba32f, binding = 4) uniform image2D imgIrradiance;
+
+// Floor della demodulazione. DEVE combaciare con quello di Denoiser.comp: demodulare e
+// rimodulare con lo stesso valore clampato e' cio' che rende il giro esattamente invertibile
+// (con l'albedo grezzo al ritorno i materiali scuri perderebbero energia in modo permanente).
+const float ALBEDO_FLOOR = 0.05;
 uniform samplerCube SamplerEnvironment;
 
 // Un array invece di N sampler2D: l'indice della texture dipende dal materiale colpito,
@@ -283,6 +295,13 @@ void main() {
         float sDepth;
         vec3 sampleColor = PerPixel(ndc, sAlbedo, sNormal, sDepth).rgb;
 
+        // Scarta i campioni non finiti (NaN/Inf da un path degenere: vetro/specchio, divisioni
+        // per pdf ~0). Senza questo un SOLO campione avvelena il pixel per sempre: l'accumulo e'
+        // mix(prev, x, blend) e mix(NaN, x, blend) resta NaN a ogni frame successivo -> pixel
+        // nero permanente. Il firefly clamp non li intercetta: ogni confronto con NaN e' false.
+        if(any(isnan(sampleColor)) || any(isinf(sampleColor)))
+            sampleColor = vec3(0.0);
+
         // Firefly clamp: limita la luminanza del singolo campione PRIMA dell'accumulo.
         // Va fatto qui e non nel post-processing: dopo la media temporale i puntini sono
         // gia' spalmati nel pixel. Introduce bias (scurisce i picchi legittimi) in cambio
@@ -300,16 +319,27 @@ void main() {
     value /= samplesPerPixel;
     aovAlbedo /= samplesPerPixel; aovNormal /= samplesPerPixel; aovDepth /= samplesPerPixel;
 
-    // accumulazione in lockstep: colore e AOV condividono lo stesso peso temporale 1/frame
+    // accumulazione in lockstep: irradianza e AOV condividono lo stesso peso temporale 1/frame.
+    // Al primo frame si scrive il campione senza leggere: la texture e' allocata con dati
+    // indefiniti e mix(garbage, x, 1.0) NON vale x se garbage e' NaN (NaN*0 = NaN) -> pixel
+    // nero permanente.
     float blend = 1.0 / rendererFrame;
-    value = mix(imageLoad(imgOutput, texelCoord), value, blend);
-    vec3 accAlbedo = mix(imageLoad(imgAlbedo, texelCoord).rgb, aovAlbedo, blend);
-    vec3 accNormal = mix(imageLoad(imgNormal, texelCoord).rgb, aovNormal, blend);
-    float accDepth = mix(imageLoad(imgDepth, texelCoord).r, aovDepth, blend);
+    bool firstFrame = (rendererFrame <= 1);
+    vec3 accAlbedo = firstFrame ? aovAlbedo : mix(imageLoad(imgAlbedo, texelCoord).rgb, aovAlbedo, blend);
+    vec3 accNormal = firstFrame ? aovNormal : mix(imageLoad(imgNormal, texelCoord).rgb, aovNormal, blend);
+    float accDepth = firstFrame ? aovDepth  : mix(imageLoad(imgDepth, texelCoord).r, aovDepth, blend);
 
     imageStore(imgAlbedo, texelCoord, vec4(accAlbedo, 1.0));
     imageStore(imgNormal, texelCoord, vec4(accNormal, 1.0));
     imageStore(imgDepth,  texelCoord, vec4(vec3(accDepth), 1.0));
+
+    // Demodulazione a monte: si integra irradianza, non beauty. Il campione di questo frame e
+    // il suo albedo sono medie sullo stesso set di sample, quindi si dividono tra loro.
+    vec3 irrSample = value.rgb / max(aovAlbedo, vec3(ALBEDO_FLOOR));
+    vec3 accIrr = irrSample;
+    if(!firstFrame)
+        accIrr = mix(imageLoad(imgIrradiance, texelCoord).rgb, irrSample, blend);
+    imageStore(imgIrradiance, texelCoord, vec4(accIrr, 1.0));
 
     // Vista di debug: al posto del beauty scrive un AOV, in forma visualizzabile. Il fragment
     // finale (aovView != 0) lo mostra saltando esposizione/ACES. Gli AOV veri sono gia' scritti.
@@ -317,7 +347,10 @@ void main() {
     if(aovView == 2) { imageStore(imgOutput, texelCoord, vec4(accNormal * 0.5 + 0.5, 1.0)); return; }
     if(aovView == 3) { float d = accDepth / (accDepth + 10.0); imageStore(imgOutput, texelCoord, vec4(vec3(d), 1.0)); return; }
 
-    imageStore(imgOutput, texelCoord, value);
+    // Rimodulazione: imgOutput torna a essere beauty per il display (e per il denoiser, che
+    // per ora legge ancora da qui). Stesso valore clampato della demodulazione -> giro esatto.
+    vec3 beauty = accIrr * max(accAlbedo, vec3(ALBEDO_FLOOR));
+    imageStore(imgOutput, texelCoord, vec4(beauty, 1.0));
 }
 
 // Punto uniforme nel disco unitario (mappatura concentrica polare, niente rejection).

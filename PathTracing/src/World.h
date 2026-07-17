@@ -68,7 +68,7 @@ namespace PathTracer {
 		std::vector<std::string> TexturePaths;     // un layer del sampler2DArray ciascuna
 		std::vector<int> TriIndex;
 		std::vector<BVH4Node> BVH4Nodes;   // BVH a 4 vie, caricato sulla GPU (binding 6)
-		int CurrentScene = 8;
+		int CurrentScene = 1;
 	private:
 		void PrepareMaterials();
 		void PrepareSimpleScene();

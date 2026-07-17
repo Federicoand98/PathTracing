@@ -84,6 +84,9 @@ namespace PathTracer {
 		std::shared_ptr<Texture> m_AlbedoAOV;
 		std::shared_ptr<Texture> m_NormalAOV;
 		std::shared_ptr<Texture> m_DepthAOV;
+		// L'accumulatore vero (image unit 4): integra irradianza demodulata, non beauty.
+		// m_RenderedImage e' derivato da questo per rimodulazione. Vedi ADR 0002.
+		std::shared_ptr<Texture> m_IrradianceAccum;
 		unsigned int m_QuadVAO = 0;
 		unsigned int m_QuadVBO = 0;
 		uint32_t m_Width = 0, m_Height = 0;

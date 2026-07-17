@@ -258,6 +258,7 @@ namespace PathTracer {
 
 		if (m_Timer >= 1.0) {
 			m_FPS = (double)m_NFrames / m_Timer;
+			if (getenv("PT_LOG_FPS")) std::cout << "PTFPS " << m_FPS << std::endl; // TEMP: misura headless
 			m_NFrames = 0;
 			m_ResetTimer = time;
 		}
