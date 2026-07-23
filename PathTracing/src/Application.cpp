@@ -6,6 +6,7 @@
 #include "Input.h"
 #include "Random.h"
 #include "Serialization/SceneSerializer.h"
+#include "vendor/portable-file-dialogs.h"
 
 namespace PathTracer {
 
@@ -432,13 +433,29 @@ namespace PathTracer {
 		}
 
 		// Import glTF (interop Blender, ADR 0003): rimpiazza la scena col contenuto del file.
-		// Niente file-dialog nativo: si incolla il path. Il sync automatico arrivera' col watch.
+		// Il path si puo' incollare a mano o scegliere col file dialog nativo ("...").
 		static char gltfPath[512] = "models/gltf_test/BoxTextured/BoxTextured.gltf";
-		ImGui::InputText("glTF path", gltfPath, sizeof(gltfPath));
-		if (ImGui::Button("Load glTF")) {
-			if (LoadGltfScene(gltfPath))
+		auto loadGltfFromUI = [&](const std::string& p) {
+			if (p.empty()) return;
+			std::snprintf(gltfPath, sizeof(gltfPath), "%s", p.c_str());
+			if (LoadGltfScene(p))
 				m_Camera.SetView({ 0.0f, 0.0f, 6.0f }, { 0.0f, 0.0f, -1.0f });
+		};
+
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 90.0f);
+		ImGui::InputText("##gltfpath", gltfPath, sizeof(gltfPath));
+		ImGui::SameLine();
+		if (ImGui::Button("...")) {
+			// Dialog nativo (zenity su Linux). Parte dalla cartella del path corrente, se valida.
+			std::string start = std::filesystem::path(gltfPath).parent_path().string();
+			auto sel = pfd::open_file("Apri scena glTF", start,
+				{ "glTF", "*.gltf *.glb", "Tutti i file", "*" }).result();
+			if (!sel.empty())
+				loadGltfFromUI(sel[0]);
 		}
+		ImGui::SameLine();
+		if (ImGui::Button("Load glTF"))
+			loadGltfFromUI(gltfPath);
 		if (!m_GltfPath.empty()) {
 			ImGui::SameLine();
 			ImGui::Checkbox("Live-link", &m_GltfWatch);
