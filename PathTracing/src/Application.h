@@ -4,6 +4,7 @@
 #define APPLICATION_H
 
 #include <iostream>
+#include <filesystem>
 #include <GL/glew.h>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -104,6 +105,11 @@ namespace PathTracer {
 		std::string GetSelectionLabel() const;
 		std::string GetSelectionName() const;
 		void ApplyDelta(const glm::mat4& delta);
+
+		// Live-link glTF: carica (rimpiazzando la scena) e registra path+mtime per il watch;
+		// PollGltfWatch controlla ogni frame se il file e' cambiato e in tal caso ricarica.
+		bool LoadGltfScene(const std::string& path);
+		void PollGltfWatch();
 	private:
 		Selection m_Selection;
 		ImGuizmo::OPERATION m_GizmoOperation = ImGuizmo::TRANSLATE;
@@ -153,6 +159,12 @@ namespace PathTracer {
 		Renderer m_Renderer;
 		Camera m_Camera;
 		World m_World;
+
+		// Live-link glTF (ADR 0003): il renderer osserva il file caricato e lo ricarica quando
+		// cambia (tipicamente perche' Blender l'ha ri-esportato su save). Read-only verso Blender.
+		std::string m_GltfPath;                        // vuoto = nessuna scena glTF attiva
+		bool m_GltfWatch = true;                        // auto-reload al cambio del file
+		std::filesystem::file_time_type m_GltfMtime{};  // ultimo timestamp visto
 		//FrameBuffer* m_Framebuffer;
 		bool m_IsRunning;
 		bool m_Vsync = true;

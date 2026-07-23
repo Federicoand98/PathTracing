@@ -53,7 +53,7 @@ namespace PathTracer {
 
 		// Test/CI headless: PT_GLTF=<file> apre una scena glTF al posto di quella di default.
 		if (const char* g = getenv("PT_GLTF")) {
-			if (m_World.LoadGltf(g))
+			if (LoadGltfScene(g))
 				m_Camera.SetView({ 3.0f, 2.5f, 6.0f }, glm::normalize(glm::vec3(-3.0f, -2.5f, -6.0f)));
 		}
 	}
@@ -193,6 +193,9 @@ namespace PathTracer {
 			bool cameraMoved = m_Camera.OnUpdate(m_DeltaTime);
 			m_Renderer.SetInteracting(cameraMoved);
 
+			// Live-link glTF: ricarica la scena se il file e' stato ri-esportato da Blender.
+			PollGltfWatch();
+
 			ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
 			// Start the Dear ImGui frame
@@ -271,6 +274,41 @@ namespace PathTracer {
 
 			glfwSwapBuffers(m_Window);
 		}
+	}
+
+	// Carica una scena glTF e la registra per il watch. Al fallimento del parsing la scena
+	// corrente resta intatta (LoadGltf non tocca il World se il parse fallisce) e il watch non
+	// viene armato. Al successo salva path e mtime: da qui in poi PollGltfWatch la sorveglia.
+	bool Application::LoadGltfScene(const std::string& path) {
+		m_Selection = {};
+		m_Renderer.ResetPathTracingCounter(true);
+		if (!m_World.LoadGltf(path))
+			return false;
+
+		m_GltfPath = path;
+		std::error_code ec;
+		m_GltfMtime = std::filesystem::last_write_time(path, ec); // ec ignorato: se fallisce, 0 -> ricarica al primo poll
+		return true;
+	}
+
+	// Live-link: se il file glTF osservato e' cambiato (Blender l'ha ri-esportato su save),
+	// ricarica la scena. Chiamato ogni frame; il costo a regime e' una sola stat() del file.
+	void Application::PollGltfWatch() {
+		if (!m_GltfWatch || m_GltfPath.empty())
+			return;
+
+		std::error_code ec;
+		auto mtime = std::filesystem::last_write_time(m_GltfPath, ec);
+		if (ec || mtime == m_GltfMtime)
+			return; // file assente/in scrittura, o invariato
+
+		// Aggiorna il timestamp PRIMA di ricaricare: se il parse fallisce (export a meta',
+		// file troncato) LoadGltf lascia la scena com'e' e non ri-tenta all'infinito sullo
+		// stesso timestamp; ci riprovera' al prossimo cambio di mtime (Blender riscrive).
+		m_GltfMtime = mtime;
+		std::cout << "Live-link: rilevato cambio, ricarico " << m_GltfPath << std::endl;
+		m_Renderer.ResetPathTracingCounter(true);
+		m_World.LoadGltf(m_GltfPath);
 	}
 
 	void Application::CalculateTime() {
@@ -398,10 +436,13 @@ namespace PathTracer {
 		static char gltfPath[512] = "models/gltf_test/BoxTextured/BoxTextured.gltf";
 		ImGui::InputText("glTF path", gltfPath, sizeof(gltfPath));
 		if (ImGui::Button("Load glTF")) {
-			m_Selection = {};
-			m_Renderer.ResetPathTracingCounter(true);
-			if (m_World.LoadGltf(gltfPath))
+			if (LoadGltfScene(gltfPath))
 				m_Camera.SetView({ 0.0f, 0.0f, 6.0f }, { 0.0f, 0.0f, -1.0f });
+		}
+		if (!m_GltfPath.empty()) {
+			ImGui::SameLine();
+			ImGui::Checkbox("Live-link", &m_GltfWatch);
+			ImGui::TextDisabled("watch: %s", m_GltfPath.c_str());
 		}
 
 		if (ImGui::Checkbox("Environment Mapping", &m_Renderer.EnvironmentMapping))
