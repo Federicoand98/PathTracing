@@ -79,6 +79,12 @@ namespace PathTracer {
 		m_ComputeShader->SetBool("EnvironmentMapping", container.EnvironmentMapping);
 		m_ComputeShader->SetInt("bvhDebug", container.BVHDebug ? 1 : 0);
 		m_ComputeShader->SetInt("aovView", container.AOVView);
+		m_ComputeShader->SetMat4("prevViewProjection", container.PrevViewProjection);
+		m_ComputeShader->SetVec3("prevCameraPosition", container.PrevCameraPosition);
+		m_ComputeShader->SetInt("aovNeedsUpdate", container.AovNeedsUpdate ? 1 : 0);
+		m_ComputeShader->SetInt("hasHistory", container.HasHistory ? 1 : 0);
+		m_ComputeShader->SetInt("cameraMoved", container.CameraMoved ? 1 : 0);
+		m_ComputeShader->SetInt("historyCap", container.HistoryCap);
 		m_ComputeShader->SetFloat("bvhHeatScale", container.BVHHeatScale);
 		m_ComputeShader->SetFloat("fireflyClamp", container.FireflyClamp);
 		m_ComputeShader->SetFloat("apertureRadius", container.ApertureRadius);

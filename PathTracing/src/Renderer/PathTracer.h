@@ -21,7 +21,14 @@ namespace PathTracer {
 		float FireflyClamp;    // luminanza massima per campione, <= 0 = off
 		float ApertureRadius;  // raggio lente thin-lens, <= 0 = pinhole (niente DOF)
 		float FocusDistance;   // distanza del piano di fuoco
-		int AOVView;           // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth (vista di debug)
+		int AOVView;           // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth, 4 = storia
+		// Riproiezione temporale (ADR 0002): camera del frame precedente + stato della storia.
+		glm::mat4 PrevViewProjection;
+		glm::vec3 PrevCameraPosition;
+		bool AovNeedsUpdate;   // true = camera cambiata/reset: ritraccia gli AOV, altrimenti rileggili
+		bool HasHistory;       // false = primo frame / reset scena / resize: storia non valida
+		bool CameraMoved;      // true = storia riproiettata -> si applica il cap
+		int HistoryCap;
 		glm::ivec2 PickPixel;  // (-1,-1) = nessuna richiesta di picking
 		const class World& World;
 		const class Camera& Camera;

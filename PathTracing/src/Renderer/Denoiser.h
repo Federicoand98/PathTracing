@@ -19,11 +19,14 @@ namespace PathTracer {
 		void Resize(uint32_t width, uint32_t height);
 
 		// Esegue le 5 iterazioni à-trous (stepSize 1,2,4,8,16) alternando le due texture.
-		// La 1a passata demodula (beauty/albedo), l'ultima rimodula e mescola col beauty grezzo.
-		// strength in [0,1] pesa il denoise nel blend finale (0 = beauty puro).
+		// L'ingresso e' l'ACCUMULATORE di irradianza del path tracer, gia' demodulato (ADR 0002):
+		// il filtro non demodula piu' nulla, rimodula solo all'ultima passata e mescola col beauty.
+		// irradiance porta N nell'alpha, usato per l'auto-fade per-pixel.
+		// normalDepth: rgb = normale world, a = profondita' (impacchettati, vedi Renderer).
+		// strength [0,1] = peso manuale; autoFade lo scala anche per 1/sqrt(N), per-pixel.
 		// Ritorna la texture finale (spazio colore) da bindare come sampler di display.
-		std::shared_ptr<Texture> Run(Texture& beauty, Texture& albedo, Texture& normal, Texture& depth,
-		                             float strength, float cPhi, float nPhi, float pPhi, float aPhi);
+		std::shared_ptr<Texture> Run(Texture& irradiance, Texture& beauty, Texture& albedo, Texture& normalDepth,
+		                             float strength, bool autoFade, float cPhi, float nPhi, float pPhi, float aPhi);
 	private:
 		std::shared_ptr<ComputeShader> m_Shader;
 		std::shared_ptr<Texture> m_PingA;

@@ -17,34 +17,33 @@ namespace PathTracer {
 		m_Height = height;
 	}
 
-	std::shared_ptr<Texture> Denoiser::Run(Texture& beauty, Texture& albedo, Texture& normal, Texture& depth,
-	                                       float strength, float cPhi, float nPhi, float pPhi, float aPhi) {
+	std::shared_ptr<Texture> Denoiser::Run(Texture& irradiance, Texture& beauty, Texture& albedo, Texture& normalDepth,
+	                                       float strength, bool autoFade, float cPhi, float nPhi, float pPhi, float aPhi) {
 		m_Shader->Bind();
 		m_Shader->SetFloat("cPhi", cPhi);
 		m_Shader->SetFloat("nPhi", nPhi);
 		m_Shader->SetFloat("pPhi", pPhi);
 		m_Shader->SetFloat("aPhi", aPhi);
 		m_Shader->SetFloat("strength", strength);
+		m_Shader->SetInt("autoFade", autoFade ? 1 : 0);
 
 		// Passo à-trous raddoppiato ad ogni iterazione: kernel 5x5 "bucato" -> supporto che
 		// cresce (5,9,17,33,65 px) a costo per-passata costante.
 		const int steps[5] = { 1, 2, 4, 8, 16 };
 
 		for (int i = 0; i < 5; i++) {
-			// Ping-pong. i=0 legge il beauty e demodula; le intermedie stanno in irradianza;
-			// i=4 rimodula + blend. Sequenza degli output: A,B,A,B,A -> finale in PingA.
-			Texture* in  = (i == 0) ? &beauty : ((i % 2 == 1) ? m_PingA.get() : m_PingB.get());
+			// Ping-pong. i=0 legge l'accumulatore di irradianza; le intermedie restano in
+			// irradianza; i=4 rimodula + blend. Sequenza degli output: A,B,A,B,A -> finale in PingA.
+			Texture* in  = (i == 0) ? &irradiance : ((i % 2 == 1) ? m_PingA.get() : m_PingB.get());
 			Texture* out = (i % 2 == 0) ? m_PingA.get() : m_PingB.get();
 
 			in->AttachImage(0, 0);
 			out->AttachImage(1, 0);
 			albedo.AttachImage(2, 0);
-			normal.AttachImage(3, 0);
-			depth.AttachImage(4, 0);
-			beauty.AttachImage(5, 0); // serve solo a i=4 per il blend, ma bindarlo sempre e' innocuo
+			normalDepth.AttachImage(3, 0); // rgb = normale, a = depth
+			beauty.AttachImage(4, 0);      // serve solo a i=4 per il blend, ma bindarlo sempre e' innocuo
 
 			m_Shader->SetInt("stepSize", steps[i]);
-			m_Shader->SetInt("demodulate", i == 0 ? 1 : 0);
 			m_Shader->SetInt("remodulate", i == 4 ? 1 : 0);
 
 			glDispatchCompute((m_Width + 7) / 8, (m_Height + 7) / 8, 1);

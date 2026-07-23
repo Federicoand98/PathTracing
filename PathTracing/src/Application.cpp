@@ -141,6 +141,11 @@ namespace PathTracer {
 		std::cout << "Max global (total) work group counts X: " << max_compute_work_group_count[0] << ", Y: " << max_compute_work_group_count[1] << ", Z: " << max_compute_work_group_count[2] << std::endl;
 		std::cout << "Max local (in one shader) work group sizes X: " << max_compute_work_group_size[0] << ", Y: " << max_compute_work_group_size[1] << ", Z: " << max_compute_work_group_size[2] << std::endl;
 		std::cout << "Max local work group invocations: " << max_compute_work_group_invocations << std::endl;
+		// La riproiezione temporale binda parecchie immagini insieme (correnti + storia):
+		// se questo limite e' basso il compute non puo' vederle tutte. Vedi ADR 0002.
+		int maxImageUnits = 0;
+		glGetIntegerv(GL_MAX_IMAGE_UNITS, &maxImageUnits);
+		std::cout << "Max image units: " << maxImageUnits << std::endl;
 		std::cout << "" << std::endl;
 
 		// Setup Dear ImGui context
@@ -176,10 +181,12 @@ namespace PathTracer {
 		while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
 			glfwPollEvents();
 
+			// La camera che si muove NON azzera piu' l'accumulo: la riproiezione temporale
+			// riusa il frame precedente invece di buttarlo (ADR 0002). Il reset resta per i
+			// cambi di scena/materiale, dove la storia e' genuinamente invalida.
+			// SetInteracting dice al renderer che la storia va cappata (ghosting) e che puo'
+			// abbassare la risoluzione (render scale).
 			bool cameraMoved = m_Camera.OnUpdate(m_DeltaTime);
-			if (cameraMoved)
-				m_Renderer.ResetPathTracingCounter();
-			// mentre la camera si muove il renderer puo' abbassare la risoluzione (render scale)
 			m_Renderer.SetInteracting(cameraMoved);
 
 			ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
@@ -233,6 +240,18 @@ namespace PathTracer {
 			// compare nello stesso frame in cui viene richiesta
 			DrawDeletePopup();
 			Render(m_DeltaTime);
+
+			// Cattura headless: PT_SHOT=<file> PT_SHOT_FRAME=<n> salva dopo n frame accumulati
+			// e chiude. Serve a ispezionare il render senza guardare lo schermo (test, CI).
+			if (const char* shot = getenv("PT_SHOT")) {
+				static int shotFrame = getenv("PT_SHOT_FRAME") ? atoi(getenv("PT_SHOT_FRAME")) : 200;
+				static int n = 0;
+				if (++n >= shotFrame) {
+					m_Renderer.GetFrameBuffer()->SaveScreenshot(shot);
+					m_IsRunning = false;
+				}
+			}
+
 			ImGui::Render();
 
 			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -287,7 +306,7 @@ namespace PathTracer {
 		ImGui::TextDisabled("| %.2f ms/frame", deltaTime * 1000.0f);
 		ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80.0f);
 		if (ImGui::Button("Screenshot"))
-			m_Renderer.GetFrameBuffer()->SavePPMTexture();
+			m_Renderer.GetFrameBuffer()->SaveScreenshot();
 
 		ImGui::Spacing();
 
@@ -1226,10 +1245,23 @@ namespace PathTracer {
 		// normale; gli altri mostrano l'AOV crudo (senza esposizione/ACES).
 		// reset dell'accumulo al cambio vista: le viste AOV scrivono in imgOutput (condiviso
 		// con l'accumulatore del colore), quindi tornando a Beauty il colore va ripartito da capo.
-		if (ImGui::Combo("View", &m_Renderer.AOVView, "Beauty\0Albedo\0Normal\0Depth\0\0"))
+		if (ImGui::Combo("View", &m_Renderer.AOVView, "Beauty\0Albedo\0Normal\0Depth\0History\0\0"))
 			m_Renderer.ResetPathTracingCounter();
-		if (m_Renderer.AOVView != 0)
+		if (m_Renderer.AOVView == 4)
+			ImGui::TextDisabled("verde = storia matura, rosso = ripartita (disocclusione)");
+		else if (m_Renderer.AOVView != 0)
 			ImGui::TextDisabled("vista AOV di debug: nessun tonemap");
+
+		// Riproiezione temporale (ADR 0002)
+		ImGui::Spacing();
+		if (ImGui::Checkbox("Riproiezione temporale", &m_Renderer.Reproject))
+			m_Renderer.ResetPathTracingCounter();
+		if (m_Renderer.Reproject) {
+			ImGui::SliderInt("History cap", &m_Renderer.HistoryCap, 1, 128);
+			ImGui::TextDisabled("cap solo in movimento; da fermo N cresce libero");
+		} else {
+			ImGui::TextDisabled("spenta: la camera che si muove azzera l'accumulo");
+		}
 
 		// Denoiser à-trous: e' un view filter read-only, non tocca l'accumulo -> niente reset.
 		ImGui::Spacing();

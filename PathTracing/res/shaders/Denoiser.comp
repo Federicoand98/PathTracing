@@ -24,41 +24,36 @@ layout(local_size_x = 8, local_size_y = 8) in;
 // Colore ping-pong: irradianza in ingresso/uscita (beauty grezzo quando demodulate == 1).
 layout(rgba32f, binding = 0) uniform readonly  image2D imgIn;
 layout(rgba32f, binding = 1) uniform writeonly image2D imgOut;
-// AOV del primo hit (accumulati in lockstep col beauty dal path tracer).
+// AOV del primo hit, del frame corrente. Normale e depth sono impacchettati in un unico
+// buffer (rgb / a): il driver da' solo 8 image unit e la storia della riproiezione ne mangia.
 layout(rgba32f, binding = 2) uniform readonly  image2D imgAlbedo;
-layout(rgba32f, binding = 3) uniform readonly  image2D imgNormal;
-layout(rgba32f, binding = 4) uniform readonly  image2D imgDepth;
+layout(rgba32f, binding = 3) uniform readonly  image2D imgNormalDepth;
 // Beauty grezzo accumulato: serve solo all'ultima passata per il blend di convergenza.
-layout(rgba32f, binding = 5) uniform readonly  image2D imgBeauty;
+layout(rgba32f, binding = 4) uniform readonly  image2D imgBeauty;
 
 uniform int   stepSize;    // passo à-trous: 1,2,4,8,16 lungo le 5 iterazioni
 uniform float cPhi;        // sigma edge-stop luminanza (grande = piu' sfoca)
 uniform float nPhi;        // esponente edge-stop normale (grande = bordi di normale piu' netti)
 uniform float pPhi;        // sigma edge-stop profondita' (unita' mondo)
 uniform float aPhi;        // sigma edge-stop albedo (piccolo = blocca i bordi di materiale)
-uniform int   demodulate;  // 1 = prima passata: dividi ogni tap per il suo albedo
 uniform int   remodulate;  // 1 = ultima passata: rimoltiplica per albedo e fai il blend
-uniform float strength;    // [0,1] peso del denoise nel blend finale (0 = beauty grezzo)
+uniform float strength;    // [0,1] peso manuale del denoise nel blend finale
+uniform int   autoFade;    // 1 = scala anche per 1/sqrt(N), per-pixel
 
 const float EPS = 1e-3;
-// Floor della demodulazione: dividere per un albedo vicino a zero amplifica a dismisura il
-// rumore nei canali scuri (es. il verde di un tessuto rosso). Un floor piu' alto lo contiene.
+// Floor della demodulazione. DEVE combaciare con quello di PathTracing.comp: e' con quel valore
+// che l'irradianza e' stata prodotta, e rimodulare con un altro non tornerebbe indietro esatto.
 const float ALBEDO_FLOOR = 0.05;
 
 float Luminance(vec3 c) {
     return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }
 
-// Carica il colore del tap gia' in spazio irradianza. Alla prima passata imgIn contiene il
-// beauty: va demodulato per l'albedo DEL TAP (non del centro), altrimenti il filtro lavorerebbe
-// ancora su segnale modulato dalla texture.
+// imgIn e' GIA' irradianza: la demodulazione e' risalita nell'accumulatore del path tracer
+// (ADR 0002), quindi qui non c'e' piu' niente da dividere. Nell'alpha viaggia il sample count
+// N, che le passate si passano intatto per il fade per-pixel dell'ultima.
 vec3 LoadIrradiance(ivec2 p) {
-    vec3 c = imageLoad(imgIn, p).rgb;
-    if(demodulate == 1) {
-        vec3 a = max(imageLoad(imgAlbedo, p).rgb, vec3(ALBEDO_FLOOR));
-        c /= a;
-    }
-    return c;
+    return imageLoad(imgIn, p).rgb;
 }
 
 void main() {
@@ -71,9 +66,12 @@ void main() {
     const float h[5] = float[5](1.0/16.0, 1.0/4.0, 3.0/8.0, 1.0/4.0, 1.0/16.0);
 
     // Guide del pixel centrale per le funzioni edge-stop.
-    vec3  cCenter = LoadIrradiance(uv);
-    vec3  nCenter = imageLoad(imgNormal, uv).rgb;
-    float dCenter = imageLoad(imgDepth,  uv).r;
+    vec4  ndCenter = imageLoad(imgNormalDepth, uv);
+    vec4  inCenter = imageLoad(imgIn, uv);
+    vec3  cCenter = inCenter.rgb;
+    float nSamples = inCenter.a;   // sample count del pixel, passato di passata in passata
+    vec3  nCenter = ndCenter.rgb;
+    float dCenter = ndCenter.a;
     vec3  aCenter = imageLoad(imgAlbedo, uv).rgb;
     float lCenter = Luminance(cCenter);
 
@@ -89,9 +87,10 @@ void main() {
             ivec2 q = uv + ivec2(dx, dy) * stepSize;
             q = clamp(q, ivec2(0), size - 1); // gli imageLoad non fanno clamp: lo faccio a mano
 
+            vec4  ndt = imageLoad(imgNormalDepth, q);
             vec3  ct = LoadIrradiance(q);
-            vec3  nt = imageLoad(imgNormal, q).rgb;
-            float dt = imageLoad(imgDepth,  q).r;
+            vec3  nt = ndt.rgb;
+            float dt = ndt.a;
             vec3  at = imageLoad(imgAlbedo, q).rgb;
 
             // Edge-stopping: pesa il tap in base a quanto e' "simile" al centro.
@@ -114,18 +113,26 @@ void main() {
     vec3 filtered = (wsum > 0.0) ? sum / wsum : cCenter;
 
     if(remodulate == 1) {
-        // Rimonta l'albedo e mescola col beauty grezzo. 'strength' e' pesata CPU-side
-        // (slider, opzionalmente attenuata ~1/sqrt(N) a immagine convergente).
-        // ATTENZIONE: va rimoltiplicato per lo STESSO valore clampato usato in demodulazione.
-        // Con l'albedo grezzo il giro demod->remod non e' invertibile sotto il floor e i
+        // Rimonta l'albedo e mescola col beauty grezzo.
+        // ATTENZIONE: va rimoltiplicato per lo STESSO valore clampato con cui e' stata prodotta
+        // l'irradianza. Con l'albedo grezzo il giro non e' invertibile sotto il floor e i
         // materiali scuri perdono energia (a=0.01 -> restituisce il 20% del colore).
         vec3 albedo   = max(imageLoad(imgAlbedo, uv).rgb, vec3(ALBEDO_FLOOR));
         vec3 denoised = filtered * albedo;
         vec3 raw      = imageLoad(imgBeauty, uv).rgb;
-        vec3 outColor = background ? raw : mix(raw, denoised, strength);
+
+        // Auto-fade PER-PIXEL: ogni pixel ha il suo N (la disocclusione lo azzera solo dove
+        // serve). Cosi' il filtro si spegne dove la storia e' matura e resta forte proprio
+        // sui bordi appena scoperti, che sono i piu' rumorosi. Con un N globale era impossibile.
+        float s = strength;
+        if(autoFade == 1)
+            s *= clamp(inversesqrt(max(nSamples, 1.0)), 0.0, 1.0);
+
+        vec3 outColor = background ? raw : mix(raw, denoised, s);
         imageStore(imgOut, uv, vec4(outColor, 1.0));
     } else {
-        // Passate intermedie: resta in spazio irradianza per la successiva.
-        imageStore(imgOut, uv, vec4(background ? cCenter : filtered, 1.0));
+        // Passate intermedie: resta in spazio irradianza, e porta avanti N nell'alpha perche'
+        // l'ultima passata possa pesare il fade per-pixel.
+        imageStore(imgOut, uv, vec4(background ? cCenter : filtered, nSamples));
     }
 }

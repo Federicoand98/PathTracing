@@ -13,16 +13,22 @@ layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 // l'accumulatore: e' derivato ogni frame rimodulando l'irradianza accumulata. Vedi ADR 0002.
 layout(rgba32f, binding = 0) uniform image2D imgOutput;
 
-// AOV (feature buffer) del primo hit, accumulati in lockstep col colore. Sono le guide del
-// denoiser: albedo (base color senza luce), normal (world space), depth (distanza lineare).
-layout(rgba32f, binding = 1) uniform image2D imgAlbedo;
-layout(rgba32f, binding = 2) uniform image2D imgNormal;
-layout(rgba32f, binding = 3) uniform image2D imgDepth;
+// AOV (feature buffer) del primo hit, del FRAME CORRENTE (non piu' accumulati nel tempo:
+// la riproiezione ha bisogno delle feature di questo frame per validare la storia, e
+// albedo/normale/depth sono deterministici, non hanno varianza da mediare via).
+// Normale e depth stanno insieme: il limite e' 8 image unit e la storia ne raddoppia il conto.
+layout(rgba32f, binding = 1) uniform image2D imgAlbedo;      // rgb = base color
+layout(rgba32f, binding = 2) uniform image2D imgNormalDepth; // rgb = normale world, a = depth
 
 // L'ACCUMULATORE vero: integra irradianza (luce senza dettaglio di superficie), non beauty.
-// Serve alla riproiezione temporale, che deve trasportare solo la luce: riproiettare il beauty
-// porterebbe dietro anche l'albedo del pixel vecchio -> ghosting di texture. Vedi ADR 0002.
-layout(rgba32f, binding = 4) uniform image2D imgIrradiance;
+// Riproiettare il beauty porterebbe dietro anche l'albedo del pixel vecchio -> ghosting di
+// texture. Nell'alpha il sample count N, che e' PER-PIXEL perche' la disocclusione azzera la
+// storia solo in alcuni pixel. Vedi ADR 0002.
+layout(rgba32f, binding = 3) uniform image2D imgIrradiance;  // rgb = irradianza, a = N
+
+// La STORIA: gli stessi due buffer del frame precedente, in sola lettura. Ping-pong lato C++.
+layout(rgba32f, binding = 4) uniform readonly image2D imgNormalDepthPrev;
+layout(rgba32f, binding = 5) uniform readonly image2D imgIrradiancePrev;
 
 // Floor della demodulazione. DEVE combaciare con quello di Denoiser.comp: demodulare e
 // rimodulare con lo stesso valore clampato e' cio' che rende il giro esattamente invertibile
@@ -142,7 +148,7 @@ struct HitInfo {
 };
 
 Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc);
-vec4 PerPixel(vec2 ndc, out vec3 aovAlbedo, out vec3 aovNormal, out float aovDepth);
+vec4 PerPixel(vec2 ndc);
 vec3 BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive);
 HitInfo TraceRay(Ray ray);
 HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit, float u, float v);
@@ -189,6 +195,16 @@ uniform ivec2 pickPixel;      // pixel da campionare per il picking, (-1,-1) = n
 uniform float fireflyClamp;   // luminanza massima per campione, <= 0 = off
 uniform float apertureRadius; // raggio della lente (thin-lens). <= 0 = pinhole, niente DOF
 uniform float focusDistance;  // distanza del piano di fuoco lungo il raggio
+
+// Riproiezione temporale (ADR 0002). La camera del frame PRECEDENTE: serve sia a ritrovare il
+// pixel nella storia (prevViewProjection) sia a validarla (prevCameraPosition: il depth in
+// storia e' misurato da li', non dalla camera di adesso).
+uniform mat4 prevViewProjection;
+uniform vec3 prevCameraPosition;
+uniform int aovNeedsUpdate; // 1 = camera cambiata/reset: gli AOV vanno ritracciati
+uniform int hasHistory;    // 0 = niente storia valida (primo frame, reset scena, resize)
+uniform int cameraMoved;   // 1 = la storia e' riproiettata -> va cappata
+uniform int historyCap;    // lunghezza massima della storia quando ci si muove
 
 layout(std430, binding = 0) buffer SpheresBuffer {
     Sphere Spheres[];
@@ -283,17 +299,57 @@ void main() {
         return;
     }
 
+    // AOV DETERMINISTICI: un raggio primario NON jitterato, tracciato una volta sola qui fuori.
+    // Devono essere identici a ogni frame, altrimenti:
+    //  - la rimodulazione (beauty = irr * albedo) oscillerebbe per sempre col jitter;
+    //  - la validazione della riproiezione confronta normale/depth col frame precedente: se
+    //    lampeggiano, i pixel di bordo vengono rifiutati SEMPRE, restano a N=1 e non fanno mai
+    //    anti-aliasing -> contorni aliasati e scuri, permanenti.
+    // In piu' cosi' non vivono dentro PerPixel: 7 float in meno nel loop dei rimbalzi, che e'
+    // il kernel piu' caldo del programma (l'occupancy li' vale ~1.6x di frame rate).
+    // Dipendendo solo dalla camera, a camera ferma sono IDENTICI a quelli del frame scorso:
+    // si rileggono invece di ritracciare. Due imageLoad al posto di una traversata BVH completa,
+    // che sul raggio primario e' la piu' cara del programma (su Sponza vale ~4x di frame rate).
+    // Vengono calcolati in uno scope che si CHIUDE prima del loop dei sample, e piu' sotto si
+    // rileggono dalle immagini. Sembra uno spreco ed e' invece il punto: se restassero vivi
+    // attraverso il loop, il compilatore terrebbe 7 float occupati per tutta la traversata BVH
+    // dei rimbalzi e l'occupancy crolla (misurato: ~1.6x di frame rate). Il giro store->load
+    // spezza la catena di liveness e lascia morire i registri.
+    {
+        vec3 a = vec3(1.0);   // default = sfondo: albedo neutro lascia la demodulazione a 1
+        vec3 n = vec3(0.0);
+        float d = 1e4;
+        if(aovNeedsUpdate == 1) {
+            vec2 ndcCenter = (vec2(texelCoord) + 0.5) / vec2(imageResultSize) * 2.0 - 1.0;
+            Ray aovRay = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndcCenter);
+            aovRay.t = FLOAT_MAX;
+            HitInfo aovHit = TraceRay(aovRay);
+            if(aovHit.HitDistance > 0.0) {
+                Material aovMat = Materials[clamp(aovHit.MaterialIndex, 0, Materials.length() - 1)];
+                vec3 aovPos = aovRay.Origin + aovRay.Direction * aovHit.HitDistance;
+                a = vec3(aovMat.Color) * SampleAlbedo(aovMat, aovHit.UV, aovPos);
+                n = aovHit.Normal;
+                d = aovHit.HitDistance;
+            }
+        } else {
+            // imgAlbedo non e' ping-pong: contiene ancora il frame scorso. NormalDepth si legge
+            // dalla storia, perche' l'indice corrente e' il bersaglio di scrittura di adesso.
+            a = imageLoad(imgAlbedo, texelCoord).rgb;
+            vec4 nd = imageLoad(imgNormalDepthPrev, texelCoord);
+            n = nd.rgb;
+            d = nd.a;
+        }
+        imageStore(imgAlbedo, texelCoord, vec4(a, 1.0));
+        imageStore(imgNormalDepth, texelCoord, vec4(n, d));
+    }
+
     vec4 value = vec4(0.0, 0.0, 0.0, 1.0);
-    vec3 aovAlbedo = vec3(0.0), aovNormal = vec3(0.0);
-    float aovDepth = 0.0;
     for(int i = 0; i < samplesPerPixel; i++) {
         // anti aliasing
         vec2 subPixelOffset = vec2(GetRandomFloat(), GetRandomFloat());
         vec2 ndc = (texelCoord + subPixelOffset) / imageResultSize * 2.0 - 1.0;
 
-        vec3 sAlbedo, sNormal;
-        float sDepth;
-        vec3 sampleColor = PerPixel(ndc, sAlbedo, sNormal, sDepth).rgb;
+        vec3 sampleColor = PerPixel(ndc).rgb;
 
         // Scarta i campioni non finiti (NaN/Inf da un path degenere: vetro/specchio, divisioni
         // per pdf ~0). Senza questo un SOLO campione avvelena il pixel per sempre: l'accumulo e'
@@ -313,43 +369,103 @@ void main() {
         }
 
         value.rgb += sampleColor;
-        aovAlbedo += sAlbedo; aovNormal += sNormal; aovDepth += sDepth;
     }
 
     value /= samplesPerPixel;
-    aovAlbedo /= samplesPerPixel; aovNormal /= samplesPerPixel; aovDepth /= samplesPerPixel;
 
-    // accumulazione in lockstep: irradianza e AOV condividono lo stesso peso temporale 1/frame.
-    // Al primo frame si scrive il campione senza leggere: la texture e' allocata con dati
-    // indefiniti e mix(garbage, x, 1.0) NON vale x se garbage e' NaN (NaN*0 = NaN) -> pixel
-    // nero permanente.
-    float blend = 1.0 / rendererFrame;
-    bool firstFrame = (rendererFrame <= 1);
-    vec3 accAlbedo = firstFrame ? aovAlbedo : mix(imageLoad(imgAlbedo, texelCoord).rgb, aovAlbedo, blend);
-    vec3 accNormal = firstFrame ? aovNormal : mix(imageLoad(imgNormal, texelCoord).rgb, aovNormal, blend);
-    float accDepth = firstFrame ? aovDepth  : mix(imageLoad(imgDepth, texelCoord).r, aovDepth, blend);
-
-    imageStore(imgAlbedo, texelCoord, vec4(accAlbedo, 1.0));
-    imageStore(imgNormal, texelCoord, vec4(accNormal, 1.0));
-    imageStore(imgDepth,  texelCoord, vec4(vec3(accDepth), 1.0));
+    // Rilettura degli AOV scritti prima del loop (vedi la nota sopra sulla liveness): da qui in
+    // poi servono di nuovo, ma NON dovevano sopravvivere alla traversata dei rimbalzi.
+    vec4 aovNd = imageLoad(imgNormalDepth, texelCoord);
+    vec3 aovAlbedo = imageLoad(imgAlbedo, texelCoord).rgb;
+    vec3 aovNormal = aovNd.rgb;
+    float aovDepth = aovNd.a;
 
     // Demodulazione a monte: si integra irradianza, non beauty. Il campione di questo frame e
     // il suo albedo sono medie sullo stesso set di sample, quindi si dividono tra loro.
     vec3 irrSample = value.rgb / max(aovAlbedo, vec3(ALBEDO_FLOOR));
-    vec3 accIrr = irrSample;
-    if(!firstFrame)
-        accIrr = mix(imageLoad(imgIrradiance, texelCoord).rgb, irrSample, blend);
-    imageStore(imgIrradiance, texelCoord, vec4(accIrr, 1.0));
+
+    // ---- Riproiezione temporale (ADR 0002) ----
+    // Invece di azzerare l'accumulo quando la camera si muove, si ritrova questo pixel nel
+    // frame precedente e si riusa la sua irradianza.
+    vec3  histIrr = vec3(0.0);
+    float histN = 0.0;
+    bool  valid = false;
+
+    // Lo sfondo ha normale nulla. Non va escluso dalla storia: escluderlo lo inchioda a N=1
+    // e non accumula MAI (grana fissa nel cielo). E' semplicemente all'infinito, quindi la
+    // sua riproiezione dipende solo dalla rotazione della camera e si valida diversamente.
+    bool isBackground = dot(aovNormal, aovNormal) < 1e-6;
+    if(hasHistory == 1) {
+        // Posizione mondo del primo hit, ricostruita dal Depth: raggio primario non jitterato
+        // esteso di aovDepth. Per questo il Depth AOV basta e non serve un buffer di posizioni.
+        vec2 ndcCenter = (vec2(texelCoord) + 0.5) / vec2(imageResultSize) * 2.0 - 1.0;
+        Ray centerRay = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndcCenter);
+        vec3 worldPos = centerRay.Origin + centerRay.Direction * aovDepth;
+
+        vec4 clipPrev = prevViewProjection * vec4(worldPos, 1.0);
+        if(clipPrev.w > 0.0) {  // w <= 0 = dietro la camera precedente
+            vec2 uvPrev = (clipPrev.xy / clipPrev.w) * 0.5 + 0.5;
+            ivec2 pc = ivec2(uvPrev * vec2(imageResultSize));
+
+            // Off-screen: il pixel non era inquadrato prima -> nessuna storia da riusare.
+            if(all(greaterThanEqual(pc, ivec2(0))) && all(lessThan(pc, imageResultSize))) {
+                vec4 ndPrev = imageLoad(imgNormalDepthPrev, pc);
+
+                bool accept;
+                if(isBackground) {
+                    // Per lo sfondo basta che fosse sfondo anche prima: non c'e' una superficie
+                    // di cui confrontare normale e distanza.
+                    accept = dot(ndPrev.rgb, ndPrev.rgb) < 1e-6;
+                } else {
+                    // Depth: NON si confronta col depth corrente. Il depth in storia e' misurato
+                    // dalla camera di allora, quindi il paragone giusto e' con la distanza attesa
+                    // da quella posizione. Tolleranza relativa: l'errore assoluto cresce lontano.
+                    float expectedPrev = length(worldPos - prevCameraPosition);
+                    bool depthOk = abs(ndPrev.a - expectedPrev) < 0.05 * max(expectedPrev, 1.0);
+                    // Normale: intercetta gli spigoli dove depth combacia ma la superficie e' altra.
+                    bool normalOk = dot(normalize(ndPrev.rgb), normalize(aovNormal)) > 0.9;
+                    accept = depthOk && normalOk;
+                }
+
+                if(accept) {
+                    vec4 h = imageLoad(imgIrradiancePrev, pc);
+                    // La storia non finita va scartata, o si propaga in eterno.
+                    if(!any(isnan(h.rgb)) && !any(isinf(h.rgb))) {
+                        histIrr = h.rgb;
+                        histN = h.a;
+                        valid = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // Peso adattivo 1/N (media imparziale). Il cap limita il ghosting da storia stantia e vale
+    // SOLO in movimento: a camera ferma la riproiezione e' l'identita', la storia non e'
+    // stantia, e N cresce libero -> l'immagine converge alla verita' esattamente come prima.
+    // Cappare anche da fermo la bloccherebbe a una media esponenziale di ~32 campioni.
+    float cap = (cameraMoved == 1) ? float(historyCap) : 1e9;
+    float N = valid ? min(histN + 1.0, cap) : 1.0;
+    vec3 accIrr = valid ? mix(histIrr, irrSample, 1.0 / N) : irrSample;
+
+    imageStore(imgIrradiance, texelCoord, vec4(accIrr, N));
 
     // Vista di debug: al posto del beauty scrive un AOV, in forma visualizzabile. Il fragment
     // finale (aovView != 0) lo mostra saltando esposizione/ACES. Gli AOV veri sono gia' scritti.
-    if(aovView == 1) { imageStore(imgOutput, texelCoord, vec4(accAlbedo, 1.0)); return; }
-    if(aovView == 2) { imageStore(imgOutput, texelCoord, vec4(accNormal * 0.5 + 0.5, 1.0)); return; }
-    if(aovView == 3) { float d = accDepth / (accDepth + 10.0); imageStore(imgOutput, texelCoord, vec4(vec3(d), 1.0)); return; }
+    if(aovView == 1) { imageStore(imgOutput, texelCoord, vec4(aovAlbedo, 1.0)); return; }
+    if(aovView == 2) { imageStore(imgOutput, texelCoord, vec4(aovNormal * 0.5 + 0.5, 1.0)); return; }
+    if(aovView == 3) { float d = aovDepth / (aovDepth + 10.0); imageStore(imgOutput, texelCoord, vec4(vec3(d), 1.0)); return; }
+    // Vista della storia: verde = storia lunga (accumulo maturo), rosso = appena ripartita da
+    // una disocclusione. E' il modo per vedere se la rejection sta facendo il suo lavoro.
+    if(aovView == 4) {
+        float t = clamp(N / float(historyCap), 0.0, 1.0);
+        imageStore(imgOutput, texelCoord, vec4(1.0 - t, t, 0.0, 1.0));
+        return;
+    }
 
     // Rimodulazione: imgOutput torna a essere beauty per il display (e per il denoiser, che
     // per ora legge ancora da qui). Stesso valore clampato della demodulazione -> giro esatto.
-    vec3 beauty = accIrr * max(accAlbedo, vec3(ALBEDO_FLOOR));
+    vec3 beauty = accIrr * max(aovAlbedo, vec3(ALBEDO_FLOOR));
     imageStore(imgOutput, texelCoord, vec4(beauty, 1.0));
 }
 
@@ -360,14 +476,8 @@ vec2 RandomInUnitDisk() {
     return r * vec2(cos(theta), sin(theta));
 }
 
-vec4 PerPixel(vec2 ndc, out vec3 aovAlbedo, out vec3 aovNormal, out float aovDepth) {
+vec4 PerPixel(vec2 ndc) {
     Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
-
-    // Default: se il raggio primario manca tutto (sfondo). Albedo neutro (1) cosi' una futura
-    // demodulazione lascia lo sfondo invariato; normale nulla; profondita' grande.
-    aovAlbedo = vec3(1.0);
-    aovNormal = vec3(0.0);
-    aovDepth  = 1e4;
 
     // Depth of field, modello thin-lens. Il raggio pinhole parte dal centro camera; con
     // apertura > 0 lo faccio partire da un punto sul disco della lente e lo ripunto verso
@@ -409,16 +519,9 @@ vec4 PerPixel(vec2 ndc, out vec3 aovAlbedo, out vec3 aovNormal, out float aovDep
         // da indici fuori range, es. un MTL malformato in un OBJ multi-materiale.
         material = Materials[clamp(hit.MaterialIndex, 0, Materials.length() - 1)];
 
-        // AOV del primo hit: le feature che guidano il denoiser (base color, normale, profondita').
-        // Catturati qui, prima dell'eventuale flip della normale per i raggi interni.
-        if(i == 0) {
-            vec3 hitPos = ray.Origin + ray.Direction * hit.HitDistance;
-            // stessa base color del BSDF: material.Color * modulatore per-pixel (SampleAlbedo
-            // e' solo texture/checker/noise, default bianco). Senza il *Color l'AOV era bianco.
-            aovAlbedo = vec3(material.Color) * SampleAlbedo(material, hit.UV, hitPos);
-            aovNormal = hit.Normal;        // normale di shading, world space (non normalizzata dopo la media)
-            aovDepth  = hit.HitDistance;   // profondita' lineare = distanza camera->primo hit
-        }
+        // Gli AOV NON si catturano piu' qui: vengono da un raggio non jitterato in main().
+        // Tenerli qui li rendeva dipendenti dal jitter (bordi che non accumulano mai) e teneva
+        // 7 float vivi per tutto questo loop, il piu' caldo del programma.
 
         // if(hit.ObjectType == 0) {
         //     col = vec4(0.0, 1.0, 0.0, 1.0);

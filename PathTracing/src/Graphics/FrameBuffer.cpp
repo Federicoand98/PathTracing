@@ -69,38 +69,33 @@ namespace PathTracer {
 			std::cout << "ERROR::FRAMEBUFFER::AttachTexture Framebuffer is not complete!\n";
 	}
 
-	void FrameBuffer::SavePPMTexture() {
-		std::cout << "Screenshot" << std::endl;
+	// Legge il framebuffer e lo scrive come PNG. Il contenuto e' gia' passato dal fragment di
+	// post (esposizione/tonemap/sRGB), quindi il file corrisponde a cio' che si vede a schermo.
+	std::string FrameBuffer::SaveScreenshot(const std::string& path) {
+		std::string fileName = path;
+		if (fileName.empty()) {
+			std::filesystem::create_directories("screenshots");
+			fileName = "screenshots/" + std::to_string(screenshotsCount++) + ".png";
+		} else {
+			std::filesystem::path p(fileName);
+			if (p.has_parent_path())
+				std::filesystem::create_directories(p.parent_path());
+		}
 
 		Bind();
+		std::vector<GLubyte> pixels(static_cast<size_t>(m_Width) * m_Height * 4);
+		glReadPixels(0, 0, m_Width, m_Height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+		Unbind();
 
-		FILE* outputImg;
-		int outputWidth, outputHeight;
-		outputWidth = m_Width;
-		outputHeight = m_Height;
-		std::string folder = "screenshots/";
-		std::string count = std::to_string(screenshotsCount);
-		std::string ext = ".png";
-		std::string fileName = folder + count + ext;
-
-		int i, j, k;
-		GLubyte* pixels = new GLubyte[outputWidth * outputHeight * 4];
-
-		glReadPixels(0, 0, outputWidth, outputHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-
+		// il framebuffer ha l'origine in basso a sinistra, i PNG in alto a sinistra
 		stbi_flip_vertically_on_write(true);
-		stbi_write_png(fileName.c_str(), outputWidth, outputHeight, 4, pixels, outputWidth * 4);
+		if (!stbi_write_png(fileName.c_str(), m_Width, m_Height, 4, pixels.data(), m_Width * 4)) {
+			std::cout << "Screenshot: scrittura fallita: " << fileName << std::endl;
+			return "";
+		}
 
-		delete[] pixels;
-
-		screenshotsCount++;
-		
-		std::cout << "Screenshot done!" << std::endl;
-
-		std::string cmd = "conda run -n tf python scripts/denoise.py";
-		cmd = cmd + " " + fileName;
-
-		system(cmd.c_str());
+		std::cout << "Screenshot: " << fileName << " (" << m_Width << "x" << m_Height << ")" << std::endl;
+		return fileName;
 	}
 }
 

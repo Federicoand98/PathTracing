@@ -50,7 +50,12 @@ namespace PathTracer {
 		float Aperture = 0.0f;       // raggio lente; 0 = pinhole, niente DOF
 		float FocusDistance = 5.0f;  // distanza del piano di fuoco
 		float Exposure = 1.0;
-		int AOVView = 0;             // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth (vista di debug)
+		int AOVView = 0;             // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth, 4 = storia
+		// Riproiezione temporale (ADR 0002): al posto di azzerare l'accumulo quando la camera
+		// si muove, si riusa il frame precedente riproiettandolo. Il cap limita il ghosting da
+		// storia stantia e vale solo in movimento; da fermo N cresce libero e converge.
+		bool Reproject = true;
+		int HistoryCap = 32;
 		// Denoiser à-trous (view filter read-only): agisce solo sulla vista Beauty, si attenua
 		// da solo con l'accumulo. I sigma sono gli edge-stop (luminanza/normale/profondita').
 		bool Denoise = false;
@@ -78,15 +83,23 @@ namespace PathTracer {
 		std::shared_ptr<Denoiser> m_Denoiser;
 		std::shared_ptr<FrameBuffer> m_FrameBuffer;
 		std::shared_ptr<Texture> m_RenderedImage;
-		// AOV (feature buffer): albedo/normale/profondita' del primo hit, scritti dal compute
-		// (image unit 1/2/3) e accumulati in lockstep. Fondamenta del denoiser. Stessa
-		// risoluzione di m_RenderedImage: vengono ridimensionati insieme.
+		// AOV del frame corrente (image unit 1). Guida del denoiser e della demodulazione.
 		std::shared_ptr<Texture> m_AlbedoAOV;
-		std::shared_ptr<Texture> m_NormalAOV;
-		std::shared_ptr<Texture> m_DepthAOV;
-		// L'accumulatore vero (image unit 4): integra irradianza demodulata, non beauty.
-		// m_RenderedImage e' derivato da questo per rimodulazione. Vedi ADR 0002.
-		std::shared_ptr<Texture> m_IrradianceAccum;
+		// Ping-pong: il compute scrive nell'indice corrente e legge la storia dall'altro.
+		// Si scambiano a ogni frame, cosi' la storia e' gratis (nessuna copia).
+		// NormalDepth impacchetta normale (rgb) e profondita' (a): il driver da' solo 8 image
+		// unit e la storia raddoppia il conto dei buffer. Irradiance porta N nell'alpha.
+		std::shared_ptr<Texture> m_NormalDepth[2];
+		std::shared_ptr<Texture> m_Irradiance[2];
+		int m_Ping = 0;
+		// Frame trascorsi da quando la camera si e' fermata. E' il proxy del minimo N sullo
+		// schermo: un pixel disoccluso all'istante dello stop riparte da N=1 e cresce di 1 al
+		// frame, quindi dopo k frame fermi il minimo N vale ~k. m_PTCounter non serve piu' allo
+		// scopo: con la riproiezione non si azzera piu' al movimento.
+		int m_FramesSinceMove = 0;
+		// Camera del frame precedente: serve al compute per ritrovare e validare la storia.
+		glm::mat4 m_PrevViewProjection{ 1.0f };
+		glm::vec3 m_PrevCameraPosition{ 0.0f };
 		unsigned int m_QuadVAO = 0;
 		unsigned int m_QuadVBO = 0;
 		uint32_t m_Width = 0, m_Height = 0;

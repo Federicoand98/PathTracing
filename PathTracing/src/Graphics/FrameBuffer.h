@@ -21,7 +21,9 @@ namespace PathTracer {
 
 		void AttachTexture(unsigned int texture);
 
-		void SavePPMTexture();
+		// Dump del framebuffer in PNG. Ritorna il path scritto, vuoto se fallisce.
+		// path vuoto = nome automatico progressivo in screenshots/.
+		std::string SaveScreenshot(const std::string& path = "");
 
 		unsigned int GetTexture() const { return m_Texture; }
 		int GetWidth() const { return m_Width; }
