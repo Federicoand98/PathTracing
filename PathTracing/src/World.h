@@ -36,6 +36,11 @@ namespace PathTracer {
 		void DestroyScene();
 		void SetMeshTransform(int meshIndex, const glm::mat4& transform);
 
+		// Importa una scena glTF (interop Blender, ADR 0003): rimpiazza la scena corrente con
+		// geometria + materiali del file. Ritorna false se il parsing fallisce (scena invariata).
+		// Definita in GltfLoader.cpp per non appesantire World.cpp con la dipendenza cgltf.
+		bool LoadGltf(const std::string& path);
+
 		// Creazione a runtime. Sono tutte APPEND: gli indici gia' in giro (selezione,
 		// MaterialIndex degli oggetti, Box::index) restano validi.
 		void CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex);

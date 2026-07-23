@@ -50,7 +50,7 @@ namespace PathTracer {
 		float Aperture = 0.0f;       // raggio lente; 0 = pinhole, niente DOF
 		float FocusDistance = 5.0f;  // distanza del piano di fuoco
 		float Exposure = 1.0;
-		int AOVView = 0;             // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth, 4 = storia
+		int AOVView = 0; // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth, 4 = storia
 		// Riproiezione temporale (ADR 0002): al posto di azzerare l'accumulo quando la camera
 		// si muove, si riusa il frame precedente riproiettandolo. Il cap limita il ghosting da
 		// storia stantia e vale solo in movimento; da fermo N cresce libero e converge.

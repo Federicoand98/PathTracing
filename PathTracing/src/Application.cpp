@@ -51,7 +51,11 @@ namespace PathTracer {
 
 		m_World.LoadScene();
 
-
+		// Test/CI headless: PT_GLTF=<file> apre una scena glTF al posto di quella di default.
+		if (const char* g = getenv("PT_GLTF")) {
+			if (m_World.LoadGltf(g))
+				m_Camera.SetView({ 3.0f, 2.5f, 6.0f }, glm::normalize(glm::vec3(-3.0f, -2.5f, -6.0f)));
+		}
 	}
 
 	Application::~Application() {
@@ -387,6 +391,17 @@ namespace PathTracer {
 			// navata lunga (asse X), all'altezza occhi del piano terra, guardando lungo +X.
 			if (static_cast<SceneType>(m_World.CurrentScene) == SceneType::SPONZA)
 				m_Camera.SetView({ -11.0f, -0.2f, 0.0f }, { 1.0f, 0.0f, 0.0f });
+		}
+
+		// Import glTF (interop Blender, ADR 0003): rimpiazza la scena col contenuto del file.
+		// Niente file-dialog nativo: si incolla il path. Il sync automatico arrivera' col watch.
+		static char gltfPath[512] = "models/gltf_test/BoxTextured/BoxTextured.gltf";
+		ImGui::InputText("glTF path", gltfPath, sizeof(gltfPath));
+		if (ImGui::Button("Load glTF")) {
+			m_Selection = {};
+			m_Renderer.ResetPathTracingCounter(true);
+			if (m_World.LoadGltf(gltfPath))
+				m_Camera.SetView({ 0.0f, 0.0f, 6.0f }, { 0.0f, 0.0f, -1.0f });
 		}
 
 		if (ImGui::Checkbox("Environment Mapping", &m_Renderer.EnvironmentMapping))
