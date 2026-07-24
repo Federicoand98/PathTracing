@@ -62,6 +62,11 @@ namespace PathTracer {
 		// geometria e materiali (anche dopo un edit dell'emissione dalla UI). I triangoli
 		// emissivi delle mesh sono esclusi (nessuna scena li usa; li campionerebbe il BSDF).
 		std::vector<GPULight> CollectLights() const;
+
+		// Ricostruisce il BVH di sfere e quad. Va richiamata dopo OGNI modifica a quelle
+		// collezioni (creazione, rimozione, spostamento da gizmo): il BVH le indicizza per
+		// posizione, quindi una geometria mossa senza rebuild verrebbe intersecata sbagliata.
+		void RebuildPrimBVH();
 	public:
 		glm::vec3 BackgroundColor;
         std::vector<Test> Tests;
@@ -79,6 +84,13 @@ namespace PathTracer {
 		std::vector<std::string> TexturePaths;     // un layer del sampler2DArray ciascuna
 		std::vector<int> TriIndex;
 		std::vector<BVH4Node> BVH4Nodes;   // BVH a 4 vie, caricato sulla GPU (binding 6)
+		// BVH sulle primitive analitiche (sfere + quad). Prima venivano scandite linearmente
+		// a ogni raggio: con 488 sfere o 726 quad era il costo dominante della scena. I suoi
+		// nodi vivono in coda a BVH4Nodes (stesso buffer e stessa traversal dei BLAS mesh);
+		// le foglie indicizzano PrimIndex, dove ogni voce e' (indice << 1) | tipo,
+		// con tipo 0 = sfera, 1 = quad.
+		std::vector<int> PrimIndex;
+		int PrimBvhRoot = -1;              // radice in BVH4Nodes, -1 = nessuna primitiva
 		int CurrentScene = 6;
 	private:
 		void PrepareMaterials();

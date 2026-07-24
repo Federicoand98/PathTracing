@@ -1065,8 +1065,13 @@ namespace PathTracer {
 		TriNormals.clear();
 		TriUVs.clear();
 
-		if (Triangles.empty())
+		// Le primitive analitiche hanno un BVH proprio, indipendente dai triangoli: si
+		// costruisce anche quando la scena non ha mesh (RandomSpheres: 488 sfere, 0 triangoli,
+		// che prima restava senza alcuna struttura di accelerazione).
+		if (Triangles.empty()) {
+			RebuildPrimBVH();
 			return;
+		}
 
 		// separa posizioni, normali e UV nei buffer che finiranno sulla GPU (local space)
 		TriPositions.reserve(Triangles.size());
@@ -1129,6 +1134,102 @@ namespace PathTracer {
 		if (maxDepth * 3 > SHADER_MAX_STACK)
 			std::cerr << "Warning: BVH depth (" << maxDepth << ") too deep for shader stack ("
 				<< SHADER_MAX_STACK << "): parts of the mesh may not render" << std::endl;
+
+		RebuildPrimBVH();
+	}
+
+	void World::RebuildPrimBVH() {
+		// I nodi del BVH primitive stanno in coda a BVH4Nodes. Un rebuild successivo al primo
+		// (es. dopo aver mosso una sfera col gizmo) deve buttare via SOLO quelli, lasciando
+		// intatti i BLAS delle mesh che li precedono: PrimBvhRoot e' proprio il confine.
+		if (PrimBvhRoot >= 0 && PrimBvhRoot <= static_cast<int>(BVH4Nodes.size()))
+			BVH4Nodes.resize(static_cast<size_t>(PrimBvhRoot));
+		PrimIndex.clear();
+		PrimBvhRoot = -1;
+
+		const int nSpheres = static_cast<int>(Spheres.size());
+		const int nQuads = static_cast<int>(Quads.size());
+
+		// Sotto una certa soglia il BVH e' CONTROPRODUCENTE: su poche decine di primitive la
+		// scansione lineare le esaurisce in meno tempo di quanto costi scendere l'albero, e in
+		// piu' lo stack di traversata occupa memoria locale per thread, abbassando l'occupancy
+		// dell'intero kernel. Misurato: con ~30 primitive (Cornell, SETUP_1/2) forzare il BVH
+		// faceva crollare il frame rate di 3-4 volte. Sotto soglia si lascia PrimBvhRoot = -1
+		// e lo shader usa il ramo lineare.
+		// Test/CI: PT_PRIMBVH=0 forza il ramo lineare, =1 forza il BVH ignorando la soglia
+		// (serve a validare il percorso BVH su scene deterministiche). Non impostata = soglia.
+		constexpr int MIN_PRIMS_FOR_BVH = 64;
+		int force = -1;
+		if (const char* e = getenv("PT_PRIMBVH")) force = atoi(e);
+		if (force == 0) return;
+		if (force != 1 && nSpheres + nQuads < MIN_PRIMS_FOR_BVH) return;
+
+		// Una AABB per primitiva, nello stesso ordine dei codici che finiranno in PrimIndex.
+		std::vector<AABB> boxes;
+		std::vector<int> codes;
+		boxes.reserve(nSpheres + nQuads);
+		codes.reserve(nSpheres + nQuads);
+
+		for (int i = 0; i < nSpheres; i++) {
+			const glm::vec3 c = glm::vec3(Spheres[i].Position);
+			const float r = Spheres[i].Position.w;
+			AABB b;
+			b.expand(c - glm::vec3(r));
+			b.expand(c + glm::vec3(r));
+			boxes.push_back(b);
+			codes.push_back((i << 1) | 0);
+		}
+
+		for (int i = 0; i < nQuads; i++) {
+			// Il quad si estende per Width/|UxV| lungo U e Height/|UxV| lungo V (vedi la
+			// parametrizzazione in HitQuad): gli spigoli fisici sono quelli, non U*Width.
+			const glm::vec3 u = glm::vec3(Quads[i].U);
+			const glm::vec3 v = glm::vec3(Quads[i].V);
+			const glm::vec3 llc = glm::vec3(Quads[i].PositionLLC);
+			const float k = glm::length(glm::cross(u, v));
+			AABB b;
+			if (k < 1e-8f) {
+				b.expand(llc); // quad degenere: AABB puntiforme, verra' comunque gonfiata sotto
+			} else {
+				const glm::vec3 e1 = u * (Quads[i].Width / k);
+				const glm::vec3 e2 = v * (Quads[i].Height / k);
+				b.expand(llc);
+				b.expand(llc + e1);
+				b.expand(llc + e2);
+				b.expand(llc + e1 + e2);
+			}
+			// Un quad e' PIATTO: su un asse la AABB ha spessore zero. Con lo slab test un box
+			// a spessore nullo produce 0*inf = NaN quando il raggio e' parallelo a quell'asse,
+			// e il figlio verrebbe scartato a caso. Un gonfiaggio minimo lo rende robusto.
+			const glm::vec3 pad(1e-4f);
+			b.min -= pad;
+			b.max += pad;
+			boxes.push_back(b);
+			codes.push_back((i << 1) | 1);
+		}
+
+		AABBBVH builder(boxes);
+		int wideDepth = 0;
+		std::vector<BVH4Node> wide = WideBVH::Collapse(builder.GetNodes(), wideDepth);
+		if (wide.empty())
+			return;
+
+		const int nodeOffset = static_cast<int>(BVH4Nodes.size());
+		const int primOffset = 0; // PrimIndex e' appena stato svuotato
+		PrimBvhRoot = nodeOffset;
+
+		for (BVH4Node node : wide) {
+			for (int c = 0; c < 4; c++) {
+				if (node.count[c] < 0) continue;                      // slot vuoto
+				if (node.count[c] == 0) node.child[c] += nodeOffset;  // figlio interno
+				else node.child[c] += primOffset;                     // foglia: primo indice in PrimIndex
+			}
+			BVH4Nodes.push_back(node);
+		}
+
+		// gli indici del builder sono posizioni in 'boxes': si traducono nei codici (idx<<1)|tipo
+		for (int local : builder.GetIndices())
+			PrimIndex.push_back(codes[local]);
 	}
 
 	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex) {

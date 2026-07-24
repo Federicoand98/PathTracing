@@ -24,9 +24,13 @@ namespace PathTracer {
 		unsigned int ssbo_bvh;
 		unsigned int ssbo_pick;
 		unsigned int ssbo_lights;
+		unsigned int ssbo_prims;   // PrimIndex: foglie del BVH di sfere/quad
+		int m_PrimBvhRoot = -1;
+		std::string m_Source;
+		bool m_UsePrimBvh = false;
 		int m_NumLights = 0; // emettitori attuali, per l'uniform numLights (NEE)
 
-		ComputeShader(const char* path) {
+		ComputeShader(const char* path) : ID(0) {
 			std::string computeCode;
 			std::ifstream computeFile;
 
@@ -43,22 +47,8 @@ namespace PathTracer {
 				std::cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " << e.what() << std::endl;
 			}
 
-			const char* shaderCode = computeCode.c_str();
-			unsigned int compute;
-
-			// compute shader
-			compute = glCreateShader(GL_COMPUTE_SHADER);
-			glShaderSource(compute, 1, &shaderCode, NULL);
-			glCompileShader(compute);
-			checkCompileErrors(compute, "COMPUTE");
-
-			// shader Program
-			ID = glCreateProgram();
-			glAttachShader(ID, compute);
-			glLinkProgram(ID);
-			checkCompileErrors(ID, "PROGRAM");
-
-			glDeleteShader(compute);
+			m_Source = computeCode;
+			Compile(false); // si parte dalla variante leggera; EnsureVariant la cambia se serve
 
 			glGenBuffers(1, &ssbo_s);
 			glGenBuffers(1, &ssbo_m);
@@ -72,8 +62,41 @@ namespace PathTracer {
 			glGenBuffers(1, &ssbo_bvh);
 			glGenBuffers(1, &ssbo_pick);
 			glGenBuffers(1, &ssbo_lights);
+			glGenBuffers(1, &ssbo_prims);
 
 			ResetPickBuffer();
+		}
+
+		// Compila il programma iniettando la variante. USE_PRIM_BVH va messo DOPO la direttiva
+		// #version, che in GLSL deve restare la prima riga non-commento del sorgente.
+		void Compile(bool usePrimBvh) {
+			std::string src = m_Source;
+			const size_t nl = src.find('\n', src.find("#version"));
+			const std::string def = "\n#define USE_PRIM_BVH " + std::string(usePrimBvh ? "1" : "0") + "\n";
+			if (nl != std::string::npos) src.insert(nl, def);
+
+			const char* code = src.c_str();
+			unsigned int compute = glCreateShader(GL_COMPUTE_SHADER);
+			glShaderSource(compute, 1, &code, NULL);
+			glCompileShader(compute);
+			checkCompileErrors(compute, "COMPUTE");
+
+			if (ID) glDeleteProgram(ID);
+			ID = glCreateProgram();
+			glAttachShader(ID, compute);
+			glLinkProgram(ID);
+			checkCompileErrors(ID, "PROGRAM");
+			glDeleteShader(compute);
+
+			m_UsePrimBvh = usePrimBvh;
+		}
+
+		// Ricompila solo se la scena cambia esigenza (raro: al cambio scena). Il programma nuovo
+		// va ri-bindato dal chiamante, e gli uniform si risettano comunque ogni frame per nome.
+		bool EnsureVariant(bool usePrimBvh) {
+			if (usePrimBvh == m_UsePrimBvh) return false;
+			Compile(usePrimBvh);
+			return true;
 		}
 
 		// Layout std430 del PickBuffer: due int + un float, tutti scalari 4 byte, packing
@@ -143,9 +166,12 @@ namespace PathTracer {
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, ssbo_pick);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, ssbo_tuv);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 11, ssbo_lights);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 12, ssbo_prims);
 		}
 
 		int NumLights() const { return m_NumLights; }
+		int PrimBvhRoot() const { return m_PrimBvhRoot; }
+		bool UsesPrimBvh() const { return m_UsePrimBvh; }
 
 		void UpdateWorldBuffer(const World& world, bool fullReset = false) {
 			// Upload incondizionato di tutti i buffer della scena: un vettore vuoto
@@ -192,6 +218,11 @@ namespace PathTracer {
 				          << " quads=" << world.Quads.size() << std::endl;
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_lights);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GPULight) * lights.size(), lights.data(), GL_STATIC_DRAW);
+
+			// Foglie del BVH delle primitive: (indice << 1) | tipo (0 sfera, 1 quad).
+			m_PrimBvhRoot = world.PrimBvhRoot;
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_prims);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.PrimIndex.size(), world.PrimIndex.data(), GL_STATIC_DRAW);
 		}
 
 	private:

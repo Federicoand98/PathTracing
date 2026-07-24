@@ -49,7 +49,7 @@ namespace PathTracer {
 		}
 	}
 
-	void Renderer::Initialize(const Camera& camera, const World& world) {
+	void Renderer::Initialize(const Camera& camera, World& world) {
 		m_Camera = &camera;
 		m_World = &world;
 
@@ -103,6 +103,15 @@ namespace PathTracer {
 		// riproiezione e' l'identita', quindi questo path copre anche l'accumulo classico.
 		bool hasHistory = m_PTCounter > 1;
 		bool cameraMoved = m_Interacting;
+
+		// Il BVH delle primitive indicizza sfere e quad per posizione: se una viene spostata,
+		// creata o rimossa va ricostruito, o si intersecherebbe la geometria vecchia. Spheres
+		// e Quads sono vettori PUBBLICI, modificati direttamente dalla UI, quindi un dirty-flag
+		// sarebbe aggirabile. Ci si aggancia invece all'invariante che il codebase gia' rispetta:
+		// ogni modifica che cambia l'immagine azzera l'accumulo. Qui e' l'unico punto che le
+		// intercetta tutte, e a regime (accumulo che sale) non costa nulla.
+		if (m_PTCounter <= 1)
+			m_World->RebuildPrimBVH();
 
 		// Gli AOV dipendono solo dalla camera: si ritracciano solo se e' cambiata davvero.
 		// Il confronto e' sulle matrici, non su Camera::OnUpdate: quello riporta il movimento

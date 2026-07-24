@@ -226,6 +226,159 @@ namespace PathTracer {
         static constexpr int maxTrianglesInLeaf = 4;
     };
 
+    // ---- BVH su AABB generiche ------------------------------------------------
+    // BVH e SBVH sanno costruire solo su Triangle (leggono A/B/C). Le primitive analitiche
+    // della scena - sfere e quad - non passano di li' e finivano scandite LINEARMENTE a ogni
+    // raggio (488 sfere in RandomSpheres, 726 quad in RandomBoxes: il costo dominante).
+    // Questo builder lavora sulle sole AABB, quindi accetta qualunque primitiva sappia
+    // produrne una. Stessa SAH binned e stesso output (BVHNodeNew) del BVH sui triangoli,
+    // percio' il collapse a BVH4 e la traversal restano invariati.
+    class AABBBVH {
+    public:
+        explicit AABBBVH(const std::vector<AABB>& boxes) : prims(&boxes) {
+            const int N = static_cast<int>(boxes.size());
+            if (N == 0) return;
+
+            nodes.resize(static_cast<size_t>(2 * N));
+            centroids.reserve(N);
+            indices.reserve(N);
+            for (int i = 0; i < N; i++) {
+                centroids.push_back((boxes[i].min + boxes[i].max) * 0.5f);
+                indices.push_back(i);
+            }
+
+            nodes[0].left = 0;
+            nodes[0].triCount = N;
+            UpdateNodeBounds(0);
+            Subdivide(0);
+            nodes.resize(nodeUsed);
+        }
+
+        std::vector<BVHNodeNew>& GetNodes() { return nodes; }
+        std::vector<int>& GetIndices() { return indices; }
+
+    private:
+        struct Bin { AABB bounds; int count = 0; };
+
+        const AABB& Box(int i) const { return (*prims)[i]; }
+
+        void UpdateNodeBounds(int nodeIndex) {
+            BVHNodeNew& node = nodes[nodeIndex];
+            node.aabbMin = glm::vec3(1e30f);
+            node.aabbMax = glm::vec3(-1e30f);
+            for (int i = 0; i < node.triCount; i++) {
+                const AABB& b = Box(indices[node.left + i]);
+                node.aabbMin = glm::min(node.aabbMin, b.min);
+                node.aabbMax = glm::max(node.aabbMax, b.max);
+            }
+        }
+
+        float NodeCost(const BVHNodeNew& node) const {
+            glm::vec3 e = node.aabbMax - node.aabbMin;
+            return node.triCount * (e.x * e.y + e.y * e.z + e.z * e.x);
+        }
+
+        float FindBestSplitPlane(const BVHNodeNew& node, int& bestAxis, float& bestPos) const {
+            float bestCost = 1e30f;
+            bestAxis = -1;
+            bestPos = 0.0f;
+
+            for (int axis = 0; axis < 3; axis++) {
+                float boundsMin = 1e30f, boundsMax = -1e30f;
+                for (int i = 0; i < node.triCount; i++) {
+                    const glm::vec3& c = centroids[indices[node.left + i]];
+                    boundsMin = std::min(boundsMin, c[axis]);
+                    boundsMax = std::max(boundsMax, c[axis]);
+                }
+                if (boundsMin == boundsMax) continue;
+
+                Bin bins[BINS];
+                float scale = BINS / (boundsMax - boundsMin);
+                for (int i = 0; i < node.triCount; i++) {
+                    int p = indices[node.left + i];
+                    int binIdx = std::min(BINS - 1, static_cast<int>((centroids[p][axis] - boundsMin) * scale));
+                    bins[binIdx].count++;
+                    bins[binIdx].bounds.expand(Box(p));
+                }
+
+                float leftArea[BINS - 1]{}, rightArea[BINS - 1]{};
+                int leftCount[BINS - 1]{}, rightCount[BINS - 1]{};
+                AABB leftBox, rightBox;
+                int leftSum = 0, rightSum = 0;
+                for (int i = 0; i < BINS - 1; i++) {
+                    leftSum += bins[i].count;
+                    leftCount[i] = leftSum;
+                    leftBox.expand(bins[i].bounds);
+                    leftArea[i] = leftBox.area();
+
+                    rightSum += bins[BINS - 1 - i].count;
+                    rightCount[BINS - 2 - i] = rightSum;
+                    rightBox.expand(bins[BINS - 1 - i].bounds);
+                    rightArea[BINS - 2 - i] = rightBox.area();
+                }
+
+                float binWidth = (boundsMax - boundsMin) / BINS;
+                for (int i = 0; i < BINS - 1; i++) {
+                    float planeCost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
+                    if (planeCost > 0.0f && planeCost < bestCost) {
+                        bestCost = planeCost;
+                        bestAxis = axis;
+                        bestPos = boundsMin + binWidth * (i + 1);
+                    }
+                }
+            }
+            return bestCost;
+        }
+
+        void Subdivide(int nodeIndex) {
+            BVHNodeNew& node = nodes[nodeIndex];
+            if (node.triCount <= maxPrimsInLeaf) return;
+
+            int axis;
+            float splitPos;
+            float splitCost = FindBestSplitPlane(node, axis, splitPos);
+            if (axis < 0) return;
+            if (splitCost >= NodeCost(node)) return;
+
+            int i = node.left;
+            int j = i + node.triCount - 1;
+            while (i <= j) {
+                if (centroids[indices[i]][axis] < splitPos)
+                    i++;
+                else
+                    std::swap(indices[i], indices[j--]);
+            }
+
+            int leftCount = i - node.left;
+            if (leftCount == 0 || leftCount == node.triCount) return;
+
+            int leftChildIndex = nodeUsed++;
+            int rightChildIndex = nodeUsed++;
+            nodes[leftChildIndex].left = node.left;
+            nodes[leftChildIndex].triCount = leftCount;
+            nodes[rightChildIndex].left = i;
+            nodes[rightChildIndex].triCount = node.triCount - leftCount;
+
+            node.left = leftChildIndex;
+            node.triCount = 0;
+
+            UpdateNodeBounds(leftChildIndex);
+            UpdateNodeBounds(rightChildIndex);
+            Subdivide(leftChildIndex);
+            Subdivide(rightChildIndex);
+        }
+
+    private:
+        static constexpr int BINS = 12;
+        static constexpr int maxPrimsInLeaf = 4;
+
+        std::vector<BVHNodeNew> nodes;
+        const std::vector<AABB>* prims = nullptr;
+        std::vector<glm::vec3> centroids;
+        std::vector<int> indices;
+        int nodeUsed = 1;
+    };
+
     // ---- SBVH (Spatial split BVH, Stich et al. 2009) --------------------------
     // Un BVH a object-split (come BVH) mette ogni triangolo interamente da un lato: se i
     // triangoli sono grandi/diagonali (tende, pavimenti di Sponza) le AABB dei due figli si

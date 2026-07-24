@@ -68,6 +68,15 @@ namespace PathTracer {
 			m_LoadedTexturePaths = container.World.TexturePaths;
 		}
 
+		// L'upload della scena va PRIMA degli uniform: da esso dipende quale variante di shader
+		// serve, e ricompilare crea un programma nuovo su cui gli uniform gia' settati sarebbero
+		// persi (sono per-programma). Cosi' invece si compila, si binda, e poi si setta tutto.
+		if (container.ResetScene || container.NumFrames == 1)
+			m_ComputeShader->UpdateWorldBuffer(container.World);
+
+		if (m_ComputeShader->EnsureVariant(m_ComputeShader->PrimBvhRoot() >= 0))
+			m_ComputeShader->Bind();
+
 		m_ComputeShader->SetInt("SamplerEnvironment", 0);
 		m_ComputeShader->SetInt("AlbedoTextures", 1);
 		m_AlbedoTextures.AttachSampler(1); // la cubemap occupa gia' l'unit 0
@@ -97,16 +106,10 @@ namespace PathTracer {
 		m_ComputeShader->SetVec3("BackgroundColor", container.World.BackgroundColor);
 		m_ComputeShader->SetMat4("inverseProjection", container.Camera.GetInverseProjection());
 		m_ComputeShader->SetMat4("inverseView", container.Camera.GetInverseView());
-		m_ComputeShader->SetWorld();
 
-		if (container.ResetScene || container.NumFrames == 1) {
-			m_ComputeShader->UpdateWorldBuffer(container.World);
-		}
-
-		// Dopo l'eventuale rebuild della scena: il numero di emettitori per la NEE. L'uniform
-		// persiste tra i frame, ma lo si setta ogni frame dal valore memorizzato nel compute
-		// shader, cosi' un cambio scena si riflette subito (nessun lag di un frame).
 		m_ComputeShader->SetInt("numLights", container.EnableNEE ? m_ComputeShader->NumLights() : 0);
+		m_ComputeShader->SetInt("primBvhRoot", m_ComputeShader->PrimBvhRoot());
+		m_ComputeShader->SetWorld();
 
 		m_SkyBox->Bind();
 	}

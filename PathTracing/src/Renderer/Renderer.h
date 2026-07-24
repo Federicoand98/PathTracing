@@ -18,7 +18,7 @@ namespace PathTracer {
 	public:
 		Renderer() = default;
 
-		void Initialize(const Camera& camera, const World& world);
+		void Initialize(const Camera& camera, World& world);
 		void Render(const Camera& camera, const World& world);
 		void OnResize(uint32_t width, uint32_t height);
 		void ResetPathTracingCounter(bool sceneReset = false) { m_PTCounter = 1; m_sceneReset = sceneReset; }
@@ -83,7 +83,7 @@ namespace PathTracer {
 		void ResizeRenderTargets(uint32_t width, uint32_t height); // colore + AOV, stessa risoluzione
 	private:
 		const Camera* m_Camera = nullptr;
-		const World* m_World = nullptr;
+		World* m_World = nullptr; // non-const: il Renderer mantiene aggiornato il BVH delle primitive
 		std::shared_ptr<PathTracer> m_PathTracer;
 		std::shared_ptr<PostProcesser> m_PostProcesser;
 		std::shared_ptr<Denoiser> m_Denoiser;

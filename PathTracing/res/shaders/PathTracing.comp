@@ -199,6 +199,10 @@ vec3 GetRandomVector(uint seed);
 // Valida un tap di storia riproiettata (depth/normale/sfondo) e ne restituisce irradianza + N.
 bool ValidateHistoryTap(ivec2 pc, ivec2 size, bool isBg, vec3 worldPos, vec3 aovNormal, out vec3 irr, out float n);
 
+#if USE_PRIM_BVH
+bool TracePrimBVH(inout Ray ray, out int outType, out int outIndex, out bool outInside, bool anyHit);
+#endif
+
 float hitAABB(Ray ray, vec3 invDir, vec3 bmin, vec3 bmax);
 float hitBVH(inout Ray ray, int rootNode, out int hitTriIndex, out float outU, out float outV);
 float TraceMeshes(inout Ray ray, out int hitTriIndex, out float outU, out float outV);
@@ -242,6 +246,7 @@ uniform int hasHistory;    // 0 = niente storia valida (primo frame, reset scena
 uniform int cameraMoved;   // 1 = la storia e' riproiettata -> va cappata
 uniform int historyCap;    // lunghezza massima della storia quando ci si muove
 uniform int numLights;     // emettitori per la NEE; 0 = NEE disattivata
+uniform int primBvhRoot;   // radice del BVH di sfere/quad in BVH4Nodes; < 0 = assente
 
 layout(std430, binding = 0) buffer SpheresBuffer {
     Sphere Spheres[];
@@ -296,6 +301,13 @@ layout(std430, binding = 10) buffer TriangleUVsBuffer {
 layout(std430, binding = 11) buffer LightsBuffer {
     Light Lights[];
 };
+
+#if USE_PRIM_BVH
+// Foglie del BVH delle primitive analitiche: (indice << 1) | tipo (0 sfera, 1 quad).
+layout(std430, binding = 12) buffer PrimIndexBuffer {
+    int PrimIndex[];
+};
+#endif
 
 
 uint rndSeed;
@@ -990,6 +1002,23 @@ float LightPdfToward(vec3 fromPos, HitInfo hit) {
 // d'ombra pagava sempre l'intera lista (488 sfere in RandomSpheres, 726 quad in RandomBoxes)
 // anche quando il primo oggetto testato lo bloccava gia'. L'early-out e' tutto il guadagno.
 bool Occluded(vec3 origin, vec3 dir, float maxDist) {
+#if USE_PRIM_BVH
+    if(primBvhRoot >= 0) {
+        Ray r = Ray(origin, dir, maxDist);
+        int pType, pIndex; bool pInside;
+        if(TracePrimBVH(r, pType, pIndex, pInside, true))
+            return true;
+        if(BVH4Nodes.length() > 0) {
+            Ray rm = Ray(origin, dir, maxDist);
+            int triIndex; float u, v;
+            float d = TraceMeshes(rm, triIndex, u, v);
+            if(d > EPSILON && d < maxDist)
+                return true;
+        }
+        return false;
+    }
+#endif
+
     // --- sfere ---
     for(int i = 0; i < Spheres.length(); i++) {
         float t1, t2;
@@ -1126,6 +1155,93 @@ float hitBVH(inout Ray ray, int rootNode, out int hitTriIndex, out float outU, o
     return hitTriIndex >= 0 ? ray.t : -1.0;
 }
 
+#if USE_PRIM_BVH
+// Traversata del BVH costruito su sfere e quad. Stessa struttura di hitBVH (slab test dei 4
+// figli in vec4, foglie intersecate subito per restringere ray.t, interni impilati dal piu'
+// lontano al piu' vicino), ma le foglie contengono primitive ETEROGENEE: il codice in
+// PrimIndex porta il tipo nel bit basso e l'indice nel resto.
+// Le primitive stanno in world space, quindi qui non c'e' nessuna trasformazione del raggio.
+bool TracePrimBVH(inout Ray ray, out int outType, out int outIndex, out bool outInside, bool anyHit) {
+    outType = -1;
+    outIndex = -1;
+    outInside = false;
+    if(primBvhRoot < 0)
+        return false;
+
+    // Stack DELIBERATAMENTE piccolo: questo BVH copre poche centinaia di primitive, quindi e'
+    // basso. Ogni entry e' memoria locale per-thread e si somma a quella di hitBVH: portarlo a
+    // 64 come li' raddoppiava lo spilling e faceva crollare l'occupancy (misurato).
+    const int MAX_STACK = 24;
+    int stack[MAX_STACK];
+    int stackPtr = 0;
+    bool found = false;
+
+    vec3 invDir = 1.0 / ray.Direction;
+    stack[stackPtr++] = primBvhRoot;
+
+    while(stackPtr > 0) {
+        BVH4Node node = BVH4Nodes[stack[--stackPtr]];
+        gNodeVisits++;
+
+        vec4 tminx = (node.bminx - ray.Origin.x) * invDir.x;
+        vec4 tmaxx = (node.bmaxx - ray.Origin.x) * invDir.x;
+        vec4 tminy = (node.bminy - ray.Origin.y) * invDir.y;
+        vec4 tmaxy = (node.bmaxy - ray.Origin.y) * invDir.y;
+        vec4 tminz = (node.bminz - ray.Origin.z) * invDir.z;
+        vec4 tmaxz = (node.bmaxz - ray.Origin.z) * invDir.z;
+
+        vec4 tEnter = max(max(min(tminx, tmaxx), min(tminy, tmaxy)), max(min(tminz, tmaxz), vec4(0.0)));
+        vec4 tExit  = min(min(max(tminx, tmaxx), max(tminy, tmaxy)), max(tminz, tmaxz));
+
+        // FOGLIE: intersecale subito, cosi' restringono ray.t per i figli interni.
+        #define PLEAF(LANE) if(node.count.LANE > 0 && tEnter.LANE <= tExit.LANE && tEnter.LANE < ray.t) { \
+            int first = node.child.LANE; \
+            for(int k = 0; k < node.count.LANE; k++) { \
+                int code = PrimIndex[first + k]; \
+                int pidx = code >> 1; \
+                if((code & 1) == 0) { \
+                    float s1, s2; \
+                    if(HitSphere(ray, Spheres[pidx], s1, s2) && s2 > 0.0) { \
+                        float d = (s1 < 0.0) ? s2 : s1; \
+                        if(d > 0.0 && d < ray.t) { \
+                            ray.t = d; outType = 0; outIndex = pidx; outInside = (d == s2); found = true; \
+                            if(anyHit) return true; \
+                        } \
+                    } \
+                } else { \
+                    float d = HitQuad(ray, Quads[pidx]); \
+                    if(d >= 0.0 && d < ray.t) { \
+                        ray.t = d; outType = 1; outIndex = pidx; outInside = false; found = true; \
+                        if(anyHit) return true; \
+                    } \
+                } \
+            } }
+        PLEAF(x) PLEAF(y) PLEAF(z) PLEAF(w)
+        #undef PLEAF
+
+        int   ci0 = node.child.x, ci1 = node.child.y, ci2 = node.child.z, ci3 = node.child.w;
+        float ct0 = (node.count.x == 0 && tEnter.x <= tExit.x && tEnter.x < ray.t) ? tEnter.x : FLOAT_MAX;
+        float ct1 = (node.count.y == 0 && tEnter.y <= tExit.y && tEnter.y < ray.t) ? tEnter.y : FLOAT_MAX;
+        float ct2 = (node.count.z == 0 && tEnter.z <= tExit.z && tEnter.z < ray.t) ? tEnter.z : FLOAT_MAX;
+        float ct3 = (node.count.w == 0 && tEnter.w <= tExit.w && tEnter.w < ray.t) ? tEnter.w : FLOAT_MAX;
+
+        float ft; int fi;
+        if(ct0 > ct1) { ft=ct0; ct0=ct1; ct1=ft; fi=ci0; ci0=ci1; ci1=fi; }
+        if(ct2 > ct3) { ft=ct2; ct2=ct3; ct3=ft; fi=ci2; ci2=ci3; ci3=fi; }
+        if(ct0 > ct2) { ft=ct0; ct0=ct2; ct2=ft; fi=ci0; ci0=ci2; ci2=fi; }
+        if(ct1 > ct3) { ft=ct1; ct1=ct3; ct3=ft; fi=ci1; ci1=ci3; ci3=fi; }
+        if(ct1 > ct2) { ft=ct1; ct1=ct2; ct2=ft; fi=ci1; ci1=ci2; ci2=fi; }
+
+        if(ct3 < FLOAT_MAX && stackPtr < MAX_STACK) stack[stackPtr++] = ci3;
+        if(ct2 < FLOAT_MAX && stackPtr < MAX_STACK) stack[stackPtr++] = ci2;
+        if(ct1 < FLOAT_MAX && stackPtr < MAX_STACK) stack[stackPtr++] = ci1;
+        if(ct0 < FLOAT_MAX && stackPtr < MAX_STACK) stack[stackPtr++] = ci0;
+    }
+
+    return found;
+}
+#endif
+
 // BVH a due livelli. Invece di trasformare i triangoli nel mondo (che imporrebbe di
 // ribakarli e ricostruire il BVH ad ogni spostamento), si trasforma il RAGGIO nello
 // spazio locale della mesh. La direzione locale NON viene rinormalizzata: cosi' il
@@ -1180,6 +1296,21 @@ HitInfo TraceRay(Ray ray) {
     bool inside;
     bool cubesPres = Cubes.length() > 0;
 
+#if USE_PRIM_BVH
+    // Sfere e quad passano dal loro BVH. Il ramo lineare sotto resta per la variante leggera
+    // (poche primitive: scandirle costa meno che scendere un albero) e come fallback.
+    if(primBvhRoot >= 0) {
+        ray.t = hitDistance;
+        int pType, pIndex; bool pInside;
+        if(TracePrimBVH(ray, pType, pIndex, pInside, false)) {
+            hitDistance = ray.t;
+            index = pIndex;
+            objType = pType;
+            inside = pInside;
+        }
+    } else
+#endif
+    {
     for(int i = 0; i < Spheres.length(); i++) {
         Sphere sphere = Spheres[i];
 
@@ -1211,6 +1342,7 @@ HitInfo TraceRay(Ray ray) {
             objType = 1;
             inside = false;
         }
+    }
     }
 
     if(BVH4Nodes.length() > 0) {
