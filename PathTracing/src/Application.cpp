@@ -68,6 +68,9 @@ namespace PathTracer {
 		// Test/CI headless: PT_DEPTH=<n> forza la profondita' dei rimbalzi (2 = solo diretta).
 		if (const char* d = getenv("PT_DEPTH"))
 			m_Renderer.m_RayDepth = atoi(d);
+		// Test/CI headless: PT_REPROJ=0 spegne la riproiezione temporale (misura del suo costo).
+		if (const char* r = getenv("PT_REPROJ"))
+			m_Renderer.Reproject = (atoi(r) != 0);
 	}
 
 	Application::~Application() {

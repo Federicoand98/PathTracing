@@ -187,6 +187,9 @@ namespace PathTracer {
 			// UI, che azzera il contatore e forza il re-upload). numLights viene da m_NumLights.
 			std::vector<GPULight> lights = world.CollectLights();
 			m_NumLights = static_cast<int>(lights.size());
+			if (getenv("PT_LIGHTS"))
+				std::cout << "PTLIGHTS " << m_NumLights << " spheres=" << world.Spheres.size()
+				          << " quads=" << world.Quads.size() << std::endl;
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_lights);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GPULight) * lights.size(), lights.data(), GL_STATIC_DRAW);
 		}

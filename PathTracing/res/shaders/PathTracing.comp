@@ -984,12 +984,50 @@ float LightPdfToward(vec3 fromPos, HitInfo hit) {
     return 0.0;
 }
 
-// Shadow ray: c'e' un occlusore tra origin e la luce (entro maxDist)? Riusa TraceRay per non
-// tenere in sync una seconda traversata (come fa il picking). Ottimizzabile con un any-hit.
+// Shadow ray: c'e' un occlusore tra origin e la luce (entro maxDist)?
+// E' un ANY-HIT: si ferma al PRIMO occlusore trovato, non cerca il piu' vicino. Sfere e quad
+// non stanno nel BVH e si scandiscono in modo lineare: con TraceRay (nearest-hit) un raggio
+// d'ombra pagava sempre l'intera lista (488 sfere in RandomSpheres, 726 quad in RandomBoxes)
+// anche quando il primo oggetto testato lo bloccava gia'. L'early-out e' tutto il guadagno.
 bool Occluded(vec3 origin, vec3 dir, float maxDist) {
-    Ray r = Ray(origin, dir, 0.0);
-    HitInfo h = TraceRay(r);
-    return h.HitDistance > 0.0 && h.HitDistance < maxDist;
+    // --- sfere ---
+    for(int i = 0; i < Spheres.length(); i++) {
+        float t1, t2;
+        if(HitSphere(Ray(origin, dir, 0.0), Spheres[i], t1, t2)) {
+            float t = (t1 > EPSILON) ? t1 : t2;   // radice positiva piu' vicina
+            if(t > EPSILON && t < maxDist)
+                return true;
+        }
+    }
+
+    // --- quad (stesso skip per box della TraceRay: un box e' 6 quad dietro una AABB) ---
+    bool cubesPres = Cubes.length() > 0;
+    int j = 0;
+    for(int i = 0; i < Quads.length(); i++) {
+        if(cubesPres && j < Cubes.length() && Cubes[j].FirstQuad == i) {
+            bool hit = HitBoundingBox(Ray(origin, dir, 0.0), vec3(Cubes[j].BoundsMin), vec3(Cubes[j].BoundsMax), vec3(0));
+            j++;
+            if(!hit) {
+                i += 5;
+                continue;
+            }
+        }
+        float t = HitQuad(Ray(origin, dir, 0.0), Quads[i]);
+        if(t > EPSILON && t < maxDist)
+            return true;
+    }
+
+    // --- mesh: gia' accelerate dal BVH. Non c'e' early-out, ma limitando ray.t a maxDist
+    // la traversata pota tutto cio' che sta oltre la luce.
+    if(BVH4Nodes.length() > 0) {
+        Ray r = Ray(origin, dir, maxDist);
+        int triIndex; float u, v;
+        float d = TraceMeshes(r, triIndex, u, v);
+        if(d > EPSILON && d < maxDist)
+            return true;
+    }
+
+    return false;
 }
 
 // Ritorna la distanza d'ingresso nella AABB, oppure FLOAT_MAX se il raggio la manca
