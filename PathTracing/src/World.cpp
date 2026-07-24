@@ -895,6 +895,65 @@ namespace PathTracer {
 		return -1;
 	}
 
+	std::vector<GPULight> World::CollectLights() const {
+		std::vector<GPULight> lights;
+
+		auto radianceOf = [&](int matIndex, glm::vec3& outRadiance) -> bool {
+			if (matIndex < 0 || matIndex >= static_cast<int>(Materials.size()))
+				return false;
+			const Material& m = Materials[matIndex];
+			glm::vec3 rad = glm::vec3(m.EmissiveColor) * m.EmissiveStrenght;
+			// luminanza Rec.709: scarta gli emissivi neri o a strength nulla
+			float lum = glm::dot(rad, glm::vec3(0.2126f, 0.7152f, 0.0722f));
+			if (lum <= 1e-4f)
+				return false;
+			outRadiance = rad;
+			return true;
+		};
+
+		// Sfere emissive: campionate via cono (solid angle). Meta = (tipo=0, objType=0, indice).
+		for (size_t i = 0; i < Spheres.size(); i++) {
+			glm::vec3 rad;
+			if (!radianceOf(static_cast<int>(Spheres[i].MaterialIndex), rad))
+				continue;
+			float r = Spheres[i].Position.w;
+			GPULight L;
+			L.Emission = glm::vec4(rad, 4.0f * 3.14159265f * r * r); // area (non usata dal cono)
+			L.P = glm::vec4(glm::vec3(Spheres[i].Position), r);
+			L.Meta = glm::ivec4(0, 0, static_cast<int>(i), 0);
+			lights.push_back(L);
+		}
+
+		// Quad emissivi: campionati per area. Nel formato dello shader gli spigoli FISICI sono
+		// E1 = U*(Width/k), E2 = V*(Height/k) con k = |U x V|, e area = Width*Height/k. Cosi'
+		// il campionamento nello shader e' q = LLC + s*E1 + t*E2 con s,t in [0,1].
+		for (size_t i = 0; i < Quads.size(); i++) {
+			glm::vec3 rad;
+			if (!radianceOf(static_cast<int>(Quads[i].MaterialIndex), rad))
+				continue;
+			glm::vec3 u = glm::vec3(Quads[i].U);
+			glm::vec3 v = glm::vec3(Quads[i].V);
+			glm::vec3 cr = glm::cross(u, v);
+			float k = glm::length(cr);
+			if (k < 1e-8f)
+				continue; // quad degenere
+			glm::vec3 n = cr / k;
+			glm::vec3 e1 = u * (Quads[i].Width / k);
+			glm::vec3 e2 = v * (Quads[i].Height / k);
+			float area = (Quads[i].Width * Quads[i].Height) / k;
+			GPULight L;
+			L.Emission = glm::vec4(rad, area);
+			L.P = glm::vec4(glm::vec3(Quads[i].PositionLLC), 0.0f);
+			L.U = glm::vec4(e1, 0.0f);
+			L.V = glm::vec4(e2, 0.0f);
+			L.Normal = glm::vec4(n, 0.0f);
+			L.Meta = glm::ivec4(1, 1, static_cast<int>(i), 0);
+			lights.push_back(L);
+		}
+
+		return lights;
+	}
+
 	// Nessuno tiene indici verso le sfere, a parte la selezione: qui basta la erase.
 	bool World::RemoveSphere(int sphereIndex) {
 		if (sphereIndex < 0 || sphereIndex >= static_cast<int>(Spheres.size()))

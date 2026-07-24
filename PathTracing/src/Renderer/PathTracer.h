@@ -29,6 +29,7 @@ namespace PathTracer {
 		bool HasHistory;       // false = primo frame / reset scena / resize: storia non valida
 		bool CameraMoved;      // true = storia riproiettata -> si applica il cap
 		int HistoryCap;
+		bool EnableNEE;        // false = azzera numLights lato shader (NEE spenta)
 		glm::ivec2 PickPixel;  // (-1,-1) = nessuna richiesta di picking
 		const class World& World;
 		const class Camera& Camera;

@@ -103,6 +103,11 @@ namespace PathTracer {
 			m_ComputeShader->UpdateWorldBuffer(container.World);
 		}
 
+		// Dopo l'eventuale rebuild della scena: il numero di emettitori per la NEE. L'uniform
+		// persiste tra i frame, ma lo si setta ogni frame dal valore memorizzato nel compute
+		// shader, cosi' un cambio scena si riflette subito (nessun lag di un frame).
+		m_ComputeShader->SetInt("numLights", container.EnableNEE ? m_ComputeShader->NumLights() : 0);
+
 		m_SkyBox->Bind();
 	}
 }

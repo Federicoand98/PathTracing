@@ -56,6 +56,12 @@ namespace PathTracer {
 
 		// -1 se il quad e' autonomo, altrimenti l'indice del box che lo possiede
 		int QuadOwnerBox(int quadIndex) const;
+
+		// Raccoglie gli emettitori (sfere/quad con materiale emissivo) per la Next Event
+		// Estimation. Ricostruito a ogni upload della scena, cosi' resta in sync con
+		// geometria e materiali (anche dopo un edit dell'emissione dalla UI). I triangoli
+		// emissivi delle mesh sono esclusi (nessuna scena li usa; li campionerebbe il BSDF).
+		std::vector<GPULight> CollectLights() const;
 	public:
 		glm::vec3 BackgroundColor;
         std::vector<Test> Tests;

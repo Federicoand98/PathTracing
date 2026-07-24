@@ -136,6 +136,31 @@ struct Material {
     float SpecularTint;  // 0 = riflesso bianco, 1 = tinto verso base color (solo dielettrici)
 };
 
+// Emettitore per la Next Event Estimation. Deve combaciare con GPULight (Primitives.h).
+// Per un quad U/V sono gli spigoli FISICI e area = |U x V| (precalcolati lato CPU), cosi'
+// il campionamento e' q = P.xyz + s*U + t*V con s,t in [0,1].
+struct Light {
+    vec4 Emission;  // rgb = radianza, a = area
+    vec4 P;         // sfera: centro.xyz + raggio(w) ; quad: LLC.xyz
+    vec4 U;         // quad: spigolo U ; sfera: inutilizzato
+    vec4 V;         // quad: spigolo V ; sfera: inutilizzato
+    vec4 Normal;    // quad: normale ; sfera: inutilizzato
+    ivec4 Meta;     // x = tipo (0 sfera, 1 quad), y = objType, z = objIndex
+};
+
+// Parametri del BSDF derivati dal materiale (nessun RNG): condivisi tra il sampling (BSDF)
+// e la valutazione per una direzione arbitraria (EvalBsdf/CombinedPdf), cosi' la logica di
+// selezione dei lobi non puo' divergere tra i due usi.
+struct BsdfParams {
+    vec3 baseColor;
+    vec3 F0;
+    float alpha;
+    float metalness;
+    float pSpec;   // prob. di scegliere il lobo speculare
+    float pDiff;   // prob. di scegliere il lobo diffuso
+    float pRefr;   // prob. di scegliere il lobo di rifrazione (delta)
+};
+
 struct HitInfo {
     float HitDistance;
     vec3 HitPosition;
@@ -149,8 +174,16 @@ struct HitInfo {
 
 Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, vec2 ndc);
 vec4 PerPixel(vec2 ndc);
-vec3 BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive);
+vec3 BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive, out float outPdf, out bool outDelta);
 HitInfo TraceRay(Ray ray);
+
+// Next Event Estimation (light sampling + MIS balance heuristic).
+BsdfParams GetBsdfParams(HitInfo hit, Material material, vec3 V);
+float CombinedPdf(BsdfParams pr, vec3 N, vec3 V, vec3 L);
+void EvalBsdf(HitInfo hit, Material material, vec3 V, vec3 L, out vec3 f, out float pdf);
+bool SampleLight(vec3 p, out vec3 wi, out float dist, out vec3 Lrad, out float pdf);
+float LightPdfToward(vec3 fromPos, HitInfo hit);
+bool Occluded(vec3 origin, vec3 dir, float maxDist);
 HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit, float u, float v);
 HitInfo NoHit();
 bool HitSphere(Ray ray, Sphere sphere, out float t1, out float t2);
@@ -162,6 +195,9 @@ vec3 GetNormal(Quad quad, vec3 surfacePosition);
 uint GetPCGHash(inout uint seed);
 float GetRandomFloat();
 vec3 GetRandomVector(uint seed);
+
+// Valida un tap di storia riproiettata (depth/normale/sfondo) e ne restituisce irradianza + N.
+bool ValidateHistoryTap(ivec2 pc, ivec2 size, bool isBg, vec3 worldPos, vec3 aovNormal, out vec3 irr, out float n);
 
 float hitAABB(Ray ray, vec3 invDir, vec3 bmin, vec3 bmax);
 float hitBVH(inout Ray ray, int rootNode, out int hitTriIndex, out float outU, out float outV);
@@ -205,6 +241,7 @@ uniform int aovNeedsUpdate; // 1 = camera cambiata/reset: gli AOV vanno ritracci
 uniform int hasHistory;    // 0 = niente storia valida (primo frame, reset scena, resize)
 uniform int cameraMoved;   // 1 = la storia e' riproiettata -> va cappata
 uniform int historyCap;    // lunghezza massima della storia quando ci si muove
+uniform int numLights;     // emettitori per la NEE; 0 = NEE disattivata
 
 layout(std430, binding = 0) buffer SpheresBuffer {
     Sphere Spheres[];
@@ -252,6 +289,12 @@ layout(std430, binding = 9) buffer PickBuffer {
 
 layout(std430, binding = 10) buffer TriangleUVsBuffer {
     TriangleUV TriUVs[];
+};
+
+// Emettitori per la NEE (light sampling + MIS). Vuoto (numLights == 0) su tutte le scene
+// senza geometria emissiva -> la NEE si disattiva del tutto: nessun costo, render identico.
+layout(std430, binding = 11) buffer LightsBuffer {
+    Light Lights[];
 };
 
 
@@ -319,6 +362,12 @@ void main() {
         vec3 a = vec3(1.0);   // default = sfondo: albedo neutro lascia la demodulazione a 1
         vec3 n = vec3(0.0);
         float d = 1e4;
+        // Nell'alpha di imgAlbedo: "history trust" della superficie [0,1]. Le superfici speculari
+        // (roughness bassa) hanno shading VIEW-DEPENDENT: la storia riproiettata da un'altra
+        // posizione camera e' sbagliata e in movimento lascia aloni. trust ~0 le fa riaggiornare
+        // in fretta (poca storia), trust ~1 lascia accumulare le superfici diffuse. Vedi la
+        // riproiezione piu' sotto. Lo sfondo (default) = 1: dipende solo dalla rotazione.
+        float trust = 1.0;
         if(aovNeedsUpdate == 1) {
             vec2 ndcCenter = (vec2(texelCoord) + 0.5) / vec2(imageResultSize) * 2.0 - 1.0;
             Ray aovRay = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndcCenter);
@@ -330,16 +379,21 @@ void main() {
                 a = vec3(aovMat.Color) * SampleAlbedo(aovMat, aovHit.UV, aovPos);
                 n = aovHit.Normal;
                 d = aovHit.HitDistance;
+                // liscio (specchio/vetro/metallo) -> view-dependent -> trust basso.
+                // ruvido (>0.5) -> diffuso -> trust pieno.
+                trust = smoothstep(0.0, 0.5, aovMat.Roughness);
             }
         } else {
-            // imgAlbedo non e' ping-pong: contiene ancora il frame scorso. NormalDepth si legge
-            // dalla storia, perche' l'indice corrente e' il bersaglio di scrittura di adesso.
-            a = imageLoad(imgAlbedo, texelCoord).rgb;
+            // imgAlbedo non e' ping-pong: contiene ancora il frame scorso (rgb + trust in alpha).
+            // NormalDepth si legge dalla storia: l'indice corrente e' il bersaglio di scrittura.
+            vec4 av = imageLoad(imgAlbedo, texelCoord);
+            a = av.rgb;
+            trust = av.a;
             vec4 nd = imageLoad(imgNormalDepthPrev, texelCoord);
             n = nd.rgb;
             d = nd.a;
         }
-        imageStore(imgAlbedo, texelCoord, vec4(a, 1.0));
+        imageStore(imgAlbedo, texelCoord, vec4(a, trust));
         imageStore(imgNormalDepth, texelCoord, vec4(n, d));
     }
 
@@ -376,7 +430,9 @@ void main() {
     // Rilettura degli AOV scritti prima del loop (vedi la nota sopra sulla liveness): da qui in
     // poi servono di nuovo, ma NON dovevano sopravvivere alla traversata dei rimbalzi.
     vec4 aovNd = imageLoad(imgNormalDepth, texelCoord);
-    vec3 aovAlbedo = imageLoad(imgAlbedo, texelCoord).rgb;
+    vec4 aovAlbedoF = imageLoad(imgAlbedo, texelCoord);
+    vec3 aovAlbedo = aovAlbedoF.rgb;
+    float aovTrust = aovAlbedoF.a;   // history trust della superficie (vedi blocco AOV)
     vec3 aovNormal = aovNd.rgb;
     float aovDepth = aovNd.a;
 
@@ -395,9 +451,21 @@ void main() {
     // e non accumula MAI (grana fissa nel cielo). E' semplicemente all'infinito, quindi la
     // sua riproiezione dipende solo dalla rotazione della camera e si valida diversamente.
     bool isBackground = dot(aovNormal, aovNormal) < 1e-6;
-    if(hasHistory == 1) {
-        // Posizione mondo del primo hit, ricostruita dal Depth: raggio primario non jitterato
-        // esteso di aovDepth. Per questo il Depth AOV basta e non serve un buffer di posizioni.
+    if(hasHistory == 1 && cameraMoved == 0) {
+        // Camera ferma: la riproiezione e' l'identita' e questo pixel inquadra la STESSA
+        // superficie del frame scorso, quindi la sua storia e' sempre valida: si legge diretta,
+        // senza validare depth/normale (il tap e' se stessi). Solo guardia sui valori non finiti.
+        // Cosi' l'accumulo converge esattamente come prima della riproiezione.
+        vec4 h = imageLoad(imgIrradiancePrev, texelCoord);
+        if(!any(isnan(h.rgb)) && !any(isinf(h.rgb))) {
+            histIrr = h.rgb;
+            histN = h.a;
+            valid = true;
+        }
+    } else if(hasHistory == 1) {
+        // In MOVIMENTO: si ritrova il pixel nel frame precedente e si legge la storia in
+        // BILINEARE (2x2). Il nearest-neighbor qui creava una griglia che shimmerava (i pattern
+        // di proiezione): l'arrotondamento intero di uvPrev salta di pixel a ogni frame.
         vec2 ndcCenter = (vec2(texelCoord) + 0.5) / vec2(imageResultSize) * 2.0 - 1.0;
         Ray centerRay = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndcCenter);
         vec3 worldPos = centerRay.Origin + centerRay.Direction * aovDepth;
@@ -405,46 +473,41 @@ void main() {
         vec4 clipPrev = prevViewProjection * vec4(worldPos, 1.0);
         if(clipPrev.w > 0.0) {  // w <= 0 = dietro la camera precedente
             vec2 uvPrev = (clipPrev.xy / clipPrev.w) * 0.5 + 0.5;
-            ivec2 pc = ivec2(uvPrev * vec2(imageResultSize));
+            // in spazio pixel-centro: il tap intero e' floor, i pesi vengono dalla frazione
+            vec2 uvPix = uvPrev * vec2(imageResultSize) - 0.5;
+            ivec2 base = ivec2(floor(uvPix));
+            vec2 f = uvPix - vec2(base);
+            float w[4] = float[4]((1.0-f.x)*(1.0-f.y), f.x*(1.0-f.y), (1.0-f.x)*f.y, f.x*f.y);
+            ivec2 off[4] = ivec2[4](ivec2(0,0), ivec2(1,0), ivec2(0,1), ivec2(1,1));
 
-            // Off-screen: il pixel non era inquadrato prima -> nessuna storia da riusare.
-            if(all(greaterThanEqual(pc, ivec2(0))) && all(lessThan(pc, imageResultSize))) {
-                vec4 ndPrev = imageLoad(imgNormalDepthPrev, pc);
-
-                bool accept;
-                if(isBackground) {
-                    // Per lo sfondo basta che fosse sfondo anche prima: non c'e' una superficie
-                    // di cui confrontare normale e distanza.
-                    accept = dot(ndPrev.rgb, ndPrev.rgb) < 1e-6;
-                } else {
-                    // Depth: NON si confronta col depth corrente. Il depth in storia e' misurato
-                    // dalla camera di allora, quindi il paragone giusto e' con la distanza attesa
-                    // da quella posizione. Tolleranza relativa: l'errore assoluto cresce lontano.
-                    float expectedPrev = length(worldPos - prevCameraPosition);
-                    bool depthOk = abs(ndPrev.a - expectedPrev) < 0.05 * max(expectedPrev, 1.0);
-                    // Normale: intercetta gli spigoli dove depth combacia ma la superficie e' altra.
-                    bool normalOk = dot(normalize(ndPrev.rgb), normalize(aovNormal)) > 0.9;
-                    accept = depthOk && normalOk;
+            vec3 irrSum = vec3(0.0);
+            float nSum = 0.0, wSum = 0.0;
+            for(int k = 0; k < 4; k++) {
+                vec3 ti; float tn;
+                // ogni tap va validato per conto suo: sui bordi geometrici alcuni cadono su
+                // un'altra superficie e vanno pesati a zero, o il bilineare sborda oltre la silhouette.
+                if(ValidateHistoryTap(base + off[k], imageResultSize, isBackground, worldPos, aovNormal, ti, tn)) {
+                    irrSum += w[k] * ti;
+                    nSum   += w[k] * tn;
+                    wSum   += w[k];
                 }
-
-                if(accept) {
-                    vec4 h = imageLoad(imgIrradiancePrev, pc);
-                    // La storia non finita va scartata, o si propaga in eterno.
-                    if(!any(isnan(h.rgb)) && !any(isinf(h.rgb))) {
-                        histIrr = h.rgb;
-                        histN = h.a;
-                        valid = true;
-                    }
-                }
+            }
+            if(wSum > 0.05) {
+                histIrr = irrSum / wSum;
+                histN = nSum / wSum;
+                valid = true;
             }
         }
     }
 
     // Peso adattivo 1/N (media imparziale). Il cap limita il ghosting da storia stantia e vale
-    // SOLO in movimento: a camera ferma la riproiezione e' l'identita', la storia non e'
-    // stantia, e N cresce libero -> l'immagine converge alla verita' esattamente come prima.
-    // Cappare anche da fermo la bloccherebbe a una media esponenziale di ~32 campioni.
-    float cap = (cameraMoved == 1) ? float(historyCap) : 1e9;
+    // SOLO in movimento: a camera ferma la riproiezione e' l'identita', la storia non e' stantia,
+    // N cresce libero e l'immagine converge alla verita' esattamente come prima.
+    // In movimento le superfici SPECULARI (trust basso) tengono pochissima storia: il loro
+    // riflesso e' view-dependent e riproiettarlo lascerebbe aloni. Le diffuse (trust ~1) tengono
+    // il cap pieno. specCap piccolo = riflessi che si riaggiornano subito (rumorosi ma corretti).
+    const float specCap = 3.0;
+    float cap = (cameraMoved == 1) ? mix(specCap, float(historyCap), aovTrust) : 1e9;
     float N = valid ? min(histN + 1.0, cap) : 1.0;
     vec3 accIrr = valid ? mix(histIrr, irrSample, 1.0 / N) : irrSample;
 
@@ -467,6 +530,41 @@ void main() {
     // per ora legge ancora da qui). Stesso valore clampato della demodulazione -> giro esatto.
     vec3 beauty = accIrr * max(aovAlbedo, vec3(ALBEDO_FLOOR));
     imageStore(imgOutput, texelCoord, vec4(beauty, 1.0));
+}
+
+// Valida un singolo tap della storia riproiettata e ne restituisce irradianza (irr) e sample
+// count (n). Ritorna false se il tap e' fuori schermo, cade su un'altra superficie (depth o
+// normale non combaciano) o contiene valori non finiti. worldPos serve solo per le superfici
+// (isBg == false); per lo sfondo basta che il tap fosse sfondo anche prima.
+bool ValidateHistoryTap(ivec2 pc, ivec2 size, bool isBg, vec3 worldPos, vec3 aovNormal, out vec3 irr, out float n) {
+    irr = vec3(0.0);
+    n = 0.0;
+    if(any(lessThan(pc, ivec2(0))) || any(greaterThanEqual(pc, size)))
+        return false;
+
+    vec4 ndPrev = imageLoad(imgNormalDepthPrev, pc);
+
+    bool ok;
+    if(isBg) {
+        ok = dot(ndPrev.rgb, ndPrev.rgb) < 1e-6; // era sfondo anche prima
+    } else {
+        // Il depth in storia e' misurato dalla camera di allora: si confronta con la distanza
+        // attesa da quella posizione, non col depth corrente. Tolleranza relativa.
+        float expectedPrev = length(worldPos - prevCameraPosition);
+        bool depthOk = abs(ndPrev.a - expectedPrev) < 0.05 * max(expectedPrev, 1.0);
+        bool normalOk = dot(normalize(ndPrev.rgb), normalize(aovNormal)) > 0.9;
+        ok = depthOk && normalOk;
+    }
+    if(!ok)
+        return false;
+
+    vec4 h = imageLoad(imgIrradiancePrev, pc);
+    if(any(isnan(h.rgb)) || any(isinf(h.rgb))) // storia non finita: va scartata o si propaga
+        return false;
+
+    irr = h.rgb;
+    n = h.a;
+    return true;
 }
 
 // Punto uniforme nel disco unitario (mappatura concentrica polare, niente rejection).
@@ -498,40 +596,32 @@ vec4 PerPixel(vec2 ndc) {
     }
 
     Material material;
-    vec3 light = vec3(0.0);         // colore finale del pixel dato dall'accumulazione
-    vec3 contribution = vec3(1.0);  // contributo di ogni intersezione al colore finale
+    vec3 light = vec3(0.0);          // radianza accumulata lungo il cammino
+    vec3 throughput = vec3(1.0);     // prodotto dei pesi BSDF (e RR) fin qui
     bool isRefractive;
 
-    vec4 col = vec4(0.0);
+    // Stato per la MIS sull'emissione: quando un raggio BSDF cade su un emettitore, il suo
+    // contributo va pesato contro la pdf che il light sampling avrebbe avuto DAL VERTICE
+    // PRECEDENTE. Il raggio camera si comporta come una sorgente delta (peso 1).
+    float prevPdfBsdf = 0.0;
+    bool  prevDelta = true;
+    vec3  prevPos = ray.Origin;
 
     for(int i = 0; i < rayDepth; i++) {
         HitInfo hit = TraceRay(ray);
 
         if(hit.HitDistance < 0.0) {
-            if(!EnvironmentMapping)
-				light += texture(SamplerEnvironment, ray.Direction).rgb * contribution;
-            else
-				light += BackgroundColor * contribution;
+            // L'ambiente non e' nel set NEE (sfondo uniforme -> campionarlo non aiuta): peso 1.
+            vec3 envRadiance = (!EnvironmentMapping)
+                ? texture(SamplerEnvironment, ray.Direction).rgb
+                : BackgroundColor;
+            light += envRadiance * throughput;
             break;
         }
 
         // Materiale gia' risolto in HandleHit (per-triangolo sulle mesh). Il clamp protegge
         // da indici fuori range, es. un MTL malformato in un OBJ multi-materiale.
         material = Materials[clamp(hit.MaterialIndex, 0, Materials.length() - 1)];
-
-        // Gli AOV NON si catturano piu' qui: vengono da un raggio non jitterato in main().
-        // Tenerli qui li rendeva dipendenti dal jitter (bordi che non accumulano mai) e teneva
-        // 7 float vivi per tutto questo loop, il piu' caldo del programma.
-
-        // if(hit.ObjectType == 0) {
-        //     col = vec4(0.0, 1.0, 0.0, 1.0);
-        //     break;
-        // }
-
-        // if(hit.ObjectType == 2) {
-        //     col = vec4(0.0, 0.0, 1.0, 1.0);
-        //     break;
-        // }
 
         if(hit.Inside) {
             hit.Normal *= -1.0;
@@ -540,36 +630,64 @@ vec4 PerPixel(vec2 ndc) {
             // rosso; bianco -> trasparente). L'assorbimento e' -log(colore): usare RefractionColor
             // direttamente come coefficiente invertirebbe la tinta (rosso -> ciano).
             vec3 absorption = -log(clamp(vec3(material.RefractionColor), vec3(1e-3), vec3(1.0)));
-            contribution *= exp(-absorption * hit.HitDistance);
+            throughput *= exp(-absorption * hit.HitDistance);
         }
 
-        // Il BSDF ritorna gia' il peso completo del campione (BRDF*cos/pdf diviso per la
-        // probabilita' di scelta del lobo): Fresnel, masking-shadowing e tinta del metallo
-        // sono dentro. Qui basta moltiplicarlo nel throughput.
-        vec3 bsdfWeight = BSDF(ray, hit, material, isRefractive);
+        vec3 N = hit.Normal;
+        vec3 V = -ray.Direction;
 
-        light += (vec3(material.EmissiveColor) * material.EmissiveStrenght) * contribution;
+        // (1) EMISSIONE della superficie, pesata in MIS. Senza NEE (numLights==0 o vertice
+        //     dopo un lobo delta) il peso e' 1 e il comportamento coincide con quello storico.
+        if(material.EmissiveStrenght > 0.0) {
+            vec3 Le = vec3(material.EmissiveColor) * material.EmissiveStrenght;
+            float w = 1.0;
+            if(!prevDelta && numLights > 0) {
+                float pdfL = LightPdfToward(prevPos, hit);
+                float sum = prevPdfBsdf + pdfL;
+                w = (sum > 0.0) ? prevPdfBsdf / sum : 1.0;
+            }
+            light += Le * throughput * w;
+        }
 
-        contribution *= bsdfWeight;
+        // (2) NEE: campiona una luce e aggiungi il contributo diretto (solo superfici esterne;
+        //     dentro un mezzo la rifrazione all'uscita renderebbe il sample errato).
+        if(numLights > 0 && !hit.Inside) {
+            vec3 wi; float dist; vec3 Lrad; float pdfLight;
+            if(SampleLight(hit.HitPosition, wi, dist, Lrad, pdfLight) && pdfLight > 1e-8) {
+                if(dot(N, wi) > 0.0) {
+                    vec3 f; float pdfBsdfDir;
+                    EvalBsdf(hit, material, V, wi, f, pdfBsdfDir);
+                    if(any(greaterThan(f, vec3(0.0)))) {
+                        vec3 sorigin = hit.HitPosition + N * 0.001;
+                        if(!Occluded(sorigin, wi, dist - 0.002)) {
+                            float w = pdfLight / (pdfLight + pdfBsdfDir);
+                            light += throughput * f * dot(N, wi) * Lrad / pdfLight * w;
+                        }
+                    }
+                }
+            }
+        }
 
-        // if(hit.ObjectType == 5)
-        //     return vec4(1.0, 0.0, 1.0, 1.0);
+        // (3) Campiona il BSDF -> prossima direzione. Il peso e' gia' BRDF*cos/pdf.
+        float pdfBsdf; bool delta;
+        vec3 bsdfWeight = BSDF(ray, hit, material, isRefractive, pdfBsdf, delta);
 
+        throughput *= bsdfWeight;
+        prevPdfBsdf = pdfBsdf;
+        prevDelta = delta;
+        prevPos = hit.HitPosition;
 
-        // Russian Roulette
-        // i raggi di luce con un basso contributo al colore vengono scartati
+        // Russian Roulette: i cammini a basso throughput vengono terminati e i sopravvissuti
+        // reintegrano l'energia persa.
         {
-            float p = max(contribution.x, max(contribution.y, contribution.z));
+            float p = max(throughput.x, max(throughput.y, throughput.z));
             if(GetRandomFloat() > p)
                 break;
-
-            // se il percorso non viene terminato allora si reintegra l'energia persa dai percorsi terminati
-            contribution *= 1.0 / p;
+            throughput *= 1.0 / p;
         }
     }
 
     return vec4(light, 1.0);
-    // return col;
 }
 
 // ---- BRDF microfacet GGX (Trowbridge-Reitz) + Fresnel RGB ------------------
@@ -629,66 +747,126 @@ vec3 CosineSampleHemisphere(vec3 n, float u1, float u2) {
     return normalize(t * (r * cos(phi)) + b * (r * sin(phi)) + n * z);
 }
 
+// Deriva i parametri del BSDF dal materiale (nessun RNG). Estratto da BSDF cosi' che il
+// sampling e la valutazione per una direzione arbitraria (NEE) usino la STESSA logica di
+// selezione dei lobi: se divergessero, la MIS diventerebbe biased.
+BsdfParams GetBsdfParams(HitInfo hit, Material material, vec3 V) {
+    BsdfParams pr;
+    pr.metalness = clamp(material.Metalness, 0.0, 1.0);
+    vec3 albedo = SampleAlbedo(material, hit.UV, hit.HitPosition);
+    pr.baseColor = vec3(material.Color) * albedo;
+
+    // F0: dielettrico grigio, metallo = albedo (vedi note storiche nel BSDF).
+    float dielF0 = min(material.SpecularProbability, 0.08);
+    vec3 tintHue = pr.baseColor / max(Luminance(pr.baseColor), 1e-4);
+    vec3 dielSpec = dielF0 * mix(vec3(1.0), tintHue, clamp(material.SpecularTint, 0.0, 1.0));
+    pr.F0 = mix(dielSpec, pr.baseColor, pr.metalness);
+
+    float roughness = clamp(material.Roughness, 0.0, 1.0);
+    pr.alpha = max(roughness * roughness, 1e-3);
+
+    pr.pRefr = material.RefractionProbability * (1.0 - pr.metalness);
+    float specImp = Luminance(pr.F0);
+    float diffImp = Luminance(pr.baseColor) * (1.0 - pr.metalness);
+    float budget = 1.0 - pr.pRefr;
+    pr.pSpec = (diffImp <= 0.0) ? budget
+             : budget * clamp(specImp / max(specImp + diffImp, 1e-4), 0.05, 0.95);
+    pr.pDiff = budget - pr.pSpec;
+    return pr;
+}
+
+// pdf (in solid angle) che il sampling del BSDF userebbe per la direzione L. E' la pdf
+// COMBINATA dei due lobi non-delta pesati per la loro prob. di selezione: il sampler poteva
+// generare L via lo speculare O il diffuso, e la MIS ha bisogno della densita' totale.
+float CombinedPdf(BsdfParams pr, vec3 N, vec3 V, vec3 L) {
+    float NoL = dot(N, L);
+    float NoV = dot(N, V);
+    if(NoL <= 0.0 || NoV <= 0.0)
+        return 0.0;
+
+    // lobo speculare: pdf VNDF(L) = D(H) * G1(V) / (4 * NoV)
+    vec3 H = normalize(V + L);
+    float NoH = max(dot(N, H), 0.0);
+    float a2 = pr.alpha * pr.alpha;
+    float denom = NoH * NoH * (a2 - 1.0) + 1.0;
+    float D = a2 / max(PI * denom * denom, 1e-12);
+    float G1 = 1.0 / (1.0 + SmithLambda(NoV, pr.alpha));
+    float pdfSpec = D * G1 / max(4.0 * NoV, 1e-8);
+
+    float pdfDiff = NoL / PI; // cosine-weighted
+
+    return pr.pDiff * pdfDiff + pr.pSpec * pdfSpec;
+}
+
+// Valuta il BSDF (parte non-delta: diffuso + speculare GGX) verso una direzione L arbitraria,
+// restituendo f (valore BRDF, NON moltiplicato per il coseno) e la pdf combinata. Usata dalla
+// NEE per il termine di light sampling.
+void EvalBsdf(HitInfo hit, Material material, vec3 V, vec3 L, out vec3 f, out float pdf) {
+    f = vec3(0.0);
+    pdf = 0.0;
+    vec3 N = hit.Normal;
+    float NoL = dot(N, L);
+    float NoV = dot(N, V);
+    if(NoL <= 0.0 || NoV <= 0.0)
+        return;
+
+    BsdfParams pr = GetBsdfParams(hit, material, V);
+
+    vec3 fDiff = pr.baseColor * (1.0 - pr.metalness) / PI;
+
+    vec3 H = normalize(V + L);
+    float NoH = max(dot(N, H), 0.0);
+    float VoH = max(dot(V, H), 0.0);
+    float a2 = pr.alpha * pr.alpha;
+    float denom = NoH * NoH * (a2 - 1.0) + 1.0;
+    float D = a2 / max(PI * denom * denom, 1e-12);
+    float Lv = SmithLambda(NoV, pr.alpha);
+    float Ll = SmithLambda(NoL, pr.alpha);
+    float G2 = 1.0 / (1.0 + Lv + Ll);
+    vec3 F = FresnelSchlickRGB(pr.F0, VoH);
+    vec3 fSpec = D * G2 * F / max(4.0 * NoV * NoL, 1e-8);
+
+    f = fDiff + fSpec;
+    pdf = CombinedPdf(pr, N, V, L);
+}
+
 // Ritorna il peso del campione (throughput multiplier) e imposta ray.Origin/Direction.
-vec3 BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive) {
+// outPdf = pdf (solid angle) della direzione scelta, per la MIS sul prossimo hit emissivo.
+// outDelta = true solo per il lobo di rifrazione (distribuzione delta): la NEE lo salta e la
+// sua emissione vale peso 1. Lo speculare GGX, anche a roughness bassa, resta non-delta: la
+// MIS lo gestisce senza soglie (pdf enorme -> peso ~1 in automatico).
+vec3 BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive, out float outPdf, out bool outDelta) {
     isRefractive = false;
+    outPdf = 0.0;
+    outDelta = false;
 
     vec3 N = hit.Normal;         // orientata verso il viewer (vedi HandleHit / flip Inside)
     vec3 V = -ray.Direction;     // dal punto verso la camera
     vec3 hitPos = ray.Origin + ray.Direction * hit.HitDistance;
 
-    float metalness = clamp(material.Metalness, 0.0, 1.0);
-    vec3 albedo = SampleAlbedo(material, hit.UV, hitPos);
-    vec3 baseColor = vec3(material.Color) * albedo;
-
-    // F0: dielettrico grigio, metallo = albedo. SpecularProbability e' l'F0 dielettrico
-    // (l'editor Principled ci scrive 0.08*livello). Clampato a 0.08 = massimo Principled:
-    // salva anche i materiali legacy che avevano il vecchio default 1.0 (era una
-    // probabilita', non un F0) e altrimenti diventerebbero specchi bianchi.
-    float dielF0 = min(material.SpecularProbability, 0.08);
-
-    // Specular tint (Disney): l'F0 dielettrico può essere spinto verso la HUE della base
-    // color (luminanza normalizzata a 1) invece del grigio neutro. tint=0 -> bianco fisico,
-    // tint=1 -> riflesso colorato su un non-metallo. Il metallo lo ignora: mix con metalness
-    // porta comunque F0 alla base color piena.
-    vec3 tintHue = baseColor / max(Luminance(baseColor), 1e-4);
-    vec3 dielSpec = dielF0 * mix(vec3(1.0), tintHue, clamp(material.SpecularTint, 0.0, 1.0));
-    vec3 F0 = mix(dielSpec, baseColor, metalness);
-
-    float roughness = clamp(material.Roughness, 0.0, 1.0);
-    float alpha = max(roughness * roughness, 1e-3); // roughness percettiva -> alpha GGX
-
-    float pRefr = material.RefractionProbability * (1.0 - metalness);
+    BsdfParams pr = GetBsdfParams(hit, material, V);
     float roll = GetRandomFloat();
 
-    // ---- lobo di rifrazione (vetro): logica invariata, solo instradata nel peso ----
-    if(pRefr > 0.0 && roll < pRefr) {
+    // ---- lobo di rifrazione (vetro): delta, nessuna NEE, emissione a valle con peso 1 ----
+    if(pr.pRefr > 0.0 && roll < pr.pRefr) {
         isRefractive = true;
+        outDelta = true;
         ray.Origin = hitPos - N * 0.001;
         vec3 refr = refract(ray.Direction, N, hit.Inside ? material.RefractionRatio : 1.0 / material.RefractionRatio);
         refr = normalize(mix(refr, normalize(-N + GetRandomVector(rndSeed)),
                              material.RefractionRoughness * material.RefractionRoughness));
         ray.Direction = refr;
-        return vec3(1.0 / pRefr); // la tinta arriva dal Beer-Lambert nel segmento interno
+        return vec3(1.0 / pr.pRefr); // la tinta arriva dal Beer-Lambert nel segmento interno
     }
-
-    // ---- scelta speculare / diffuso, proporzionale all'importanza (throughput-aware) ----
-    float specImp = Luminance(F0);
-    float diffImp = Luminance(baseColor) * (1.0 - metalness);
-    float budget = 1.0 - pRefr;
-    // niente diffuso su un metallo -> tutto speculare
-    float pSpec = (diffImp <= 0.0) ? budget
-                : budget * clamp(specImp / max(specImp + diffImp, 1e-4), 0.05, 0.95);
-    float pDiff = budget - pSpec;
 
     ray.Origin = hitPos + N * 0.001;
 
-    if(roll < pRefr + pSpec) {
+    if(roll < pr.pRefr + pr.pSpec) {
         // ---- speculare: microfacet GGX con VNDF ----
         vec3 T, B;
         BuildBasis(N, T, B);
         vec3 Vl = vec3(dot(V, T), dot(V, B), dot(V, N)); // V in spazio locale (Vl.z = NoV)
-        vec3 Hl = SampleGGXVNDF(Vl, alpha, GetRandomFloat(), GetRandomFloat());
+        vec3 Hl = SampleGGXVNDF(Vl, pr.alpha, GetRandomFloat(), GetRandomFloat());
         vec3 Ll = reflect(-Vl, Hl); // direzione di luce riflessa attorno alla micro-normale
 
         if(Ll.z <= 0.0)             // sotto l'orizzonte: campione non valido
@@ -700,19 +878,118 @@ vec3 BSDF(inout Ray ray, HitInfo hit, Material material, out bool isRefractive) 
 
         // Peso VNDF: BRDF*cos/pdf = F * G2/G1. Con Smith height-correlated
         // G2/G1 = (1+Lv) / (1+Lv+Ll). La NDF si cancella nel rapporto.
-        vec3 F = FresnelSchlickRGB(F0, VoH);
-        float Lv = SmithLambda(NoV, alpha);
-        float Ll_ = SmithLambda(NoL, alpha);
+        vec3 F = FresnelSchlickRGB(pr.F0, VoH);
+        float Lv = SmithLambda(NoV, pr.alpha);
+        float Ll_ = SmithLambda(NoL, pr.alpha);
         float gRatio = (1.0 + Lv) / (1.0 + Lv + Ll_);
 
         ray.Direction = normalize(T * Ll.x + B * Ll.y + N * Ll.z);
-        return F * gRatio / pSpec;
+        outPdf = CombinedPdf(pr, N, V, ray.Direction);
+        return F * gRatio / pr.pSpec;
     }
     else {
         // ---- diffuso lambertiano, cosine-weighted ----
         ray.Direction = CosineSampleHemisphere(N, GetRandomFloat(), GetRandomFloat());
-        return baseColor * (1.0 - metalness) / pDiff;
+        outPdf = CombinedPdf(pr, N, V, ray.Direction);
+        return pr.baseColor * (1.0 - pr.metalness) / pr.pDiff;
     }
+}
+
+// ---- NEE: sampling delle luci, pdf per la MIS, shadow ray ----------------------------
+
+// Campiona un emettitore (scelto uniformemente) e restituisce direzione, distanza, radianza
+// e pdf in solid angle (gia' comprensiva di 1/numLights). false = campione non valido.
+bool SampleLight(vec3 p, out vec3 wi, out float dist, out vec3 Lrad, out float pdf) {
+    wi = vec3(0.0, 1.0, 0.0); dist = 0.0; Lrad = vec3(0.0); pdf = 0.0;
+    if(numLights == 0)
+        return false;
+
+    int li = min(int(GetRandomFloat() * float(numLights)), numLights - 1);
+    Light L = Lights[li];
+    Lrad = L.Emission.rgb;
+    float pickPdf = 1.0 / float(numLights);
+
+    if(L.Meta.x == 0) {
+        // ---- sfera: cone sampling (Shirley) ----
+        vec3 c = L.P.xyz; float r = L.P.w;
+        vec3 w = c - p;
+        float d2 = dot(w, w);
+        float d = sqrt(d2);
+        if(d <= r)               // punto dentro la sfera-luce: caso degenere, salta
+            return false;
+
+        float cosMax = sqrt(max(0.0, 1.0 - (r * r) / d2));
+        float u1 = GetRandomFloat(), u2 = GetRandomFloat();
+        float cosT = 1.0 - u1 * (1.0 - cosMax);
+        float sinT = sqrt(max(0.0, 1.0 - cosT * cosT));
+        float phi = 2.0 * PI * u2;
+
+        vec3 wz = w / d;
+        vec3 tx, ty; BuildBasis(wz, tx, ty);
+        wi = normalize(tx * (sinT * cos(phi)) + ty * (sinT * sin(phi)) + wz * cosT);
+
+        // distanza all'intersezione con la sfera lungo wi (radice vicina)
+        float b = dot(wi, p - c);
+        float disc = b * b - (d2 - r * r);
+        dist = (disc >= 0.0) ? (-b - sqrt(disc)) : (d - r);
+        if(dist <= 0.0)
+            dist = d - r;
+
+        float solid = 2.0 * PI * (1.0 - cosMax);
+        pdf = pickPdf / max(solid, 1e-8);
+        return true;
+    } else {
+        // ---- quad: area sampling ----
+        float u1 = GetRandomFloat(), u2 = GetRandomFloat();
+        vec3 q = L.P.xyz + u1 * L.U.xyz + u2 * L.V.xyz;
+        vec3 dvec = q - p;
+        float dist2 = dot(dvec, dvec);
+        dist = sqrt(dist2);
+        wi = dvec / dist;
+        float cosLgt = abs(dot(L.Normal.xyz, wi)); // emettitore two-sided (come l'emissione sull'hit)
+        if(cosLgt < 1e-6)
+            return false;
+        pdf = pickPdf * dist2 / (cosLgt * L.Emission.a);
+        return true;
+    }
+}
+
+// pdf (solid angle, incl. 1/numLights) con cui il light sampling avrebbe generato la direzione
+// da fromPos verso l'emettitore effettivamente colpito da un raggio BSDF. Serve al termine MIS
+// sull'emissione. 0 se l'oggetto colpito non e' un emettitore campionabile.
+float LightPdfToward(vec3 fromPos, HitInfo hit) {
+    if(numLights == 0)
+        return 0.0;
+    for(int i = 0; i < numLights; i++) {
+        if(Lights[i].Meta.y != hit.ObjectType || Lights[i].Meta.z != hit.ObjectIndex)
+            continue;
+        float pickPdf = 1.0 / float(numLights);
+        if(Lights[i].Meta.x == 0) {
+            vec3 c = Lights[i].P.xyz; float r = Lights[i].P.w;
+            float d2 = dot(c - fromPos, c - fromPos);
+            if(d2 <= r * r)
+                return 0.0;
+            float cosMax = sqrt(max(0.0, 1.0 - (r * r) / d2));
+            float solid = 2.0 * PI * (1.0 - cosMax);
+            return pickPdf / max(solid, 1e-8);
+        } else {
+            vec3 dvec = hit.HitPosition - fromPos;
+            float dist2 = dot(dvec, dvec);
+            float cosLgt = abs(dot(Lights[i].Normal.xyz, normalize(dvec)));
+            if(cosLgt < 1e-6)
+                return 0.0;
+            return pickPdf * dist2 / (cosLgt * Lights[i].Emission.a);
+        }
+    }
+    return 0.0;
+}
+
+// Shadow ray: c'e' un occlusore tra origin e la luce (entro maxDist)? Riusa TraceRay per non
+// tenere in sync una seconda traversata (come fa il picking). Ottimizzabile con un any-hit.
+bool Occluded(vec3 origin, vec3 dir, float maxDist) {
+    Ray r = Ray(origin, dir, 0.0);
+    HitInfo h = TraceRay(r);
+    return h.HitDistance > 0.0 && h.HitDistance < maxDist;
 }
 
 // Ritorna la distanza d'ingresso nella AABB, oppure FLOAT_MAX se il raggio la manca

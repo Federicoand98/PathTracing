@@ -56,6 +56,12 @@ namespace PathTracer {
 		// storia stantia e vale solo in movimento; da fermo N cresce libero e converge.
 		bool Reproject = true;
 		int HistoryCap = 32;
+		// Next Event Estimation (light sampling + MIS): a ogni vertice non-speculare campiona
+		// direttamente gli emettitori invece di aspettare che un rimbalzo casuale li becchi.
+		// Crollo di varianza sulle scene con luci piccole; inattivo (nessun costo) se la scena
+		// non ha geometria emissiva. Lato shader e' l'uniform numLights: qui lo si azzera per
+		// spegnere la NEE senza toccare la light list.
+		bool NEE = true;
 		// Denoiser à-trous (view filter read-only): agisce solo sulla vista Beauty, si attenua
 		// da solo con l'accumulo. I sigma sono gli edge-stop (luminanza/normale/profondita').
 		bool Denoise = false;

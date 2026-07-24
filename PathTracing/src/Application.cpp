@@ -50,6 +50,10 @@ namespace PathTracer {
 								 m_Camera(45.0f, 0.1f, 100.0f) {
 		s_Instance = this;
 
+		// Test/CI headless: PT_SCENE=<n> sceglie la scena prima del load.
+		if (const char* sc = getenv("PT_SCENE"))
+			m_World.CurrentScene = atoi(sc);
+
 		m_World.LoadScene();
 
 		// Test/CI headless: PT_GLTF=<file> apre una scena glTF al posto di quella di default.
@@ -57,6 +61,13 @@ namespace PathTracer {
 			if (LoadGltfScene(g))
 				m_Camera.SetView({ 3.0f, 2.5f, 6.0f }, glm::normalize(glm::vec3(-3.0f, -2.5f, -6.0f)));
 		}
+
+		// Test/CI headless: PT_NEE=0 forza la NEE spenta (A/B col light sampling).
+		if (const char* n = getenv("PT_NEE"))
+			m_Renderer.NEE = (atoi(n) != 0);
+		// Test/CI headless: PT_DEPTH=<n> forza la profondita' dei rimbalzi (2 = solo diretta).
+		if (const char* d = getenv("PT_DEPTH"))
+			m_Renderer.m_RayDepth = atoi(d);
 	}
 
 	Application::~Application() {
@@ -256,6 +267,20 @@ namespace PathTracer {
 				static int n = 0;
 				if (++n >= shotFrame) {
 					m_Renderer.GetFrameBuffer()->SaveScreenshot(shot);
+					// PT_HDR=<file>: dump della beauty LINEARE (rgba32f, pre-tonemap) come raw
+					// float32. Serve a confronti non falsati da tonemap/clipping a 8 bit.
+					if (const char* hdr = getenv("PT_HDR")) {
+						auto tex = m_Renderer.GetRenderedImage();
+						int w = tex->GetWidth(), h = tex->GetHeight();
+						std::vector<float> buf(static_cast<size_t>(w) * h * 4);
+						tex->Bind();
+						glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, buf.data());
+						tex->Unbind();
+						std::ofstream f(hdr, std::ios::binary);
+						f.write(reinterpret_cast<const char*>(&w), sizeof(int));
+						f.write(reinterpret_cast<const char*>(&h), sizeof(int));
+						f.write(reinterpret_cast<const char*>(buf.data()), buf.size() * sizeof(float));
+					}
 					m_IsRunning = false;
 				}
 			}
@@ -1337,6 +1362,15 @@ namespace PathTracer {
 		}
 
 		// Denoiser à-trous: e' un view filter read-only, non tocca l'accumulo -> niente reset.
+		// Next Event Estimation: cambia l'integratore -> reset dell'accumulo per non
+		// mischiare campioni con e senza NEE.
+		ImGui::Spacing();
+		if (ImGui::Checkbox("Next Event Estimation", &m_Renderer.NEE))
+			m_Renderer.ResetPathTracingCounter();
+		ImGui::TextDisabled(m_Renderer.NEE
+			? "campiona le luci direttamente (utile solo con geometria emissiva)"
+			: "spenta: le luci si trovano solo per rimbalzo casuale (piu' rumore)");
+
 		ImGui::Spacing();
 		ImGui::Checkbox("Denoise (a-trous)", &m_Renderer.Denoise);
 		if (m_Renderer.Denoise) {

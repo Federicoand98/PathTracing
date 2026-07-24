@@ -98,6 +98,21 @@ namespace PathTracer {
         float padding = 0.0f;
     };
 
+    // Emettitore per la Next Event Estimation (light sampling + MIS). Costruito da
+    // World::CollectLights() a partire dalle sfere/quad con materiale emissivo, caricato
+    // in un SSBO (binding 11). Layout std430: solo vec4/ivec4 -> stride 96, niente padding.
+    // Deve combaciare bit-per-bit con lo struct Light in PathTracing.comp.
+    struct GPULight {
+        glm::vec4 Emission{ 0.0f };  // rgb = radianza (EmissiveColor*Strength), a = area
+        glm::vec4 P{ 0.0f };         // sfera: centro.xyz + raggio(w) ; quad: LLC.xyz
+        glm::vec4 U{ 0.0f };         // quad: vettore-spigolo U (fisico) ; sfera: inutilizzato
+        glm::vec4 V{ 0.0f };         // quad: vettore-spigolo V (fisico) ; sfera: inutilizzato
+        glm::vec4 Normal{ 0.0f };    // quad: normale.xyz ; sfera: inutilizzato
+        glm::ivec4 Meta{ 0 };        // x = tipo (0 sfera, 1 quad), y = objType, z = objIndex
+    };
+
+    static_assert(sizeof(GPULight) == 96, "GPULight deve essere 96 byte per combaciare con lo std430");
+
     struct Box {
         glm::vec4 Min{ 0.0f };
         glm::vec4 Max{ 0.0f };

@@ -23,6 +23,8 @@ namespace PathTracer {
 		unsigned int ssbo_idx;
 		unsigned int ssbo_bvh;
 		unsigned int ssbo_pick;
+		unsigned int ssbo_lights;
+		int m_NumLights = 0; // emettitori attuali, per l'uniform numLights (NEE)
 
 		ComputeShader(const char* path) {
 			std::string computeCode;
@@ -69,6 +71,7 @@ namespace PathTracer {
 			glGenBuffers(1, &ssbo_idx);
 			glGenBuffers(1, &ssbo_bvh);
 			glGenBuffers(1, &ssbo_pick);
+			glGenBuffers(1, &ssbo_lights);
 
 			ResetPickBuffer();
 		}
@@ -139,7 +142,10 @@ namespace PathTracer {
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, ssbo_tn);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, ssbo_pick);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, ssbo_tuv);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 11, ssbo_lights);
 		}
+
+		int NumLights() const { return m_NumLights; }
 
 		void UpdateWorldBuffer(const World& world, bool fullReset = false) {
 			// Upload incondizionato di tutti i buffer della scena: un vettore vuoto
@@ -175,6 +181,14 @@ namespace PathTracer {
 
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_idx);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.TriIndex.size(), world.TriIndex.data(), GL_STATIC_DRAW);
+
+			// Light list per la NEE: ricostruita qui, quindi resta sempre in sync con la scena
+			// (questo metodo gira a ogni reset/cambio scena, incluso un edit dell'emissione dalla
+			// UI, che azzera il contatore e forza il re-upload). numLights viene da m_NumLights.
+			std::vector<GPULight> lights = world.CollectLights();
+			m_NumLights = static_cast<int>(lights.size());
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_lights);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GPULight) * lights.size(), lights.data(), GL_STATIC_DRAW);
 		}
 
 	private:
