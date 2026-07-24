@@ -9,6 +9,13 @@ endif()
 
 project ("PathTracing")
 
+# Senza un build type esplicito CMake non passa NESSUN flag di ottimizzazione (-O0): tutto
+# il lato CPU (parsing OBJ, costruzione BVH/SBVH) gira non ottimizzato e molto lento. Default
+# a Release quando non specificato; per debuggare basta -DCMAKE_BUILD_TYPE=Debug.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 set(OpenGL_GL_PREFERENCE "GLVND")
 
 set(CMAKE_CXX_STANDARD 17)
@@ -52,6 +59,7 @@ include_directories(
 		"${SRC_DIR}"
 		"${SRC_DIR}/ImGui"
 		"${SRC_DIR}/ImGuizmo"
+		"${SRC_DIR}/vendor"
     ${GLFW_INCLUDE_DIRS}
 )
 
