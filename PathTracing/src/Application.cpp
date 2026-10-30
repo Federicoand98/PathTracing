@@ -71,6 +71,9 @@ namespace PathTracer {
 		// Test/CI headless: PT_REPROJ=0 spegne la riproiezione temporale (misura del suo costo).
 		if (const char* r = getenv("PT_REPROJ"))
 			m_Renderer.Reproject = (atoi(r) != 0);
+		// Test/CI headless: PT_DENOISE=1 accende il denoiser (misura del suo costo).
+		if (const char* dn = getenv("PT_DENOISE"))
+			m_Renderer.Denoise = (atoi(dn) != 0);
 	}
 
 	Application::~Application() {
@@ -123,7 +126,9 @@ namespace PathTracer {
 		glfwGetFramebufferSize(m_Window, &bufferW, &bufferH);
 
 		glfwMakeContextCurrent(m_Window);
-		glfwSwapInterval(1); // Enable vsync
+		// Test/CI headless: PT_NOVSYNC=1. Con la vsync il driver abbassa i clock per riempire il
+		// frame, quindi i tempi GPU non misurano il costo reale delle passate.
+		glfwSwapInterval(getenv("PT_NOVSYNC") ? 0 : 1); // Enable vsync
 
 		glewExperimental = true;
 
@@ -348,7 +353,8 @@ namespace PathTracer {
 
 		if (m_Timer >= 1.0) {
 			m_FPS = (double)m_NFrames / m_Timer;
-			if (getenv("PT_LOG_FPS")) std::cout << "PTFPS " << m_FPS << std::endl; // TEMP: misura headless
+			if (getenv("PT_LOG_FPS")) std::cout << "PTFPS " << m_FPS << " pt_ms " << m_Renderer.GetPathTraceMs()
+			                                    << " dn_ms " << m_Renderer.GetDenoiseMs() << std::endl; // TEMP: misura headless
 			m_NFrames = 0;
 			m_ResetTimer = time;
 		}
@@ -375,6 +381,8 @@ namespace PathTracer {
 		ImGui::Text("FPS: %.1f", m_FPS);
 		ImGui::SameLine();
 		ImGui::TextDisabled("| %.2f ms/frame", deltaTime * 1000.0f);
+		ImGui::SameLine();
+		ImGui::TextDisabled("| GPU PT %.2f DN %.2f ms", m_Renderer.GetPathTraceMs(), m_Renderer.GetDenoiseMs());
 		ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80.0f);
 		if (ImGui::Button("Screenshot"))
 			m_Renderer.GetFrameBuffer()->SaveScreenshot();
@@ -1791,6 +1799,11 @@ namespace PathTracer {
 	}
 
 	void Application::Render(float deltaTime) {
+		// Test/CI headless: PT_VIEWPORT=<L>x<A> fissa la risoluzione di render. Il layout ImGui
+		// cambia da un avvio all'altro e renderebbe non confrontabili immagini e tempi.
+		if (const char* vp = getenv("PT_VIEWPORT"))
+			sscanf(vp, "%ux%u", &m_ViewportWidth, &m_ViewportHeight);
+
 		m_Camera.OnResize(m_ViewportWidth, m_ViewportHeight);
 		m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
 		m_Renderer.Render(m_Camera, m_World);

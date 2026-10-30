@@ -1,4 +1,5 @@
 #include "TextureArray.h"
+#include <cmath>
 #include "../stb_image.h"
 
 namespace PathTracer {
@@ -49,17 +50,20 @@ namespace PathTracer {
 		// Con questo formato interno il sampler le decodifica in lineare in hardware, cosi'
 		// il path tracer lavora sempre in lineare. L'alpha resta lineare (non e' colore).
 		// Il tonemap finale (fScreenQuad.frag) fa la ri-codifica lineare->sRGB in uscita.
-		glTextureStorage3D(m_Texture, 1, GL_SRGB8_ALPHA8, m_Size, m_Size, m_Layers);
+		// Catena di mip completa: dopo il primo rimbalzo lo shader campiona un livello ridotto.
+		const GLsizei levels = static_cast<GLsizei>(std::log2(m_Size)) + 1;
+		glTextureStorage3D(m_Texture, levels, GL_SRGB8_ALPHA8, m_Size, m_Size, m_Layers);
 
 		glTextureParameteri(m_Texture, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTextureParameteri(m_Texture, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		glTextureParameteri(m_Texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTextureParameteri(m_Texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 		glTextureParameteri(m_Texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 		if (paths.empty()) {
 			// layer bianco: il materiale senza texture moltiplica per 1
 			const std::vector<unsigned char> white(static_cast<size_t>(m_Size) * m_Size * 4, 255);
 			glTextureSubImage3D(m_Texture, 0, 0, 0, 0, m_Size, m_Size, 1, GL_RGBA, GL_UNSIGNED_BYTE, white.data());
+			glGenerateTextureMipmap(m_Texture);
 			return;
 		}
 
@@ -88,5 +92,6 @@ namespace PathTracer {
 		}
 
 		stbi_set_flip_vertically_on_load(false);
+		glGenerateTextureMipmap(m_Texture);
 	}
 }

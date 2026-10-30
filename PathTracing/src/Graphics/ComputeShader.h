@@ -4,6 +4,7 @@
 #define COMPUTESHADER_H
 
 #include <GL/glew.h>
+#include <filesystem>
 #include "ptpch.h"
 #include "../World.h"
 
@@ -26,29 +27,18 @@ namespace PathTracer {
 		unsigned int ssbo_lights;
 		unsigned int ssbo_prims;   // PrimIndex: foglie del BVH di sfere/quad
 		int m_PrimBvhRoot = -1;
+		int m_TlasRoot = -1;
+		int m_GeometryVersion = -1;  // versione di triangoli e BLAS gia' sulla GPU
+		size_t m_BvhBytes = 0;
 		std::string m_Source;
+		std::vector<std::string> m_SourceFiles; // indice = numero di file nei #line
 		bool m_UsePrimBvh = false;
+		bool m_UseTlas = false;
 		int m_NumLights = 0; // emettitori attuali, per l'uniform numLights (NEE)
 
 		ComputeShader(const char* path) : ID(0) {
-			std::string computeCode;
-			std::ifstream computeFile;
-
-			computeFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-
-			try {
-				computeFile.open(path);
-				std::stringstream computeStream;
-				computeStream << computeFile.rdbuf();
-				computeFile.close();
-				computeCode = computeStream.str();
-			}
-			catch (std::ifstream::failure& e) {
-				std::cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " << e.what() << std::endl;
-			}
-
-			m_Source = computeCode;
-			Compile(false); // si parte dalla variante leggera; EnsureVariant la cambia se serve
+			m_Source = LoadSource(path);
+			Compile(false, false); // si parte dalla variante leggera; EnsureVariant la cambia se serve
 
 			glGenBuffers(1, &ssbo_s);
 			glGenBuffers(1, &ssbo_m);
@@ -67,12 +57,14 @@ namespace PathTracer {
 			ResetPickBuffer();
 		}
 
-		// Compila il programma iniettando la variante. USE_PRIM_BVH va messo DOPO la direttiva
+		// Compila il programma iniettando la variante. I define vanno messi DOPO la direttiva
 		// #version, che in GLSL deve restare la prima riga non-commento del sorgente.
-		void Compile(bool usePrimBvh) {
+		void Compile(bool usePrimBvh, bool useTlas) {
 			std::string src = m_Source;
 			const size_t nl = src.find('\n', src.find("#version"));
-			const std::string def = "\n#define USE_PRIM_BVH " + std::string(usePrimBvh ? "1" : "0") + "\n";
+			// #line riallinea i numeri di riga: il define aggiunto non deve spostare gli errori.
+			const std::string def = "\n#define USE_PRIM_BVH " + std::string(usePrimBvh ? "1" : "0")
+				+ "\n#define USE_TLAS " + std::string(useTlas ? "1" : "0") + "\n#line 2 0";
 			if (nl != std::string::npos) src.insert(nl, def);
 
 			const char* code = src.c_str();
@@ -89,13 +81,14 @@ namespace PathTracer {
 			glDeleteShader(compute);
 
 			m_UsePrimBvh = usePrimBvh;
+			m_UseTlas = useTlas;
 		}
 
 		// Ricompila solo se la scena cambia esigenza (raro: al cambio scena). Il programma nuovo
 		// va ri-bindato dal chiamante, e gli uniform si risettano comunque ogni frame per nome.
-		bool EnsureVariant(bool usePrimBvh) {
-			if (usePrimBvh == m_UsePrimBvh) return false;
-			Compile(usePrimBvh);
+		bool EnsureVariant(bool usePrimBvh, bool useTlas) {
+			if (usePrimBvh == m_UsePrimBvh && useTlas == m_UseTlas) return false;
+			Compile(usePrimBvh, useTlas);
 			return true;
 		}
 
@@ -171,6 +164,7 @@ namespace PathTracer {
 
 		int NumLights() const { return m_NumLights; }
 		int PrimBvhRoot() const { return m_PrimBvhRoot; }
+		int TlasRoot() const { return m_TlasRoot; }
 		bool UsesPrimBvh() const { return m_UsePrimBvh; }
 
 		void UpdateWorldBuffer(const World& world, bool fullReset = false) {
@@ -187,14 +181,25 @@ namespace PathTracer {
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_q);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Quad) * world.Quads.size(), world.Quads.data(), GL_STATIC_DRAW);
 
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_t);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TrianglePosition) * world.TriPositions.size(), world.TriPositions.data(), GL_STATIC_DRAW);
+			// I triangoli e i BLAS si ricaricano solo se la geometria e' cambiata: questo metodo
+			// gira a ogni reset, cioe' anche a ogni tick di uno slider, e su Sponza sono decine
+			// di MB. La riallocazione resta per tutto il resto, che pesa pochi KB.
+			const bool geometryChanged = world.GeometryVersion != m_GeometryVersion;
+			m_GeometryVersion = world.GeometryVersion;
 
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_tn);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TriangleNormal) * world.TriNormals.size(), world.TriNormals.data(), GL_STATIC_DRAW);
+			if (geometryChanged) {
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_t);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TrianglePosition) * world.TriPositions.size(), world.TriPositions.data(), GL_STATIC_DRAW);
 
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_tuv);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TriangleUV) * world.TriUVs.size(), world.TriUVs.data(), GL_STATIC_DRAW);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_tn);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TriangleNormal) * world.TriNormals.size(), world.TriNormals.data(), GL_STATIC_DRAW);
+
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_tuv);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TriangleUV) * world.TriUVs.size(), world.TriUVs.data(), GL_STATIC_DRAW);
+
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_idx);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.TriIndex.size(), world.TriIndex.data(), GL_STATIC_DRAW);
+			}
 
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_mesh);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(MeshInfo) * world.Meshes.size(), world.Meshes.data(), GL_STATIC_DRAW);
@@ -202,11 +207,16 @@ namespace PathTracer {
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_cubes);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Box) * world.Boxes.size(), world.Boxes.data(), GL_STATIC_DRAW);
 
+			// BVH4Nodes: la parte BLAS e' stabile, in coda ci sono i BVH di primo livello
+			const size_t bvhBytes = sizeof(BVH4Node) * world.BVH4Nodes.size();
+			const size_t blasBytes = sizeof(BVH4Node) * world.BlasNodeCount;
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_bvh);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(BVH4Node) * world.BVH4Nodes.size(), world.BVH4Nodes.data(), GL_STATIC_DRAW);
-
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_idx);
-			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.TriIndex.size(), world.TriIndex.data(), GL_STATIC_DRAW);
+			if (geometryChanged || bvhBytes != m_BvhBytes) {
+				glBufferData(GL_SHADER_STORAGE_BUFFER, bvhBytes, world.BVH4Nodes.data(), GL_STATIC_DRAW);
+				m_BvhBytes = bvhBytes;
+			} else if (bvhBytes > blasBytes) {
+				glBufferSubData(GL_SHADER_STORAGE_BUFFER, blasBytes, bvhBytes - blasBytes, world.BVH4Nodes.data() + world.BlasNodeCount);
+			}
 
 			// Light list per la NEE: ricostruita qui, quindi resta sempre in sync con la scena
 			// (questo metodo gira a ogni reset/cambio scena, incluso un edit dell'emissione dalla
@@ -219,13 +229,42 @@ namespace PathTracer {
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_lights);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(GPULight) * lights.size(), lights.data(), GL_STATIC_DRAW);
 
-			// Foglie del BVH delle primitive: (indice << 1) | tipo (0 sfera, 1 quad).
+			// Foglie dei BVH di primo livello: codici delle primitive, poi indici delle mesh.
 			m_PrimBvhRoot = world.PrimBvhRoot;
+			m_TlasRoot = world.TlasRoot;
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_prims);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(int) * world.PrimIndex.size(), world.PrimIndex.data(), GL_STATIC_DRAW);
 		}
 
 	private:
+		// GLSL core non ha #include: lo si risolve qui, ricorsivamente, con percorsi relativi al
+		// file che include. I #line riportano gli errori del driver al file e alla riga giusti:
+		// il primo numero negli errori, es. 3(120), e' l'indice in m_SourceFiles.
+		std::string LoadSource(const std::filesystem::path& path) {
+			std::ifstream file(path);
+			if (!file) {
+				std::cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " << path << std::endl;
+				return "";
+			}
+
+			const int fileIndex = static_cast<int>(m_SourceFiles.size());
+			m_SourceFiles.push_back(path.string());
+
+			std::string source = fileIndex > 0 ? "#line 1 " + std::to_string(fileIndex) + "\n" : "";
+			std::string line;
+			for (int number = 1; std::getline(file, line); number++) {
+				const size_t open = line.find('"');
+				const size_t close = line.rfind('"');
+				if (line.rfind("#include", 0) == 0 && open != std::string::npos && close > open) {
+					source += LoadSource(path.parent_path() / line.substr(open + 1, close - open - 1));
+					source += "#line " + std::to_string(number + 1) + " " + std::to_string(fileIndex) + "\n";
+				} else {
+					source += line + "\n";
+				}
+			}
+			return source;
+		}
+
 		void checkCompileErrors(unsigned int shader, std::string type) {
 			int success;
 			char infoLog[1024];
@@ -234,6 +273,8 @@ namespace PathTracer {
 				if (!success) {
 					glGetShaderInfoLog(shader, 1024, NULL, infoLog);
 					std::cout << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+					for (size_t i = 0; i < m_SourceFiles.size(); i++)
+						std::cout << "  " << i << " = " << m_SourceFiles[i] << std::endl;
 				}
 			}
 			else {

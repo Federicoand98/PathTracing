@@ -51,8 +51,9 @@ namespace PathTracer {
 		// ceil: con risoluzioni non multiple di 8 (es. render scale) la divisione intera
 		// perderebbe i pixel di bordo. I thread in eccesso escono subito (bounds-guard nello shader).
 		glDispatchCompute((numGroupX + 7) / 8, (numGroupY + 7) / 8, 1);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		// TEXTURE_FETCH: il fragment di display campiona con un sampler cio' che e' stato scritto
+		// con imageStore. La barriera image non basta, copre solo imageLoad/imageStore successivi.
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 	}
 
 	void PathTracer::ReadPickResult(int& objectType, int& objectIndex, float& distance) {
@@ -74,14 +75,12 @@ namespace PathTracer {
 		if (container.ResetScene || container.NumFrames == 1)
 			m_ComputeShader->UpdateWorldBuffer(container.World);
 
-		if (m_ComputeShader->EnsureVariant(m_ComputeShader->PrimBvhRoot() >= 0))
+		if (m_ComputeShader->EnsureVariant(m_ComputeShader->PrimBvhRoot() >= 0, m_ComputeShader->TlasRoot() >= 0))
 			m_ComputeShader->Bind();
 
 		m_ComputeShader->SetInt("SamplerEnvironment", 0);
 		m_ComputeShader->SetInt("AlbedoTextures", 1);
 		m_AlbedoTextures.AttachSampler(1); // la cubemap occupa gia' l'unit 0
-		m_ComputeShader->SetInt("width", container.Width);
-		m_ComputeShader->SetInt("height", container.Height);
 		m_ComputeShader->SetInt("rendererFrame", container.NumFrames);
 		m_ComputeShader->SetInt("samplesPerPixel", container.SamplesPerPixel);
 		m_ComputeShader->SetInt("rayDepth", container.RayDepth);
@@ -109,6 +108,7 @@ namespace PathTracer {
 
 		m_ComputeShader->SetInt("numLights", container.EnableNEE ? m_ComputeShader->NumLights() : 0);
 		m_ComputeShader->SetInt("primBvhRoot", m_ComputeShader->PrimBvhRoot());
+		m_ComputeShader->SetInt("tlasRoot", m_ComputeShader->TlasRoot());
 		m_ComputeShader->SetWorld();
 
 		m_SkyBox->Bind();

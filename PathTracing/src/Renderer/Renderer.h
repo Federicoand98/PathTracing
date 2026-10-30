@@ -6,6 +6,7 @@
 #include "ptpch.h"
 #include "../Graphics/Texture.h"
 #include "../Graphics/FrameBuffer.h"
+#include "../Graphics/GpuTimer.h"
 #include "Primitives.h"
 #include "../Camera.h"
 #include "PathTracer.h"
@@ -40,6 +41,8 @@ namespace PathTracer {
 		}
 		std::shared_ptr<Texture> GetRenderedImage() const { return m_RenderedImage; }
 		std::shared_ptr<FrameBuffer> GetFrameBuffer() const { return m_FrameBuffer; }
+		float GetPathTraceMs() const { return m_PathTraceTimer.Ms(); }
+		float GetDenoiseMs() const { return m_DenoiseActive ? m_DenoiseTimer.Ms() : 0.0f; }
 	public:
 		bool PathTracing = true;
 		bool PostProcessing = true;
@@ -88,6 +91,9 @@ namespace PathTracer {
 		std::shared_ptr<PostProcesser> m_PostProcesser;
 		std::shared_ptr<Denoiser> m_Denoiser;
 		std::shared_ptr<FrameBuffer> m_FrameBuffer;
+		GpuTimer m_PathTraceTimer;
+		GpuTimer m_DenoiseTimer;
+		bool m_DenoiseActive = false; // il denoiser ha girato nell'ultimo frame
 		std::shared_ptr<Texture> m_RenderedImage;
 		// AOV del frame corrente (image unit 1). Guida del denoiser e della demodulazione.
 		std::shared_ptr<Texture> m_AlbedoAOV;

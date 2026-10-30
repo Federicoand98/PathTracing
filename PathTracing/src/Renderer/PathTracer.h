@@ -9,8 +9,6 @@
 namespace PathTracer {
 
 	struct ComputeUniformContainer {
-		uint32_t Width;
-		uint32_t Height;
 		uint32_t NumFrames;
 		uint32_t SamplesPerPixel;
 		uint32_t RayDepth;

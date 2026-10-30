@@ -3,33 +3,34 @@
 // À-trous edge-avoiding wavelet filter (Dammertz et al. 2010), guidato dagli AOV.
 //
 // E' un *view filter* read-only (vedi docs/adr/0001): NON tocca il buffer di accumulo del
-// path tracer, legge il beauty accumulato + gli AOV e produce un'immagine ripulita da mostrare.
+// path tracer, legge l'irradianza accumulata + gli AOV e produce un'immagine ripulita da mostrare.
 // Cosi' l'accumulazione converge comunque al ground truth e il denoiser puo' spegnersi da solo
 // man mano che i campioni crescono (vedi 'strength').
 //
 // Una sola iterazione à-trous: il driver la dispatcha 5 volte in ping-pong con stepSize
 // 1,2,4,8,16 (kernel 5x5 B3-spline "bucato" che raddoppia il passo ad ogni iterazione ->
-// supporto crescente a costo costante). Demodulazione e rimodulazione sono ripiegate nella
-// prima e nell'ultima passata via flag, cosi' le passate intermedie filtrano irradianza pura.
+// supporto crescente a costo costante). La demodulazione avviene a monte, nell'accumulatore
+// (ADR 0002): qui si filtra irradianza pura e l'ultima passata la rimodula.
 //
-//   irradianza = beauty / albedo   (demodulate, 1a passata)
-//   ... 5 passate à-trous su irradianza, edge-stop su luminanza/normale/profondita' ...
+//   ... 5 passate à-trous su irradianza, edge-stop su luminanza/normale/profondita'/albedo ...
 //   finale = mix(beauty, irradianza_filtrata * albedo, strength)   (remodulate, ultima passata)
 //
-// Demodulare toglie il dettaglio d'albedo (texture, tinte) dal segnale da filtrare: si sfoca
-// solo l'illuminazione, e il dettaglio ad alta frequenza viene reintrodotto intatto in uscita.
+// Filtrare irradianza tiene fuori il dettaglio d'albedo (texture, tinte): si sfoca solo
+// l'illuminazione, e il dettaglio ad alta frequenza viene reintrodotto intatto in uscita.
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
-// Colore ping-pong: irradianza in ingresso/uscita (beauty grezzo quando demodulate == 1).
-layout(rgba32f, binding = 0) uniform readonly  image2D imgIn;
-layout(rgba32f, binding = 1) uniform writeonly image2D imgOut;
+#include "common/constants.glsl"
+
+// Colore ping-pong: irradianza in ingresso/uscita, rgb + sample count N in alpha.
+layout(rgba32f, binding = 0) uniform restrict readonly  image2D imgIn;
+layout(rgba32f, binding = 1) uniform restrict writeonly image2D imgOut;
 // AOV del primo hit, del frame corrente. Normale e depth sono impacchettati in un unico
 // buffer (rgb / a): il driver da' solo 8 image unit e la storia della riproiezione ne mangia.
-layout(rgba32f, binding = 2) uniform readonly  image2D imgAlbedo;
-layout(rgba32f, binding = 3) uniform readonly  image2D imgNormalDepth;
+layout(rgba32f, binding = 2) uniform restrict readonly  image2D imgAlbedo;
+layout(rgba32f, binding = 3) uniform restrict readonly  image2D imgNormalDepth;
 // Beauty grezzo accumulato: serve solo all'ultima passata per il blend di convergenza.
-layout(rgba32f, binding = 4) uniform readonly  image2D imgBeauty;
+layout(rgba32f, binding = 4) uniform restrict readonly  image2D imgBeauty;
 
 uniform int   stepSize;    // passo à-trous: 1,2,4,8,16 lungo le 5 iterazioni
 uniform float cPhi;        // sigma edge-stop luminanza (grande = piu' sfoca)
@@ -41,13 +42,6 @@ uniform float strength;    // [0,1] peso manuale del denoise nel blend finale
 uniform int   autoFade;    // 1 = scala anche per 1/sqrt(N), per-pixel
 
 const float EPS = 1e-3;
-// Floor della demodulazione. DEVE combaciare con quello di PathTracing.comp: e' con quel valore
-// che l'irradianza e' stata prodotta, e rimodulare con un altro non tornerebbe indietro esatto.
-const float ALBEDO_FLOOR = 0.05;
-
-float Luminance(vec3 c) {
-    return dot(c, vec3(0.2126, 0.7152, 0.0722));
-}
 
 // imgIn e' GIA' irradianza: la demodulazione e' risalita nell'accumulatore del path tracer
 // (ADR 0002), quindi qui non c'e' piu' niente da dividere. Nell'alpha viaggia il sample count
@@ -75,9 +69,21 @@ void main() {
     vec3  aCenter = imageLoad(imgAlbedo, uv).rgb;
     float lCenter = Luminance(cCenter);
 
-    // Un pixel di sfondo (nessun hit: normale nulla, depth enorme) non ha vicini coerenti:
-    // lo lascio passare intatto per non trascinarci dentro il colore della geometria.
-    bool background = dot(nCenter, nCenter) < 1e-6;
+    // Auto-fade PER-PIXEL: ogni pixel ha il suo N (la disocclusione lo azzera solo dove
+    // serve). Cosi' il filtro si spegne dove la storia e' matura e resta forte proprio
+    // sui bordi appena scoperti, che sono i piu' rumorosi. Con un N globale era impossibile.
+    float s = strength;
+    if(autoFade == 1)
+        s *= clamp(inversesqrt(max(nSamples, 1.0)), 0.0, 1.0);
+
+    // Un pixel di sfondo (nessun hit: normale nulla, depth enorme) non ha vicini coerenti: lo
+    // lascio passare intatto per non trascinarci dentro il colore della geometria. Vale lo
+    // stesso se il suo peso nel blend e' trascurabile (stessa soglia di Renderer::Render):
+    // uscire qui evita i 25 tap del kernel.
+    if(dot(nCenter, nCenter) < 1e-6 || s <= 0.01) {
+        imageStore(imgOut, uv, remodulate == 1 ? vec4(imageLoad(imgBeauty, uv).rgb, 1.0) : vec4(cCenter, nSamples));
+        return;
+    }
 
     vec3  sum  = vec3(0.0);
     float wsum = 0.0;
@@ -121,18 +127,10 @@ void main() {
         vec3 denoised = filtered * albedo;
         vec3 raw      = imageLoad(imgBeauty, uv).rgb;
 
-        // Auto-fade PER-PIXEL: ogni pixel ha il suo N (la disocclusione lo azzera solo dove
-        // serve). Cosi' il filtro si spegne dove la storia e' matura e resta forte proprio
-        // sui bordi appena scoperti, che sono i piu' rumorosi. Con un N globale era impossibile.
-        float s = strength;
-        if(autoFade == 1)
-            s *= clamp(inversesqrt(max(nSamples, 1.0)), 0.0, 1.0);
-
-        vec3 outColor = background ? raw : mix(raw, denoised, s);
-        imageStore(imgOut, uv, vec4(outColor, 1.0));
+        imageStore(imgOut, uv, vec4(mix(raw, denoised, s), 1.0));
     } else {
         // Passate intermedie: resta in spazio irradianza, e porta avanti N nell'alpha perche'
         // l'ultima passata possa pesare il fade per-pixel.
-        imageStore(imgOut, uv, vec4(background ? cCenter : filtered, nSamples));
+        imageStore(imgOut, uv, vec4(filtered, nSamples));
     }
 }

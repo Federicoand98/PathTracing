@@ -121,11 +121,13 @@ namespace PathTracer {
 		glm::mat4 viewProjection = camera.GetProjection() * camera.GetView();
 		bool aovNeedsUpdate = (viewProjection != m_PrevViewProjection) || m_PTCounter <= 1 || m_sceneReset;
 
-		ComputeUniformContainer container = { rw, rh, m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, FireflyClamp, Aperture, FocusDistance, AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, HistoryCap, NEE, pickPixel, *m_World, *m_Camera };
+		ComputeUniformContainer container = { m_PTCounter, m_SamplesPerPixel, m_RayDepth, m_sceneReset, EnvironmentMapping, BVHDebug, BVHHeatScale, FireflyClamp, Aperture, FocusDistance, AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, HistoryCap, NEE, pickPixel, *m_World, *m_Camera };
 
 		m_PathTracer->Begin();
 		m_PathTracer->UploadUniforms(container);
+		m_PathTraceTimer.Begin();
 		m_PathTracer->DispatchCompute(rw, rh);
+		m_PathTraceTimer.End();
 
 		if (m_PickRequested) {
 			m_PathTracer->ReadPickResult(m_PickType, m_PickIndex, m_PickDistance);
@@ -150,10 +152,13 @@ namespace PathTracer {
 		if (DenoiseAutoFade && m_FramesSinceMove > 1)
 			minFade = std::clamp(1.0f / std::sqrt(static_cast<float>(m_FramesSinceMove)), 0.0f, 1.0f);
 
-		if (Denoise && AOVView == 0 && !BVHDebug && DenoiseStrength * minFade > 0.01f) {
+		m_DenoiseActive = Denoise && AOVView == 0 && !BVHDebug && DenoiseStrength * minFade > 0.01f;
+		if (m_DenoiseActive) {
+			m_DenoiseTimer.Begin();
 			auto denoised = m_Denoiser->Run(*m_Irradiance[cur], *m_RenderedImage, *m_AlbedoAOV,
 			                                *m_NormalDepth[cur], DenoiseStrength, DenoiseAutoFade,
 			                                DenoiseCPhi, DenoiseNPhi, DenoisePPhi, DenoiseAPhi);
+			m_DenoiseTimer.End();
 			denoised->Bind(); // TEXTURE0 (2D) = immagine ripulita, campionata dal fragment di display
 		}
 

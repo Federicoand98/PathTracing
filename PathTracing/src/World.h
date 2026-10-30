@@ -63,9 +63,10 @@ namespace PathTracer {
 		// emissivi delle mesh sono esclusi (nessuna scena li usa; li campionerebbe il BSDF).
 		std::vector<GPULight> CollectLights() const;
 
-		// Ricostruisce il BVH di sfere e quad. Va richiamata dopo OGNI modifica a quelle
-		// collezioni (creazione, rimozione, spostamento da gizmo): il BVH le indicizza per
-		// posizione, quindi una geometria mossa senza rebuild verrebbe intersecata sbagliata.
+		// Ricostruisce i BVH di primo livello (sfere e quad, TLAS delle mesh). Va richiamata dopo
+		// OGNI modifica a quelle collezioni (creazione, rimozione, spostamento da gizmo): i BVH le
+		// indicizzano per posizione, quindi una geometria mossa senza rebuild verrebbe intersecata
+		// sbagliata.
 		void RebuildPrimBVH();
 	public:
 		glm::vec3 BackgroundColor;
@@ -91,6 +92,14 @@ namespace PathTracer {
 		// con tipo 0 = sfera, 1 = quad.
 		std::vector<int> PrimIndex;
 		int PrimBvhRoot = -1;              // radice in BVH4Nodes, -1 = nessuna primitiva
+		// TLAS: BVH sulle AABB world delle mesh. Sta in coda a BVH4Nodes come quello delle
+		// primitive e le sue foglie contengono indici di mesh, in coda a PrimIndex.
+		int TlasRoot = -1;                 // radice in BVH4Nodes, -1 = scansione lineare
+		// I primi BlasNodeCount nodi di BVH4Nodes sono i BLAS, che cambiano solo con la geometria.
+		// Il resto (BVH primitive + TLAS) si ricostruisce a ogni reset.
+		int BlasNodeCount = 0;
+		// Cresce a ogni modifica di triangoli e BLAS: evita di ricaricarli sulla GPU a ogni reset.
+		int GeometryVersion = 0;
 		int CurrentScene = 6;
 	private:
 		void PrepareMaterials();
@@ -112,6 +121,8 @@ namespace PathTracer {
 		Material MaterialFromMtl(const MtlMaterial& mtl);  // MtlMaterial -> Material dell'engine
 
 		void BuildBVH();
+		void BuildPrimBVH();
+		void BuildTLAS();
 
 		void CreateCornellBox();
 	};

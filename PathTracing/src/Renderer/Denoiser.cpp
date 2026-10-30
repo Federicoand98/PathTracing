@@ -50,6 +50,7 @@ namespace PathTracer {
 			// ogni passata legge l'output della precedente: barriera image obbligatoria
 			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 		}
+		glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT); // il risultato viene campionato dal fragment
 
 		m_Shader->Unbind();
 		return m_PingA; // l'ultima passata (i=4, pari) ha scritto in PingA

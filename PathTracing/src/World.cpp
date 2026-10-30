@@ -65,6 +65,7 @@ namespace PathTracer {
 		Quads.clear();
 		Materials.clear();
 		Triangles.clear();
+		GeometryVersion++;
 		TriPositions.clear();
 		TriNormals.clear();
 		TriUVs.clear();
@@ -75,6 +76,10 @@ namespace PathTracer {
 		Boxes.clear();
 		BVH4Nodes.clear();
 		TriIndex.clear();
+		BlasNodeCount = 0;
+		PrimIndex.clear();
+		PrimBvhRoot = -1;
+		TlasRoot = -1;
 	}
 
 	void World::PrepareMaterials() {
@@ -1061,6 +1066,7 @@ namespace PathTracer {
 
 		BVH4Nodes.clear();
 		TriIndex.clear();
+		GeometryVersion++;
 		TriPositions.clear();
 		TriNormals.clear();
 		TriUVs.clear();
@@ -1135,18 +1141,24 @@ namespace PathTracer {
 			std::cerr << "Warning: BVH depth (" << maxDepth << ") too deep for shader stack ("
 				<< SHADER_MAX_STACK << "): parts of the mesh may not render" << std::endl;
 
+		BlasNodeCount = static_cast<int>(BVH4Nodes.size());
 		RebuildPrimBVH();
 	}
 
 	void World::RebuildPrimBVH() {
-		// I nodi del BVH primitive stanno in coda a BVH4Nodes. Un rebuild successivo al primo
+		// I nodi di primo livello stanno in coda a BVH4Nodes. Un rebuild successivo al primo
 		// (es. dopo aver mosso una sfera col gizmo) deve buttare via SOLO quelli, lasciando
-		// intatti i BLAS delle mesh che li precedono: PrimBvhRoot e' proprio il confine.
-		if (PrimBvhRoot >= 0 && PrimBvhRoot <= static_cast<int>(BVH4Nodes.size()))
-			BVH4Nodes.resize(static_cast<size_t>(PrimBvhRoot));
+		// intatti i BLAS delle mesh che li precedono.
+		BVH4Nodes.resize(static_cast<size_t>(BlasNodeCount));
 		PrimIndex.clear();
 		PrimBvhRoot = -1;
+		TlasRoot = -1;
 
+		BuildPrimBVH();
+		BuildTLAS();
+	}
+
+	void World::BuildPrimBVH() {
 		const int nSpheres = static_cast<int>(Spheres.size());
 		const int nQuads = static_cast<int>(Quads.size());
 
@@ -1230,6 +1242,53 @@ namespace PathTracer {
 		// gli indici del builder sono posizioni in 'boxes': si traducono nei codici (idx<<1)|tipo
 		for (int local : builder.GetIndices())
 			PrimIndex.push_back(codes[local]);
+	}
+
+	void World::BuildTLAS() {
+		// Come per le primitive, sotto una soglia l'albero non conviene: il suo stack si somma a
+		// quello di hitBVH e abbassa l'occupancy dell'intero kernel, a fronte di una scansione
+		// lineare che su poche mesh costa quasi nulla (misurato: pareggio poco sopra 64 mesh, 8x a
+		// 1000, 70x a 8000). Sotto soglia lo shader resta la variante
+		// senza TLAS. Test/CI: PT_TLAS=0 forza la scansione lineare, =1 forza il TLAS.
+		constexpr int MIN_MESHES_FOR_TLAS = 64;
+		int force = -1;
+		if (const char* e = getenv("PT_TLAS")) force = atoi(e);
+		if (force == 0) return;
+
+		std::vector<AABB> boxes;
+		std::vector<int> meshes;
+		for (int i = 0; i < static_cast<int>(Meshes.size()); i++) {
+			if (static_cast<int>(Meshes[i].NumTriangles) == 0) continue;
+			// mesh piatte: AABB a spessore nullo, stesso gonfiaggio dei quad (vedi BuildPrimBVH)
+			const glm::vec3 pad(1e-4f);
+			AABB b;
+			b.expand(glm::vec3(Meshes[i].BoundsMin) - pad);
+			b.expand(glm::vec3(Meshes[i].BoundsMax) + pad);
+			boxes.push_back(b);
+			meshes.push_back(i);
+		}
+		if (boxes.empty() || (force != 1 && static_cast<int>(boxes.size()) < MIN_MESHES_FOR_TLAS))
+			return;
+
+		AABBBVH builder(boxes);
+		int wideDepth = 0;
+		std::vector<BVH4Node> wide = WideBVH::Collapse(builder.GetNodes(), wideDepth);
+
+		const int nodeOffset = static_cast<int>(BVH4Nodes.size());
+		const int leafOffset = static_cast<int>(PrimIndex.size());
+		TlasRoot = nodeOffset;
+
+		for (BVH4Node node : wide) {
+			for (int c = 0; c < 4; c++) {
+				if (node.count[c] < 0) continue;                      // slot vuoto
+				if (node.count[c] == 0) node.child[c] += nodeOffset;  // figlio interno
+				else node.child[c] += leafOffset;                     // foglia: primo indice in PrimIndex
+			}
+			BVH4Nodes.push_back(node);
+		}
+
+		for (int local : builder.GetIndices())
+			PrimIndex.push_back(meshes[local]);
 	}
 
 	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex) {
