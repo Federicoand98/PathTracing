@@ -1,8 +1,7 @@
 #pragma once
 
 #include "ptpch.h"
-#include "../Graphics/ComputeShader.h"
-#include "../Graphics/Texture.h"
+#include "../Vulkan/ComputePipeline.h"
 
 namespace PathTracer {
 
@@ -14,23 +13,23 @@ namespace PathTracer {
 	class Denoiser {
 	public:
 		Denoiser();
+		~Denoiser();
 
-		// Alloca/ridimensiona le due texture di ping-pong alla risoluzione di render.
+		// Alloca/ridimensiona le due immagini di ping-pong alla risoluzione di render.
 		void Resize(uint32_t width, uint32_t height);
 
-		// Esegue le 5 iterazioni à-trous (stepSize 1,2,4,8,16) alternando le due texture.
+		// Registra le 5 iterazioni à-trous (stepSize 1,2,4,8,16) alternando le due immagini.
 		// L'ingresso e' l'ACCUMULATORE di irradianza del path tracer, gia' demodulato (ADR 0002):
 		// il filtro non demodula piu' nulla, rimodula solo all'ultima passata e mescola col beauty.
 		// irradiance porta N nell'alpha, usato per l'auto-fade per-pixel.
 		// normalDepth: rgb = normale world, a = profondita' (impacchettati, vedi Renderer).
 		// strength [0,1] = peso manuale; autoFade lo scala anche per 1/sqrt(N), per-pixel.
-		// Ritorna la texture finale (spazio colore) da bindare come sampler di display.
-		std::shared_ptr<Texture> Run(Texture& irradiance, Texture& beauty, Texture& albedo, Texture& normalDepth,
-		                             float strength, bool autoFade, float cPhi, float nPhi, float pPhi, float aPhi);
+		// Ritorna l'immagine finale (spazio colore) da passare al tonemap.
+		const GpuImage& Run(VkCommandBuffer cmd, const GpuImage& irradiance, const GpuImage& beauty, const GpuImage& albedo,
+		                    const GpuImage& normalDepth, float strength, bool autoFade, float cPhi, float nPhi, float pPhi, float aPhi);
 	private:
-		std::shared_ptr<ComputeShader> m_Shader;
-		std::shared_ptr<Texture> m_PingA;
-		std::shared_ptr<Texture> m_PingB;
-		uint32_t m_Width = 0, m_Height = 0;
+		std::unique_ptr<ComputePipeline> m_Pipeline;
+		GpuImage m_PingA;
+		GpuImage m_PingB;
 	};
 }

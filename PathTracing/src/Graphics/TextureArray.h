@@ -4,12 +4,12 @@
 #define TEXTUREARRAY_H
 
 #include "ptpch.h"
-#include <GL/glew.h>
+#include "../Vulkan/VulkanContext.h"
 
 namespace PathTracer {
 
 	/*
-	* Un GL_TEXTURE_2D_ARRAY con una texture per layer.
+	* Un'immagine 2D array con una texture per layer.
 	*
 	* Perche' un array e non N sampler2D: nel path tracer l'indice della texture dipende
 	* dal materiale colpito, che varia da raggio a raggio dentro la stessa invocazione.
@@ -21,21 +21,18 @@ namespace PathTracer {
 	class TextureArray {
 	public:
 		TextureArray() = default;
-		~TextureArray();
+		~TextureArray() { Release(); }
 
-		// Se paths e' vuoto crea comunque un layer 1x1 bianco: campionare una texture
-		// incompleta e' undefined behavior, e lo shader campiona sempre.
+		// Se paths e' vuoto crea comunque un layer bianco: lo shader campiona sempre.
 		void Load(const std::vector<std::string>& paths, uint32_t size = 1024);
-		void AttachSampler(int unit) const { glBindTextureUnit(unit, m_Texture); }
-
-		int GetLayerCount() const { return m_Layers; }
-
-	private:
 		void Release();
 
-		GLuint m_Texture = 0;
-		uint32_t m_Size = 0;
-		int m_Layers = 0;
+		const GpuImage& Image() const { return m_Image; }
+		VkSampler Sampler() const { return m_Sampler; }
+
+	private:
+		GpuImage m_Image;
+		VkSampler m_Sampler = VK_NULL_HANDLE;
 	};
 }
 

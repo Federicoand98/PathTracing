@@ -130,7 +130,7 @@ namespace PathTracer {
 									  { "max", ToJson(glm::vec3(b.Max)) },
 									  { "material", (int)b.MaterialIndex } });
 
-		// La mesh si salva come path OBJ + trasformazione + materiale: i triangoli e il BVH
+		// La mesh si salva come path OBJ + trasformazione + materiale: i triangoli e i BLAS
 		// si ricostruiscono al load. Una mesh senza path (sorgente ignota) viene saltata.
 		for (size_t i = 0; i < m_World.Meshes.size(); i++) {
 			const std::string meshPath = i < m_World.MeshPaths.size() ? m_World.MeshPaths[i] : "";
@@ -209,7 +209,7 @@ namespace PathTracer {
 
 		m_World.TexturePaths = root.value("textures", std::vector<std::string>{});
 
-		// AddMesh ricostruisce l'intero BVH a ogni chiamata: su tante mesh pesanti il load
+		// AddMesh rifa' i buffer dei triangoli a ogni chiamata: su tante mesh pesanti il load
 		// puo' impiegare qualche secondo. Va bene, e' un'operazione one-shot.
 		for (const json& mj : root.value("meshes", json::array())) {
 			const std::string meshPath = mj.value("path", std::string());

@@ -229,7 +229,7 @@ namespace PathTracer {
 			<< triTotal << " triangoli, " << Materials.size() << " materiali, "
 			<< TexturePaths.size() << " texture" << std::endl;
 
-		BuildBVH();
+		BuildTriangleBuffers();
 		return true;
 	}
 

@@ -4,13 +4,12 @@
 #define RENDERER_H
 
 #include "ptpch.h"
-#include "../Graphics/Texture.h"
-#include "../Graphics/FrameBuffer.h"
-#include "../Graphics/GpuTimer.h"
+#include "imgui.h"
 #include "Primitives.h"
 #include "../Camera.h"
+#include "../World.h"
+#include "../Vulkan/ComputePipeline.h"
 #include "PathTracer.h"
-#include "PostProcesser.h"
 #include "Denoiser.h"
 
 namespace PathTracer {
@@ -39,16 +38,16 @@ namespace PathTracer {
 			m_PickAvailable = false;
 			return true;
 		}
-		std::shared_ptr<Texture> GetRenderedImage() const { return m_RenderedImage; }
-		std::shared_ptr<FrameBuffer> GetFrameBuffer() const { return m_FrameBuffer; }
-		float GetPathTraceMs() const { return m_PathTraceTimer.Ms(); }
-		float GetDenoiseMs() const { return m_DenoiseActive ? m_DenoiseTimer.Ms() : 0.0f; }
+		ImU64 GetDisplayTexture() const { return reinterpret_cast<ImU64>(m_DisplaySet); }
+		std::string SaveScreenshot(const std::string& path = "");
+		void SaveHdr(const std::string& path);
+		void Release();
+		float GetPathTraceMs() const { return m_PathTraceMs; }
+		float GetDenoiseMs() const { return m_DenoiseMs; }
 	public:
 		bool PathTracing = true;
 		bool PostProcessing = true;
 		bool EnvironmentMapping = true;
-		bool BVHDebug = false;
-		float BVHHeatScale = 64.0f;
 		float FireflyClamp = 0.0f;   // 0 = off
 		float Aperture = 0.0f;       // raggio lente; 0 = pinhole, niente DOF
 		float FocusDistance = 5.0f;  // distanza del piano di fuoco
@@ -81,29 +80,41 @@ namespace PathTracer {
 		int m_SamplesPerPixel = 1;
 		int m_RayDepth = 5;
 	private:
-		void DrawSceneQuad();
 		void UpdateAccumulationCounter();
 		void ResizeRenderTargets(uint32_t width, uint32_t height); // colore + AOV, stessa risoluzione
+		void ResizeDisplay(uint32_t width, uint32_t height);
+		void ReadImage(const GpuImage& image, void* pixels, size_t bytes);
+		void ReadTimestamps();
 	private:
 		const Camera* m_Camera = nullptr;
-		World* m_World = nullptr; // non-const: il Renderer mantiene aggiornato il BVH delle primitive
-		std::shared_ptr<PathTracer> m_PathTracer;
-		std::shared_ptr<PostProcesser> m_PostProcesser;
-		std::shared_ptr<Denoiser> m_Denoiser;
-		std::shared_ptr<FrameBuffer> m_FrameBuffer;
-		GpuTimer m_PathTraceTimer;
-		GpuTimer m_DenoiseTimer;
-		bool m_DenoiseActive = false; // il denoiser ha girato nell'ultimo frame
-		std::shared_ptr<Texture> m_RenderedImage;
-		// AOV del frame corrente (image unit 1). Guida del denoiser e della demodulazione.
-		std::shared_ptr<Texture> m_AlbedoAOV;
+		const World* m_World = nullptr;
+		std::unique_ptr<PathTracer> m_PathTracer;
+		std::unique_ptr<Denoiser> m_Denoiser;
+		std::unique_ptr<ComputePipeline> m_Tonemap;
+
+		GpuImage m_RenderedImage;
+		// AOV del frame corrente. Guida del denoiser e della demodulazione.
+		GpuImage m_AlbedoAOV;
 		// Ping-pong: il compute scrive nell'indice corrente e legge la storia dall'altro.
 		// Si scambiano a ogni frame, cosi' la storia e' gratis (nessuna copia).
-		// NormalDepth impacchetta normale (rgb) e profondita' (a): il driver da' solo 8 image
-		// unit e la storia raddoppia il conto dei buffer. Irradiance porta N nell'alpha.
-		std::shared_ptr<Texture> m_NormalDepth[2];
-		std::shared_ptr<Texture> m_Irradiance[2];
+		// NormalDepth impacchetta normale (rgb) e profondita' (a). Irradiance porta N nell'alpha.
+		GpuImage m_NormalDepth[2];
+		GpuImage m_Irradiance[2];
 		int m_Ping = 0;
+
+		GpuImage m_Display;       // RGBA8 tonemappata, mostrata da ImGui
+		VkSampler m_DisplaySampler = VK_NULL_HANDLE;
+		VkDescriptorSet m_DisplaySet = VK_NULL_HANDLE;
+		int screenshotsCount = 0;
+
+		// Timestamp GPU: inizio e fine di path tracer e denoiser. I risultati sono del frame scorso.
+		VkQueryPool m_Timestamps = VK_NULL_HANDLE;
+		bool m_TimestampsWritten = false;
+		bool m_DenoiseWritten = false;
+		float m_PathTraceMs = 0.0f;
+		float m_DenoiseMs = 0.0f;
+		bool m_PickPending = false; // il dispatch del picking e' nel frame scorso, risultato da leggere
+
 		// Frame trascorsi da quando la camera si e' fermata. E' il proxy del minimo N sullo
 		// schermo: un pixel disoccluso all'istante dello stop riparte da N=1 e cresce di 1 al
 		// frame, quindi dopo k frame fermi il minimo N vale ~k. m_PTCounter non serve piu' allo
@@ -112,8 +123,6 @@ namespace PathTracer {
 		// Camera del frame precedente: serve al compute per ritrovare e validare la storia.
 		glm::mat4 m_PrevViewProjection{ 1.0f };
 		glm::vec3 m_PrevCameraPosition{ 0.0f };
-		unsigned int m_QuadVAO = 0;
-		unsigned int m_QuadVBO = 0;
 		uint32_t m_Width = 0, m_Height = 0;
 		uint32_t m_RenderW = 0, m_RenderH = 0;  // risoluzione effettiva dell'ultimo dispatch
 		bool m_Interacting = false;

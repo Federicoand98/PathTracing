@@ -1,4 +1,4 @@
-#version 430 core
+#version 460 core
 
 // À-trous edge-avoiding wavelet filter (Dammertz et al. 2010), guidato dagli AOV.
 //
@@ -32,14 +32,16 @@ layout(rgba32f, binding = 3) uniform restrict readonly  image2D imgNormalDepth;
 // Beauty grezzo accumulato: serve solo all'ultima passata per il blend di convergenza.
 layout(rgba32f, binding = 4) uniform restrict readonly  image2D imgBeauty;
 
-uniform int   stepSize;    // passo à-trous: 1,2,4,8,16 lungo le 5 iterazioni
-uniform float cPhi;        // sigma edge-stop luminanza (grande = piu' sfoca)
-uniform float nPhi;        // esponente edge-stop normale (grande = bordi di normale piu' netti)
-uniform float pPhi;        // sigma edge-stop profondita' (unita' mondo)
-uniform float aPhi;        // sigma edge-stop albedo (piccolo = blocca i bordi di materiale)
-uniform int   remodulate;  // 1 = ultima passata: rimoltiplica per albedo e fai il blend
-uniform float strength;    // [0,1] peso manuale del denoise nel blend finale
-uniform int   autoFade;    // 1 = scala anche per 1/sqrt(N), per-pixel
+layout(push_constant) uniform Params {
+    int   stepSize;    // passo à-trous: 1,2,4,8,16 lungo le 5 iterazioni
+    float cPhi;        // sigma edge-stop luminanza (grande = piu' sfoca)
+    float nPhi;        // esponente edge-stop normale (grande = bordi di normale piu' netti)
+    float pPhi;        // sigma edge-stop profondita' (unita' mondo)
+    float aPhi;        // sigma edge-stop albedo (piccolo = blocca i bordi di materiale)
+    int   remodulate;  // 1 = ultima passata: rimoltiplica per albedo e fai il blend
+    float strength;    // [0,1] peso manuale del denoise nel blend finale
+    int   autoFade;    // 1 = scala anche per 1/sqrt(N), per-pixel
+};
 
 const float EPS = 1e-3;
 

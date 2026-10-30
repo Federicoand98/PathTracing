@@ -1,31 +1,58 @@
 #include "Denoiser.h"
 
-#include <GL/glew.h>
-
 namespace PathTracer {
 
+	namespace {
+		// Deve combaciare con il blocco push_constant di Denoiser.comp.
+		struct DenoiserParams {
+			int StepSize;
+			float CPhi, NPhi, PPhi, APhi;
+			int Remodulate;
+			float Strength;
+			int AutoFade;
+		};
+	}
+
 	Denoiser::Denoiser() {
-		m_Shader = std::make_shared<ComputeShader>("shaders/Denoiser.comp");
+		m_Pipeline = std::make_unique<ComputePipeline>("shaders/spv/Denoiser.spv",
+			std::vector<VkDescriptorType>(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE), static_cast<uint32_t>(sizeof(DenoiserParams)));
+	}
+
+	Denoiser::~Denoiser() {
+		VulkanContext& vk = VulkanContext::Get();
+		vk.DestroyImage(m_PingA);
+		vk.DestroyImage(m_PingB);
 	}
 
 	void Denoiser::Resize(uint32_t width, uint32_t height) {
-		if (!m_PingA) m_PingA = std::make_shared<Texture>(GL_TEXTURE_2D);
-		if (!m_PingB) m_PingB = std::make_shared<Texture>(GL_TEXTURE_2D);
-		m_PingA->Resize(width, height); // no-op se la dimensione non e' cambiata
-		m_PingB->Resize(width, height);
-		m_Width = width;
-		m_Height = height;
+		if (m_PingA.Width == width && m_PingA.Height == height)
+			return;
+
+		VulkanContext& vk = VulkanContext::Get();
+		GpuImage oldA = m_PingA, oldB = m_PingB;
+		vk.Defer([oldA, oldB]() mutable {
+			VulkanContext::Get().DestroyImage(oldA);
+			VulkanContext::Get().DestroyImage(oldB);
+		});
+
+		const VkImageUsageFlags usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+		m_PingA = vk.CreateImage(VK_FORMAT_R32G32B32A32_SFLOAT, width, height, usage);
+		m_PingB = vk.CreateImage(VK_FORMAT_R32G32B32A32_SFLOAT, width, height, usage);
+		vk.TransitionToGeneral(m_PingA);
+		vk.TransitionToGeneral(m_PingB);
 	}
 
-	std::shared_ptr<Texture> Denoiser::Run(Texture& irradiance, Texture& beauty, Texture& albedo, Texture& normalDepth,
-	                                       float strength, bool autoFade, float cPhi, float nPhi, float pPhi, float aPhi) {
-		m_Shader->Bind();
-		m_Shader->SetFloat("cPhi", cPhi);
-		m_Shader->SetFloat("nPhi", nPhi);
-		m_Shader->SetFloat("pPhi", pPhi);
-		m_Shader->SetFloat("aPhi", aPhi);
-		m_Shader->SetFloat("strength", strength);
-		m_Shader->SetInt("autoFade", autoFade ? 1 : 0);
+	const GpuImage& Denoiser::Run(VkCommandBuffer cmd, const GpuImage& irradiance, const GpuImage& beauty, const GpuImage& albedo,
+	                              const GpuImage& normalDepth, float strength, bool autoFade, float cPhi, float nPhi, float pPhi, float aPhi) {
+		m_Pipeline->Bind(cmd);
+
+		DenoiserParams params{};
+		params.CPhi = cPhi;
+		params.NPhi = nPhi;
+		params.PPhi = pPhi;
+		params.APhi = aPhi;
+		params.Strength = strength;
+		params.AutoFade = autoFade ? 1 : 0;
 
 		// Passo à-trous raddoppiato ad ogni iterazione: kernel 5x5 "bucato" -> supporto che
 		// cresce (5,9,17,33,65 px) a costo per-passata costante.
@@ -34,25 +61,19 @@ namespace PathTracer {
 		for (int i = 0; i < 5; i++) {
 			// Ping-pong. i=0 legge l'accumulatore di irradianza; le intermedie restano in
 			// irradianza; i=4 rimodula + blend. Sequenza degli output: A,B,A,B,A -> finale in PingA.
-			Texture* in  = (i == 0) ? &irradiance : ((i % 2 == 1) ? m_PingA.get() : m_PingB.get());
-			Texture* out = (i % 2 == 0) ? m_PingA.get() : m_PingB.get();
+			const GpuImage& in = (i == 0) ? irradiance : ((i % 2 == 1) ? m_PingA : m_PingB);
+			const GpuImage& out = (i % 2 == 0) ? m_PingA : m_PingB;
 
-			in->AttachImage(0, 0);
-			out->AttachImage(1, 0);
-			albedo.AttachImage(2, 0);
-			normalDepth.AttachImage(3, 0); // rgb = normale, a = depth
-			beauty.AttachImage(4, 0);      // serve solo a i=4 per il blend, ma bindarlo sempre e' innocuo
+			m_Pipeline->Image(0, in).Image(1, out).Image(2, albedo).Image(3, normalDepth).Image(4, beauty).Commit(cmd);
 
-			m_Shader->SetInt("stepSize", steps[i]);
-			m_Shader->SetInt("remodulate", i == 4 ? 1 : 0);
+			params.StepSize = steps[i];
+			params.Remodulate = i == 4 ? 1 : 0;
+			m_Pipeline->PushConstants(cmd, &params, sizeof(params));
 
-			glDispatchCompute((m_Width + 7) / 8, (m_Height + 7) / 8, 1);
-			// ogni passata legge l'output della precedente: barriera image obbligatoria
-			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+			vkCmdDispatch(cmd, (irradiance.Width + 7) / 8, (irradiance.Height + 7) / 8, 1);
+			ComputeBarrier(cmd); // ogni passata legge l'output della precedente
 		}
-		glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT); // il risultato viene campionato dal fragment
 
-		m_Shader->Unbind();
 		return m_PingA; // l'ultima passata (i=4, pari) ha scritto in PingA
 	}
 }

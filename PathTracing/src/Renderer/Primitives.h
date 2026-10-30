@@ -20,6 +20,16 @@ namespace PathTracer {
         glm::vec3 b;
     };
 
+    struct AABB {
+        glm::vec3 min{ 1e30f };
+        glm::vec3 max{ -1e30f };
+
+        void expand(const glm::vec3& p) {
+            min = glm::min(min, p);
+            max = glm::max(max, p);
+        }
+    };
+
     // Struttura di authoring lato CPU: comoda da costruire, mai caricata sulla GPU.
     struct Triangle {
         glm::vec4 A;
@@ -36,8 +46,8 @@ namespace PathTracer {
         float MaterialIndex = -1.0f;
     };
 
-    // Sulla GPU posizioni e normali stanno in due buffer distinti: il loop caldo del
-    // BVH legge solo le posizioni, dimezzando la banda nel punto piu' critico.
+    // Sulla GPU posizioni e normali stanno in due buffer distinti: le posizioni sono anche
+    // l'ingresso dei BLAS, che non devono vedere nient'altro.
     struct TrianglePosition {
         glm::vec4 A;
         glm::vec4 B;
@@ -50,7 +60,7 @@ namespace PathTracer {
         glm::vec4 NormalC;
     };
 
-    // Anch'esso "freddo": letto una sola volta sull'hit finale, mai nel loop del BVH.
+    // Anch'esso "freddo": letto una sola volta sull'hit finale.
     // La uv sta in .xy; i vec4 evitano sorprese di stride con lo std430.
     struct TriangleUV {
         glm::vec4 A{ 0.0f };
@@ -65,9 +75,9 @@ namespace PathTracer {
         int material = -1; // indice LOCALE nel MTL del modello, -1 = nessun usemtl
     };
 
-    // Istanza di mesh in un BVH a due livelli: i triangoli restano in LOCAL SPACE e
-    // hanno un proprio BVH (BLAS) con radice RootNode. Trasformare la mesh significa
-    // aggiornare Transform, non ri-bakare i triangoli ne' ricostruire il BVH: e' il
+    // Istanza di mesh in una struttura a due livelli: i triangoli restano in LOCAL SPACE e
+    // hanno un proprio BLAS. Trasformare la mesh significa aggiornare Transform, non
+    // ri-bakare i triangoli ne' ricostruire il BLAS: e' il
     // raggio a essere portato nello spazio locale della mesh.
     struct MeshInfo {
         glm::mat4 Transform{ 1.0f };
@@ -79,7 +89,7 @@ namespace PathTracer {
         float FirstTriangle = 0;
         float NumTriangles = 0;
         float MaterialIndex = 0;
-        float RootNode = 0;           // indice della radice del BLAS in BVH4Nodes
+        float Padding = 0;
     };
 
     struct Sphere {

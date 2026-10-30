@@ -19,100 +19,85 @@ layout(rgba32f, binding = 3) uniform restrict writeonly image2D imgIrradiance;  
 layout(rgba32f, binding = 4) uniform restrict readonly image2D imgNormalDepthPrev;
 layout(rgba32f, binding = 5) uniform restrict readonly image2D imgIrradiancePrev;
 
-uniform samplerCube SamplerEnvironment;
+layout(binding = 6) uniform samplerCube SamplerEnvironment;
 
 // Un array invece di N sampler2D: l'indice della texture dipende dal materiale colpito,
 // che varia da raggio a raggio. Indicizzare un array di sampler con un indice non
 // "dynamically uniform" e' undefined behavior; il layer di un sampler2DArray no.
-uniform sampler2DArray AlbedoTextures;
+layout(binding = 7) uniform sampler2DArray AlbedoTextures;
 
-uniform int rendererFrame;
-uniform int samplesPerPixel;
-uniform int rayDepth;
-uniform vec3 cameraPosition;
-uniform mat4 inverseProjection;
-uniform mat4 inverseView;
-uniform vec3 BackgroundColor;
-uniform bool EnvironmentMapping;
-uniform int bvhDebug;         // 0 = off, 1 = heatmap del costo di traversata BVH
-uniform float bvhHeatScale;   // n. di nodi visitati che mappa al colore "caldo" (rosso)
-uniform int aovView;          // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth (vista di debug)
-uniform ivec2 pickPixel;      // pixel da campionare per il picking, (-1,-1) = nessuno
-uniform float fireflyClamp;   // luminanza massima per campione, <= 0 = off
-uniform float apertureRadius; // raggio della lente (thin-lens). <= 0 = pinhole, niente DOF
-uniform float focusDistance;  // distanza del piano di fuoco lungo il raggio
+// Parametri del frame. Deve combaciare con FrameParams in Renderer/PathTracer.h. Il blocco e'
+// anonimo: i campi si usano per nome diretto. Layout std140 coi vec3 chiusi da uno scalare.
+layout(std140, binding = 8) uniform FrameParams {
+    mat4 inverseProjection;
+    mat4 inverseView;
+    // Riproiezione temporale (ADR 0002). La camera del frame PRECEDENTE: serve sia a ritrovare il
+    // pixel nella storia (prevViewProjection) sia a validarla (prevCameraPosition: il depth in
+    // storia e' misurato da li', non dalla camera di adesso).
+    mat4 prevViewProjection;
+    vec3 cameraPosition;
+    int rendererFrame;
+    vec3 prevCameraPosition;
+    int samplesPerPixel;
+    vec3 BackgroundColor;
+    int rayDepth;
+    ivec2 pickPixel;      // pixel da campionare per il picking, (-1,-1) = nessuno
+    int aovView;          // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth (vista di debug)
+    int numLights;        // emettitori per la NEE; 0 = NEE disattivata
+    float fireflyClamp;   // luminanza massima per campione, <= 0 = off
+    float apertureRadius; // raggio della lente (thin-lens). <= 0 = pinhole, niente DOF
+    float focusDistance;  // distanza del piano di fuoco lungo il raggio
+    int aovNeedsUpdate;   // 1 = camera cambiata/reset: gli AOV vanno ritracciati
+    int hasHistory;       // 0 = niente storia valida (primo frame, reset scena, resize)
+    int cameraMoved;      // 1 = la storia e' riproiettata -> va cappata
+    int historyCap;       // lunghezza massima della storia quando ci si muove
+    bool EnvironmentMapping;
+    // Vulkan non ammette buffer vuoti: una collezione vuota ha comunque un buffer, quindi la
+    // dimensione non si puo' ricavare da .length().
+    int numSpheres;       // quanti primitivi del BLAS procedurale sono sfere: i seguenti sono quad
+    int numMaterials;
+};
 
-// Riproiezione temporale (ADR 0002). La camera del frame PRECEDENTE: serve sia a ritrovare il
-// pixel nella storia (prevViewProjection) sia a validarla (prevCameraPosition: il depth in
-// storia e' misurato da li', non dalla camera di adesso).
-uniform mat4 prevViewProjection;
-uniform vec3 prevCameraPosition;
-uniform int aovNeedsUpdate; // 1 = camera cambiata/reset: gli AOV vanno ritracciati
-uniform int hasHistory;    // 0 = niente storia valida (primo frame, reset scena, resize)
-uniform int cameraMoved;   // 1 = la storia e' riproiettata -> va cappata
-uniform int historyCap;    // lunghezza massima della storia quando ci si muove
-uniform int numLights;     // emettitori per la NEE; 0 = NEE disattivata
-uniform int primBvhRoot;   // radice del BVH di sfere/quad in BVH4Nodes; < 0 = assente
-uniform int tlasRoot;      // radice del TLAS in BVH4Nodes; < 0 = assente
-
-layout(std430, binding = 0) restrict readonly buffer SpheresBuffer {
+layout(std430, binding = 9) restrict readonly buffer SpheresBuffer {
     Sphere Spheres[];
 };
 
-layout(std430, binding = 1) restrict readonly buffer MaterialsBuffer {
+layout(std430, binding = 10) restrict readonly buffer MaterialsBuffer {
     Material Materials[];
 };
 
-layout(std430, binding = 2) restrict readonly buffer QuadsBuffer {
+layout(std430, binding = 11) restrict readonly buffer QuadsBuffer {
     Quad Quads[];
 };
 
-layout(std430, binding = 3) restrict readonly buffer TrianglePositionsBuffer {
+layout(std430, binding = 12) restrict readonly buffer TrianglePositionsBuffer {
     TrianglePosition TriPositions[];
 };
 
-layout(std430, binding = 4) restrict readonly buffer MeshBuffer {
+layout(std430, binding = 13) restrict readonly buffer MeshBuffer {
     MeshInfo Meshes[];
 };
 
-layout(std430, binding = 5) restrict readonly buffer CubeBuffer {
-    CubeInfo Cubes[];
-};
-
-layout(std430, binding = 6) restrict readonly buffer BVHBuffer {
-    BVH4Node BVH4Nodes[];
-};
-
-layout(std430, binding = 7) restrict readonly buffer TriIndexBuffer {
-    int TriIndex[];
-};
-
-layout(std430, binding = 8) restrict readonly buffer TriangleNormalsBuffer {
+layout(std430, binding = 14) restrict readonly buffer TriangleNormalsBuffer {
     TriangleNormal TriNormals[];
 };
 
 // Risultato del picking: scritto da una sola invocazione (quella su pickPixel),
 // quindi non serve nessuna atomica.
-layout(std430, binding = 9) restrict writeonly buffer PickBuffer {
+layout(std430, binding = 15) restrict writeonly buffer PickBuffer {
     int pickType;   // 0 sfera, 1 quad, 2 mesh, -1 niente
     int pickIndex;
     float pickDistance; // t del raggio primario al punto colpito, < 0 = niente
 };
 
-layout(std430, binding = 10) restrict readonly buffer TriangleUVsBuffer {
+layout(std430, binding = 16) restrict readonly buffer TriangleUVsBuffer {
     TriangleUV TriUVs[];
 };
 
 // Emettitori per la NEE (light sampling + MIS). Vuoto (numLights == 0) su tutte le scene
 // senza geometria emissiva -> la NEE si disattiva del tutto: nessun costo, render identico.
-layout(std430, binding = 11) restrict readonly buffer LightsBuffer {
+layout(std430, binding = 17) restrict readonly buffer LightsBuffer {
     Light Lights[];
 };
 
-#if USE_PRIM_BVH || USE_TLAS
-// Foglie dei BVH di primo livello. Primitive analitiche: (indice << 1) | tipo (0 sfera, 1 quad).
-// TLAS: indice della mesh.
-layout(std430, binding = 12) restrict readonly buffer PrimIndexBuffer {
-    int PrimIndex[];
-};
-#endif
+layout(binding = 18) uniform accelerationStructureEXT topLevel;

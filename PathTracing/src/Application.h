@@ -5,18 +5,12 @@
 
 #include <iostream>
 #include <filesystem>
-#include <GL/glew.h>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
-#define GL_SILENCE_DEPRECATION
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-#include <GLES2/gl2.h>
-#endif
-#include <GLFW/glfw3.h> // Will drag system OpenGL headers
-#include "Graphics/Texture.h"
+#include "imgui_impl_vulkan.h"
+#include <GLFW/glfw3.h>
+#include "Vulkan/VulkanContext.h"
 #include "Renderer/Renderer.h"
-#include "Graphics/FrameBuffer.h"
 #include "ImGuizmo.h"
 #include "ptpch.h"
 
@@ -68,6 +62,7 @@ namespace PathTracer {
 		void CalculateTime();
 		void RenderUI(float deltaTime);
 		void Render(float deltaTime);
+		void HandleCaptures();
 
 		// pannelli della UI, uno per tab
 		void DrawSceneTab();
@@ -156,6 +151,10 @@ namespace PathTracer {
 		int m_LastPickIndex = -1;
 		int m_PickRequestCount = 0;
 
+		VulkanContext m_Vulkan;
+		VkDescriptorPool m_ImGuiPool = VK_NULL_HANDLE;
+		bool m_ScreenshotRequested = false;
+
 		Renderer m_Renderer;
 		Camera m_Camera;
 		World m_World;
@@ -165,7 +164,6 @@ namespace PathTracer {
 		std::string m_GltfPath;                        // vuoto = nessuna scena glTF attiva
 		bool m_GltfWatch = true;                        // auto-reload al cambio del file
 		std::filesystem::file_time_type m_GltfMtime{};  // ultimo timestamp visto
-		//FrameBuffer* m_Framebuffer;
 		bool m_IsRunning;
 		bool m_Vsync = true;
 		float m_Timer = 0.0f;

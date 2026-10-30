@@ -1,12 +1,41 @@
 #pragma once
 
 #include "ptpch.h"
-#include "RenderingUnit.h"
-#include "../Graphics/ComputeShader.h"
-#include "../Graphics/Texture.h"
+#include "../Vulkan/ComputePipeline.h"
+#include "../Vulkan/SceneAccel.h"
 #include "../Graphics/TextureArray.h"
+#include "../World.h"
+#include "../Camera.h"
 
 namespace PathTracer {
+
+	// Deve combaciare con il blocco FrameParams in res/shaders/pt/bindings.glsl (std140).
+	struct FrameParams {
+		glm::mat4 InverseProjection;
+		glm::mat4 InverseView;
+		glm::mat4 PrevViewProjection;
+		glm::vec3 CameraPosition;
+		int RendererFrame;
+		glm::vec3 PrevCameraPosition;
+		int SamplesPerPixel;
+		glm::vec3 BackgroundColor;
+		int RayDepth;
+		glm::ivec2 PickPixel;
+		int AovView;
+		int NumLights;
+		float FireflyClamp;
+		float ApertureRadius;
+		float FocusDistance;
+		int AovNeedsUpdate;
+		int HasHistory;
+		int CameraMoved;
+		int HistoryCap;
+		uint32_t EnvironmentMapping;
+		int NumSpheres;
+		int NumMaterials;
+		int Padding[2];
+	};
+	static_assert(sizeof(FrameParams) == 304, "FrameParams deve combaciare con il layout std140 dello shader");
 
 	struct ComputeUniformContainer {
 		uint32_t NumFrames;
@@ -14,8 +43,6 @@ namespace PathTracer {
 		uint32_t RayDepth;
 		bool ResetScene;
 		bool EnvironmentMapping;
-		bool BVHDebug;
-		float BVHHeatScale;
 		float FireflyClamp;    // luminanza massima per campione, <= 0 = off
 		float ApertureRadius;  // raggio lente thin-lens, <= 0 = pinhole (niente DOF)
 		float FocusDistance;   // distanza del piano di fuoco
@@ -33,21 +60,46 @@ namespace PathTracer {
 		const class Camera& Camera;
 	};
 
-	class PathTracer : public RenderingUnit {
+	// Immagini scritte dal path tracer in questo frame, piu' la storia in sola lettura.
+	struct PathTracerTargets {
+		const GpuImage& Output;
+		const GpuImage& Albedo;
+		const GpuImage& NormalDepth;
+		const GpuImage& Irradiance;
+		const GpuImage& NormalDepthPrev;
+		const GpuImage& IrradiancePrev;
+	};
+
+	class PathTracer {
 	public:
-		PathTracer(const class World& world);
+		explicit PathTracer(const class World& world);
 		~PathTracer();
 
-		void Begin() override;
-		void End() override;
+		// Carica cio' che serve al frame e registra il dispatch sul command buffer.
+		void Dispatch(VkCommandBuffer cmd, const ComputeUniformContainer& container, const PathTracerTargets& targets);
+		// Il risultato del picking e' pronto solo a frame eseguito: va letto al frame dopo.
+		void ReadPickResult(int& objectType, int& objectIndex, float& distance) const;
 
-		void DispatchCompute(unsigned int numGroupX, unsigned int numGroupY);
-		void UploadUniforms(const ComputeUniformContainer& container);
-		void ReadPickResult(int& objectType, int& objectIndex, float& distance);
 	private:
-		std::shared_ptr<ComputeShader> m_ComputeShader;
-		std::shared_ptr<Texture> m_SkyBox;
+		void UploadScene(const class World& world);
+		void Upload(GpuBuffer& buffer, const void* data, size_t bytes);
+		void LoadEnvironment();
+
+	private:
+		std::unique_ptr<ComputePipeline> m_Pipeline;
+		std::unique_ptr<SceneAccel> m_Accel;
+
+		GpuBuffer m_Spheres, m_Materials, m_Quads, m_TriPositions, m_TriNormals, m_TriUVs;
+		GpuBuffer m_Meshes, m_Lights;
+		GpuBuffer m_Pick;   // host-visible: la CPU legge il risultato
+		GpuBuffer m_Frame;  // host-visible: parametri del frame
+
 		TextureArray m_AlbedoTextures;
-		std::vector<std::string> m_LoadedTexturePaths; // per ricaricare solo al cambio scena
+		std::vector<std::string> m_LoadedTexturePaths;
+		GpuImage m_Environment;
+		VkSampler m_EnvironmentSampler = VK_NULL_HANDLE;
+
+		int m_NumLights = 0;
+		int m_GeometryVersion = -1;  // versione di triangoli e BLAS gia' sulla GPU
 	};
 }

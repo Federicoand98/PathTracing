@@ -1,7 +1,6 @@
 #ifndef COMMON_CONSTANTS_GLSL
 #define COMMON_CONSTANTS_GLSL
 
-#define FLOAT_MAX 3.4028235e+38
 #define EPSILON 0.001
 #define PI              3.1415926
 

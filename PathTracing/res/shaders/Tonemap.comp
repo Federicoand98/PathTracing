@@ -1,0 +1,51 @@
+#version 460 core
+
+// Ultima passata: HDR lineare -> esposizione -> [ACES] -> encoding sRGB, verso l'immagine
+// RGBA8 mostrata da ImGui. La sorgente si campiona con un sampler e non con imageLoad: con il
+// render scale puo' essere piu' piccola del viewport e va ingrandita in bilineare.
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(binding = 0) uniform sampler2D imgIn;
+layout(rgba8, binding = 1) uniform restrict writeonly image2D imgOut;
+
+layout(push_constant) uniform Params {
+    float Exposure;
+    int   PostProcessing;
+    int   aovView;   // 0 = beauty (tonemap normale); != 0 = vista AOV (niente esposizione/ACES)
+};
+
+vec3 LinearToSRGB(vec3 rgb, float gamma) {
+    rgb = clamp(rgb, 0.0, 1.0);
+    return mix(pow(rgb, vec3(1.0 / gamma)) * 1.055 - 0.055, rgb * 12.92, lessThan(rgb, vec3(0.0031308)));
+}
+
+vec3 ACESFilm(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+void main() {
+    ivec2 size = imageSize(imgOut);
+    ivec2 texel = ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(texel, size)))
+        return;
+
+    vec3 color = textureLod(imgIn, (vec2(texel) + 0.5) / vec2(size), 0.0).rgb;
+
+    // Vista di debug degli AOV: il compute ha gia' scritto valori visualizzabili. Vanno mostrati
+    // senza esposizione ne' tonemap (falserebbero normali/depth); solo l'encoding sRGB.
+    if(aovView == 0) {
+        color *= Exposure;                      // esposizione: moltiplicatore lineare
+        if(PostProcessing == 1)
+            color = ACESFilm(color);            // tonemap HDR -> [0,1] (clampa gia' lui)
+    }
+
+    // Encoding sRGB SEMPRE: l'immagine non e' sRGB e ImGui non converte. Senza tonemap i valori
+    // > 1 vengono troncati da LinearToSRGB (clipping atteso: e' cosa vuol dire "niente tonemap").
+    imageStore(imgOut, texel, vec4(LinearToSRGB(color, 2.4), 1.0));
+}

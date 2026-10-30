@@ -93,84 +93,17 @@ namespace PathTracer {
 		if (!glfwInit())
 			return false;
 
-		// Decide GL+GLSL versions
-	#if defined(IMGUI_IMPL_OPENGL_ES2)
-		// GL ES 2.0 + GLSL 100
-		const char* glsl_version = "#version 100";
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
-	#elif defined(__APPLE__)
-		// GL 3.2 + GLSL 150
-		const char* glsl_version = "#version 150";
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
-		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
-	#else
-		// GL 3.0 + GLSL 130
-		const char* glsl_version = "#version 430";
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-		glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
-		glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // 3.0+ only
-	#endif
-
-		// Create window with graphics context
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 		m_Window = glfwCreateWindow(width, height, "PathTracer", nullptr, nullptr);
 
 		if (m_Window == nullptr)
 			return false;
 
-		int bufferW, bufferH;
-		glfwGetFramebufferSize(m_Window, &bufferW, &bufferH);
-
-		glfwMakeContextCurrent(m_Window);
 		// Test/CI headless: PT_NOVSYNC=1. Con la vsync il driver abbassa i clock per riempire il
 		// frame, quindi i tempi GPU non misurano il costo reale delle passate.
-		glfwSwapInterval(getenv("PT_NOVSYNC") ? 0 : 1); // Enable vsync
-
-		glewExperimental = true;
-
-		if (glewInit() != GLEW_OK) {
-			Shutdown();
+		m_Vsync = getenv("PT_NOVSYNC") == nullptr;
+		if (!m_Vulkan.Initialize(m_Window, m_Vsync))
 			return false;
-		}
-
-		glViewport(0, 0, bufferW, bufferH);
-
-		//m_Framebuffer = new FrameBuffer(bufferW, bufferH);
-
-		std::cout << "" << std::endl;
-		std::cout << "OpenGL Info" << std::endl;
-		std::cout << "" << "OpenGL Vendor: " << glGetString(GL_VENDOR) << std::endl;
-		std::cout << "" << "OpenGL Renderer: " << glGetString(GL_RENDERER) << std::endl;
-		std::cout << "" << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
-		std::cout << "" << "OpenGL Shading Language Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
-		std::cout << "" << std::endl;
-
-		int max_compute_work_group_count[3];
-		int max_compute_work_group_size[3];
-		int max_compute_work_group_invocations;
-
-		for (int idx = 0; idx < 3; idx++) {
-			glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, idx, &max_compute_work_group_count[idx]);
-			glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, idx, &max_compute_work_group_size[idx]);
-		}
-
-		glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &max_compute_work_group_invocations);
-
-		std::cout << "" << std::endl;
-		std::cout << "Compute Shader Info" << std::endl;
-		std::cout << "Max global (total) work group counts X: " << max_compute_work_group_count[0] << ", Y: " << max_compute_work_group_count[1] << ", Z: " << max_compute_work_group_count[2] << std::endl;
-		std::cout << "Max local (in one shader) work group sizes X: " << max_compute_work_group_size[0] << ", Y: " << max_compute_work_group_size[1] << ", Z: " << max_compute_work_group_size[2] << std::endl;
-		std::cout << "Max local work group invocations: " << max_compute_work_group_invocations << std::endl;
-		// La riproiezione temporale binda parecchie immagini insieme (correnti + storia):
-		// se questo limite e' basso il compute non puo' vederle tutte. Vedi ADR 0002.
-		int maxImageUnits = 0;
-		glGetIntegerv(GL_MAX_IMAGE_UNITS, &maxImageUnits);
-		std::cout << "Max image units: " << maxImageUnits << std::endl;
-		std::cout << "" << std::endl;
 
 		// Setup Dear ImGui context
 		IMGUI_CHECKVERSION();
@@ -189,8 +122,34 @@ namespace PathTracer {
 			style.Colors[ImGuiCol_WindowBg].w = 1.0f;
 		}
 
-		ImGui_ImplGlfw_InitForOpenGL(m_Window, true);
-		ImGui_ImplOpenGL3_Init(glsl_version);
+		ImGui_ImplGlfw_InitForVulkan(m_Window, true);
+
+		// Le finestre staccate di ImGui hanno ognuna la sua swapchain e i suoi set: da qui la
+		// dimensione generosa del pool.
+		VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 256 };
+		VkDescriptorPoolCreateInfo poolInfo{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+		poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+		poolInfo.maxSets = 256;
+		poolInfo.poolSizeCount = 1;
+		poolInfo.pPoolSizes = &poolSize;
+		vkCreateDescriptorPool(m_Vulkan.Device(), &poolInfo, nullptr, &m_ImGuiPool);
+
+		VkFormat swapchainFormat = m_Vulkan.SwapchainFormat();
+		ImGui_ImplVulkan_InitInfo initInfo{};
+		initInfo.Instance = m_Vulkan.Instance();
+		initInfo.PhysicalDevice = m_Vulkan.PhysicalDevice();
+		initInfo.Device = m_Vulkan.Device();
+		initInfo.QueueFamily = m_Vulkan.QueueFamily();
+		initInfo.Queue = m_Vulkan.Queue();
+		initInfo.DescriptorPool = m_ImGuiPool;
+		initInfo.MinImageCount = m_Vulkan.SwapchainImageCount();
+		initInfo.ImageCount = m_Vulkan.SwapchainImageCount();
+		initInfo.UseDynamicRendering = true;
+		initInfo.ColorAttachmentFormat = swapchainFormat;
+		ImGui_ImplVulkan_Init(&initInfo, VK_NULL_HANDLE);
+
+		m_Vulkan.Immediate([](VkCommandBuffer cmd) { ImGui_ImplVulkan_CreateFontsTexture(cmd); });
+		ImGui_ImplVulkan_DestroyFontUploadObjects();
 
 		return true;
 	}
@@ -205,6 +164,9 @@ namespace PathTracer {
 		while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
 			glfwPollEvents();
 
+			if (!m_Vulkan.BeginFrame())
+				continue;
+
 			// La camera che si muove NON azzera piu' l'accumulo: la riproiezione temporale
 			// riusa il frame precedente invece di buttarlo (ADR 0002). Il reset resta per i
 			// cambi di scena/materiale, dove la storia e' genuinamente invalida.
@@ -216,14 +178,9 @@ namespace PathTracer {
 			// Live-link glTF: ricarica la scena se il file e' stato ri-esportato da Blender.
 			PollGltfWatch();
 
-			ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
-
 			// Start the Dear ImGui frame
-			ImGui_ImplOpenGL3_NewFrame();
+			ImGui_ImplVulkan_NewFrame();
 			ImGui_ImplGlfw_NewFrame();
-
-			glClearColor(0.0, 0.0, 0.0, 1.0);
-			glClear(GL_COLOR_BUFFER_BIT);
 
 			ImGui::NewFrame();
 			ImGuizmo::BeginFrame();
@@ -252,7 +209,7 @@ namespace PathTracer {
 				// Submit the DockSpace
 				ImGuiIO& io = ImGui::GetIO();
 				if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-					ImGuiID dockspace_id = ImGui::GetID("OpenGL Dockspace");
+					ImGuiID dockspace_id = ImGui::GetID("OpenGL Dockspace"); // il nome resta: e' la chiave del layout salvato in imgui.ini
 					ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 				}
 
@@ -268,45 +225,45 @@ namespace PathTracer {
 			DrawDeletePopup();
 			Render(m_DeltaTime);
 
-			// Cattura headless: PT_SHOT=<file> PT_SHOT_FRAME=<n> salva dopo n frame accumulati
-			// e chiude. Serve a ispezionare il render senza guardare lo schermo (test, CI).
-			if (const char* shot = getenv("PT_SHOT")) {
-				static int shotFrame = getenv("PT_SHOT_FRAME") ? atoi(getenv("PT_SHOT_FRAME")) : 200;
-				static int n = 0;
-				if (++n >= shotFrame) {
-					m_Renderer.GetFrameBuffer()->SaveScreenshot(shot);
-					// PT_HDR=<file>: dump della beauty LINEARE (rgba32f, pre-tonemap) come raw
-					// float32. Serve a confronti non falsati da tonemap/clipping a 8 bit.
-					if (const char* hdr = getenv("PT_HDR")) {
-						auto tex = m_Renderer.GetRenderedImage();
-						int w = tex->GetWidth(), h = tex->GetHeight();
-						std::vector<float> buf(static_cast<size_t>(w) * h * 4);
-						tex->Bind();
-						glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, buf.data());
-						tex->Unbind();
-						std::ofstream f(hdr, std::ios::binary);
-						f.write(reinterpret_cast<const char*>(&w), sizeof(int));
-						f.write(reinterpret_cast<const char*>(&h), sizeof(int));
-						f.write(reinterpret_cast<const char*>(buf.data()), buf.size() * sizeof(float));
-					}
-					m_IsRunning = false;
-				}
-			}
-
 			ImGui::Render();
 
-			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+			m_Vulkan.BeginUiPass();
+			ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), m_Vulkan.Cmd());
+			m_Vulkan.EndUiPass();
+			m_Vulkan.SubmitFrame();
 
 			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-				GLFWwindow* backup_current_context = glfwGetCurrentContext();
 				ImGui::UpdatePlatformWindows();
 				ImGui::RenderPlatformWindowsDefault();
-				glfwMakeContextCurrent(backup_current_context);
 			}
 
-			CalculateTime();
+			m_Vulkan.PresentFrame();
 
-			glfwSwapBuffers(m_Window);
+			CalculateTime();
+			HandleCaptures();
+		}
+	}
+
+	// Va dopo la submit: le immagini si leggono solo a frame eseguito.
+	void Application::HandleCaptures() {
+		if (m_ScreenshotRequested) {
+			m_Renderer.SaveScreenshot();
+			m_ScreenshotRequested = false;
+		}
+
+		// Cattura headless: PT_SHOT=<file> PT_SHOT_FRAME=<n> salva dopo n frame accumulati
+		// e chiude. Serve a ispezionare il render senza guardare lo schermo (test, CI).
+		if (const char* shot = getenv("PT_SHOT")) {
+			static int shotFrame = getenv("PT_SHOT_FRAME") ? atoi(getenv("PT_SHOT_FRAME")) : 200;
+			static int n = 0;
+			if (++n >= shotFrame) {
+				m_Renderer.SaveScreenshot(shot);
+				// PT_HDR=<file>: dump della beauty LINEARE (rgba32f, pre-tonemap) come raw
+				// float32. Serve a confronti non falsati da tonemap/clipping a 8 bit.
+				if (const char* hdr = getenv("PT_HDR"))
+					m_Renderer.SaveHdr(hdr);
+				m_IsRunning = false;
+			}
 		}
 	}
 
@@ -363,9 +320,15 @@ namespace PathTracer {
 	}
 
 	void Application::Shutdown() {
-		ImGui_ImplOpenGL3_Shutdown();
-		ImGui_ImplGlfw_Shutdown();
-		ImGui::DestroyContext();
+		if (m_Vulkan.Device() != VK_NULL_HANDLE) {
+			vkDeviceWaitIdle(m_Vulkan.Device());
+			m_Renderer.Release();
+			ImGui_ImplVulkan_Shutdown();
+			ImGui_ImplGlfw_Shutdown();
+			ImGui::DestroyContext();
+			vkDestroyDescriptorPool(m_Vulkan.Device(), m_ImGuiPool, nullptr);
+		}
+		m_Vulkan.Shutdown();
 
 		glfwDestroyWindow(m_Window);
 		glfwTerminate();
@@ -385,7 +348,7 @@ namespace PathTracer {
 		ImGui::TextDisabled("| GPU PT %.2f DN %.2f ms", m_Renderer.GetPathTraceMs(), m_Renderer.GetDenoiseMs());
 		ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80.0f);
 		if (ImGui::Button("Screenshot"))
-			m_Renderer.GetFrameBuffer()->SaveScreenshot();
+			m_ScreenshotRequested = true;
 
 		ImGui::Spacing();
 
@@ -421,7 +384,7 @@ namespace PathTracer {
 		m_ViewportHeight = (uint32_t)ImGui::GetContentRegionAvail().y;
 
 		ImVec2 pos = ImGui::GetCursorScreenPos();
-		auto image = m_Renderer.GetFrameBuffer()->GetTexture();
+		ImTextureID image = m_Renderer.GetDisplayTexture();
 		if(image != 0)
 			ImGui::GetWindowDrawList()->AddImage(
 				image,
@@ -853,7 +816,7 @@ namespace PathTracer {
 				const int material = EnsureMaterialExists();
 				const std::string path = "models/" + m_ModelFiles[m_SelectedModelFile];
 
-				// ricostruisce l'INTERO BVH: sui modelli grossi puo' bloccare per qualche secondo
+				// ricostruisce TUTTI i BLAS: sui modelli grossi puo' bloccare per qualche secondo
 				const int mesh = m_World.AddMesh(path, spawn, material);
 				if (mesh >= 0) {
 					m_Selection = { SelectionType::Mesh, mesh };
@@ -939,7 +902,7 @@ namespace PathTracer {
 
 			switch (m_Selection.Type) {
 			case SelectionType::Mesh:
-				ImGui::TextDisabled("%d triangoli - il BVH verra' ricostruito",
+				ImGui::TextDisabled("%d triangoli - i BLAS verranno ricostruiti",
 					static_cast<int>(m_World.Meshes[m_Selection.Index].NumTriangles));
 				break;
 			case SelectionType::Box:
@@ -1279,7 +1242,7 @@ namespace PathTracer {
 
 		ImGui::SeparatorText("Output");
 		if (ImGui::Checkbox("Vsync", &m_Vsync))
-			glfwSwapInterval(m_Vsync);
+			m_Vulkan.SetVsync(m_Vsync);
 
 		// Esposizione e tonemap agiscono DOPO l'accumulo (fragment di post): cambiarli non
 		// invalida i campioni gia' accumulati, quindi niente ResetPathTracingCounter.
@@ -1338,10 +1301,8 @@ namespace PathTracer {
 
 		ImGui::PopItemWidth();
 
-		ImGui::SeparatorText("OpenGL");
-		ImGui::TextDisabled("Vendor:   %s", glGetString(GL_VENDOR));
-		ImGui::TextDisabled("Renderer: %s", glGetString(GL_RENDERER));
-		ImGui::TextDisabled("Version:  %s", glGetString(GL_VERSION));
+		ImGui::SeparatorText("Vulkan");
+		ImGui::TextDisabled("Device: %s", m_Vulkan.DeviceName());
 	}
 
 	// ---------------------------------------------------------------- UI: tab Debug
@@ -1398,16 +1359,6 @@ namespace PathTracer {
 				ImGui::SliderFloat("Sigma albedo", &m_Renderer.DenoiseAPhi, 0.02f, 1.0f, "%.2f");
 				ImGui::TextDisabled("view filter: non tocca l'accumulo");
 			}
-		}
-
-		ImGui::SeparatorText("BVH");
-		if (ImGui::Checkbox("BVH Heatmap", &m_Renderer.BVHDebug))
-			m_Renderer.ResetPathTracingCounter();
-
-		if (m_Renderer.BVHDebug) {
-			ImGui::TextDisabled("blu = poche ricerche, rosso = molte");
-			ImGui::TextDisabled("disattiva Post Processing per i colori reali");
-			ImGui::SliderFloat("Heat scale", &m_Renderer.BVHHeatScale, 1.0f, 256.0f);
 		}
 
 		ImGui::SeparatorText("Picking");
@@ -1639,7 +1590,7 @@ namespace PathTracer {
 			break;
 		}
 		case SelectionType::Mesh: {
-			// nessuna ricostruzione del BVH: cambia solo la trasformazione dell'istanza
+			// nessuna ricostruzione dei BLAS: cambia solo la trasformazione dell'istanza
 			const MeshInfo& mesh = m_World.Meshes.at(m_Selection.Index);
 			m_World.SetMeshTransform(m_Selection.Index, delta * mesh.Transform);
 			break;
@@ -1807,7 +1758,5 @@ namespace PathTracer {
 		m_Camera.OnResize(m_ViewportWidth, m_ViewportHeight);
 		m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
 		m_Renderer.Render(m_Camera, m_World);
-
-		glClear(GL_COLOR_BUFFER_BIT);
 	}
 }

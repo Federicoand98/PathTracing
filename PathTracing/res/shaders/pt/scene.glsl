@@ -74,161 +74,87 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         if(dot(ray.Direction, normal) > 0.0)
             normal = -normal;
 
-        hit = HitInfo(hitDistance, hitPosition, normal, meshIndex, 2, insideHit, uv, triMaterial);
+        // Per le mesh insideHit dice solo che la faccia e' vista da dietro. Un interno ce l'ha
+        // solo un materiale rifrattivo: una mesh aperta e opaca (un muro, una tenda) vista da
+        // dietro e' una superficie normale, non un mezzo che assorbe. Chi usa Inside ribalta
+        // la normale, quindi qui va lasciata concorde col raggio.
+        bool inside = insideHit && Materials[clamp(triMaterial, 0, numMaterials - 1)].RefractionProbability > 0.0;
+        if(inside)
+            normal = -normal;
+
+        hit = HitInfo(hitDistance, hitPosition, normal, meshIndex, 2, inside, uv, triMaterial);
     }
 
     return hit;
 }
 
-HitInfo TraceRay(Ray ray) {
-    float hitDistance = 100000.0;
-    int index = -1;
-    int objType = -1; // 0 Sphere, 1 Quad, 2 Mesh
-    float t1, t2;
-    float u = 0, v = 0;
-    int meshIndex = -1;
-    bool inside;
-    bool cubesPres = Cubes.length() > 0;
-
-#if USE_PRIM_BVH
-    // Sfere e quad passano dal loro BVH. Il ramo lineare sotto resta per la variante leggera
-    // (poche primitive: scandirle costa meno che scendere un albero) e come fallback.
-    if(primBvhRoot >= 0) {
-        ray.t = hitDistance;
-        int pType, pIndex; bool pInside;
-        if(TracePrimBVH(ray, pType, pIndex, pInside, false)) {
-            hitDistance = ray.t;
-            index = pIndex;
-            objType = pType;
-            inside = pInside;
-        }
-    } else
-#endif
-    {
-    for(int i = 0; i < Spheres.length(); i++) {
-        Sphere sphere = Spheres[i];
-
-        // La distanza va confrontata dopo aver scelto la radice: con l'origine dentro la sfera
-        // t1 < 0 passerebbe sempre il test e t2 sovrascriverebbe un hit piu' vicino.
-        if(HitSphere(ray, sphere, t1, t2) && t2 > 0.0) {
-            float d = t1 < 0.0 ? t2 : t1;
-            if(d < hitDistance) {
-                hitDistance = d;
-                index = i;
-                inside = d == t2;
-                objType = 0;
-            }
-        }
+// Le primitive analitiche stanno in un BLAS procedurale di AABB: il driver trova il box, ma
+// l'intersezione vera resta qui. Ritorna la distanza del candidato, < 0 se non c'e'.
+// L'indice del primitivo conta prima le sfere, poi i quad (vedi World::PrimitiveBounds).
+float IntersectProcedural(Ray ray, int primitive, float tMin) {
+    if(primitive < numSpheres) {
+        Sphere sphere = Spheres[primitive];
+        float t1, t2;
+        if(!HitSphere(ray, sphere, t1, t2))
+            return -1.0;
+        return t1 >= tMin ? t1 : (t2 >= tMin ? t2 : -1.0);
     }
-
-    int j = 0;
-    for(int i = 0; i < Quads.length(); i++) {
-        if (cubesPres && j < Cubes.length() && Cubes[j].FirstQuad == i){
-            bool hit = HitBoundingBox(ray, vec3(Cubes[j].BoundsMin), vec3(Cubes[j].BoundsMax));
-            j++;
-            if (!hit) {
-                i+=5;
-                continue;
-            }
-        }
-        Quad quad = Quads[i];
-
-        float distance = HitQuad(ray, quad);
-
-        if(distance >= 0 && distance < hitDistance) {
-            hitDistance = distance;
-            index = i;
-            objType = 1;
-            inside = false;
-        }
-    }
-    }
-
-    if(BVH4Nodes.length() > 0) {
-        // il test AABB usa ray.t per scartare i nodi oltre l'hit piu' vicino gia' trovato
-        ray.t = hitDistance;
-
-        int hitTriIndex, hitMesh;
-        float outU, outV;
-        float distance = TraceMeshes(ray, hitTriIndex, hitMesh, outU, outV, false);
-
-        if(distance >= 0 && distance < hitDistance) {
-            hitDistance = distance;
-            index = hitTriIndex;
-            meshIndex = hitMesh;
-            objType = 2;
-            inside = false;
-            u = outU;
-            v = outV;
-        }
-    }
-
-    if(index < 0) {
-        HitInfo result = NoHit();
-        return result;
-    }
-
-    return HandleHit(ray, hitDistance, index, objType, inside, u, v, meshIndex);
+    Quad quad = Quads[primitive - numSpheres];
+    float t = HitQuad(ray, quad);
+    return t >= tMin ? t : -1.0;
 }
 
-// Shadow ray: c'e' un occlusore tra origin e la luce (entro maxDist)?
-// E' un ANY-HIT: si ferma al PRIMO occlusore trovato, non cerca il piu' vicino. Non serve la
-// superficie colpita, quindi l'early-out e' tutto il guadagno rispetto a TraceRay.
-bool Occluded(vec3 origin, vec3 dir, float maxDist) {
-#if USE_PRIM_BVH
-    if(primBvhRoot >= 0) {
-        Ray r = Ray(origin, dir, maxDist);
-        int pType, pIndex; bool pInside;
-        if(TracePrimBVH(r, pType, pIndex, pInside, true))
-            return true;
-        if(BVH4Nodes.length() > 0) {
-            Ray rm = Ray(origin, dir, maxDist);
-            int triIndex, meshIndex; float u, v;
-            float d = TraceMeshes(rm, triIndex, meshIndex, u, v, true);
-            if(d > EPSILON && d < maxDist)
-                return true;
-        }
-        return false;
-    }
-#endif
+// Promuove un candidato procedurale a intersezione, se e' davanti a cio' che c'e' gia'.
+void CommitProcedural(rayQueryEXT query, Ray ray, float tMin, float tMax) {
+    float t = IntersectProcedural(ray, rayQueryGetIntersectionPrimitiveIndexEXT(query, false), tMin);
+    if(rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT)
+        tMax = rayQueryGetIntersectionTEXT(query, true);
+    if(t >= tMin && t <= tMax)
+        rayQueryGenerateIntersectionEXT(query, t);
+}
 
-    // --- sfere ---
-    for(int i = 0; i < Spheres.length(); i++) {
+HitInfo TraceRay(Ray ray) {
+    const float tMax = 100000.0;
+    rayQueryEXT query;
+    rayQueryInitializeEXT(query, topLevel, gl_RayFlagsOpaqueEXT,
+                          0xFF, ray.Origin, 0.0, ray.Direction, tMax);
+    while(rayQueryProceedEXT(query))
+        if(rayQueryGetIntersectionTypeEXT(query, false) == gl_RayQueryCandidateIntersectionAABBEXT)
+            CommitProcedural(query, ray, 1e-4, tMax);
+
+    uint type = rayQueryGetIntersectionTypeEXT(query, true);
+    if(type == gl_RayQueryCommittedIntersectionNoneEXT)
+        return NoHit();
+
+    float t = rayQueryGetIntersectionTEXT(query, true);
+    int primitive = rayQueryGetIntersectionPrimitiveIndexEXT(query, true);
+
+    if(type == gl_RayQueryCommittedIntersectionTriangleEXT) {
+        int mesh = rayQueryGetIntersectionInstanceCustomIndexEXT(query, true);
+        vec2 barycentrics = rayQueryGetIntersectionBarycentricsEXT(query, true);
+        bool backFace = !rayQueryGetIntersectionFrontFaceEXT(query, true);
+        return HandleHit(ray, t, int(Meshes[mesh].FirstTriangle) + primitive, 2, backFace, barycentrics.x, barycentrics.y, mesh);
+    }
+
+    if(primitive < numSpheres) {
+        Sphere sphere = Spheres[primitive];
         float t1, t2;
-        Sphere sphere = Spheres[i];
-        if(HitSphere(Ray(origin, dir, 0.0), sphere, t1, t2)) {
-            float t = (t1 > EPSILON) ? t1 : t2;   // radice positiva piu' vicina
-            if(t > EPSILON && t < maxDist)
-                return true;
-        }
+        HitSphere(ray, sphere, t1, t2);
+        return HandleHit(ray, t, primitive, 0, t == t2, 0.0, 0.0, -1);
     }
+    return HandleHit(ray, t, primitive - numSpheres, 1, false, 0.0, 0.0, -1);
+}
 
-    // --- quad (stesso skip per box della TraceRay: un box e' 6 quad dietro una AABB) ---
-    bool cubesPres = Cubes.length() > 0;
-    int j = 0;
-    for(int i = 0; i < Quads.length(); i++) {
-        if(cubesPres && j < Cubes.length() && Cubes[j].FirstQuad == i) {
-            bool hit = HitBoundingBox(Ray(origin, dir, 0.0), vec3(Cubes[j].BoundsMin), vec3(Cubes[j].BoundsMax));
-            j++;
-            if(!hit) {
-                i += 5;
-                continue;
-            }
-        }
-        Quad quad = Quads[i];
-        float t = HitQuad(Ray(origin, dir, 0.0), quad);
-        if(t > EPSILON && t < maxDist)
-            return true;
-    }
+// Shadow ray: c'e' un occlusore tra origin e la luce (entro maxDist)? Si ferma al primo.
+bool Occluded(vec3 origin, vec3 dir, float maxDist) {
+    Ray ray = Ray(origin, dir, 0.0);
+    rayQueryEXT query;
+    rayQueryInitializeEXT(query, topLevel,
+                          gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+                          0xFF, origin, EPSILON, dir, maxDist);
+    while(rayQueryProceedEXT(query))
+        if(rayQueryGetIntersectionTypeEXT(query, false) == gl_RayQueryCandidateIntersectionAABBEXT)
+            CommitProcedural(query, ray, EPSILON, maxDist);
 
-    // --- mesh: limitando ray.t a maxDist la traversata pota tutto cio' che sta oltre la luce.
-    if(BVH4Nodes.length() > 0) {
-        Ray r = Ray(origin, dir, maxDist);
-        int triIndex, meshIndex; float u, v;
-        float d = TraceMeshes(r, triIndex, meshIndex, u, v, true);
-        if(d > EPSILON && d < maxDist)
-            return true;
-    }
-
-    return false;
+    return rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT;
 }

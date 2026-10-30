@@ -49,7 +49,7 @@ vec3 PerPixel(vec2 ndc) {
             // L'ambiente non e' nel set NEE (sfondo uniforme -> campionarlo non aiuta): peso 1.
             // Attenzione: EnvironmentMapping == true seleziona il colore piatto, false la cubemap.
             vec3 envRadiance = (!EnvironmentMapping)
-                ? texture(SamplerEnvironment, ray.Direction).rgb
+                ? textureLod(SamplerEnvironment, ray.Direction, 0.0).rgb
                 : BackgroundColor;
             light += envRadiance * throughput;
             break;
@@ -57,7 +57,7 @@ vec3 PerPixel(vec2 ndc) {
 
         // Materiale gia' risolto in HandleHit (per-triangolo sulle mesh). Il clamp protegge
         // da indici fuori range, es. un MTL malformato in un OBJ multi-materiale.
-        material = Materials[clamp(hit.MaterialIndex, 0, Materials.length() - 1)];
+        material = Materials[clamp(hit.MaterialIndex, 0, numMaterials - 1)];
 
         if(hit.Inside) {
             hit.Normal *= -1.0;

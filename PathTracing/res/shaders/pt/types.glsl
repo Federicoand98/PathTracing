@@ -1,13 +1,3 @@
-// Nodo BVH a 4 vie in layout SoA (128 byte): le AABB dei 4 figli sono impacchettate
-// per componente, cosi' lo slab test dei 4 box si fa con poche operazioni vec4 invece
-// di 4 test scalari. Deve combaciare bit-per-bit con BVH4Node lato C++ (BVHBuilder.h).
-struct BVH4Node {
-    vec4 bminx; vec4 bminy; vec4 bminz;  // min.{x,y,z} dei 4 figli
-    vec4 bmaxx; vec4 bmaxy; vec4 bmaxz;  // max.{x,y,z} dei 4 figli
-    ivec4 child;  // interno: indice nodo | foglia: primo indice in TriIndex
-    ivec4 count;  // 0 = interno, >0 = foglia con N triangoli, <0 = slot vuoto
-};
-
 struct Ray {
     vec3 Origin;
     vec3 Direction;
@@ -28,12 +18,6 @@ struct Quad {
 	float Height;
 };
 
-struct CubeInfo {
-    vec4 BoundsMin;
-    vec4 BoundsMax;
-    float FirstQuad;
-};
-
 struct MeshInfo {
     mat4 Transform;
     mat4 InvTransform;
@@ -44,11 +28,11 @@ struct MeshInfo {
     float FirstTriangle;
     float NumTriangles;
     float MaterialIndex;
-    float RootNode;   // radice del BLAS di questa mesh
+    float Padding;
 };
 
-// Posizioni e normali sono in due buffer separati: il loop caldo del BVH tocca
-// solo le posizioni (48B), le normali servono una sola volta sull'hit finale.
+// Posizioni e normali sono in due buffer separati: le posizioni sono anche l'ingresso dei BLAS,
+// le normali servono una sola volta sull'hit finale.
 struct TrianglePosition {
     vec4 A;
     vec4 B;

@@ -1,4 +1,6 @@
-#version 430 core
+#version 460 core
+
+#extension GL_EXT_ray_query : require
 
 layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -9,30 +11,11 @@ layout (local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 #include "pt/bindings.glsl"
 #include "pt/material.glsl"
 #include "pt/intersect.glsl"
-#include "pt/bvh.glsl"
 #include "pt/scene.glsl"
 #include "pt/bsdf.glsl"
 #include "pt/lights.glsl"
 #include "pt/reprojection.glsl"
 #include "pt/integrator.glsl"
-
-// gradiente freddo->caldo per la heatmap del BVH: nero, blu, ciano, verde, giallo, rosso
-vec3 BvhHeatColor(float t) {
-    t = clamp(t, 0.0, 1.0);
-    const vec3 c0 = vec3(0.0, 0.0, 0.0);
-    const vec3 c1 = vec3(0.0, 0.0, 1.0);
-    const vec3 c2 = vec3(0.0, 1.0, 1.0);
-    const vec3 c3 = vec3(0.0, 1.0, 0.0);
-    const vec3 c4 = vec3(1.0, 1.0, 0.0);
-    const vec3 c5 = vec3(1.0, 0.0, 0.0);
-
-    float s = t * 5.0;
-    if(s < 1.0) return mix(c0, c1, s);
-    if(s < 2.0) return mix(c1, c2, s - 1.0);
-    if(s < 3.0) return mix(c2, c3, s - 2.0);
-    if(s < 4.0) return mix(c3, c4, s - 3.0);
-    return mix(c4, c5, s - 4.0);
-}
 
 void main() {
     ivec2 imageResultSize = imageSize(imgOutput);
@@ -55,25 +38,6 @@ void main() {
         pickType = pickHit.ObjectType;
         pickIndex = pickHit.ObjectIndex;
         pickDistance = pickHit.HitDistance; // < 0 se il raggio non colpisce niente
-    }
-
-    // BVH debugger: colora ogni pixel in base a quanti nodi BVH testa il raggio
-    // primario. Bypassa l'accumulazione e scrive direttamente (vista live).
-    if(bvhDebug == 1) {
-        vec2 ndc = (vec2(texelCoord) + 0.5) / vec2(imageResultSize) * 2.0 - 1.0;
-        Ray ray = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, ndc);
-        ray.t = FLOAT_MAX;
-
-        gNodeVisits = 0;
-        {
-            int hitTriIndex, hitMesh;
-            float outU, outV;
-            TraceMeshes(ray, hitTriIndex, hitMesh, outU, outV, false);
-        }
-
-        vec3 heat = BvhHeatColor(float(gNodeVisits) / max(bvhHeatScale, 1.0));
-        imageStore(imgOutput, texelCoord, vec4(heat, 1.0));
-        return;
     }
 
     // Vivono in uno scope che si chiude prima del loop dei sample: vedi UpdateAOVs.

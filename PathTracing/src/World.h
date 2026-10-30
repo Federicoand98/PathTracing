@@ -9,7 +9,6 @@
 #include "Renderer/Material.h"
 #include "Renderer/Primitives.h"
 #include "Graphics/Model.h"
-#include "Graphics/BVHBuilder.h"
 
 namespace PathTracer {
 
@@ -63,11 +62,8 @@ namespace PathTracer {
 		// emissivi delle mesh sono esclusi (nessuna scena li usa; li campionerebbe il BSDF).
 		std::vector<GPULight> CollectLights() const;
 
-		// Ricostruisce i BVH di primo livello (sfere e quad, TLAS delle mesh). Va richiamata dopo
-		// OGNI modifica a quelle collezioni (creazione, rimozione, spostamento da gizmo): i BVH le
-		// indicizzano per posizione, quindi una geometria mossa senza rebuild verrebbe intersecata
-		// sbagliata.
-		void RebuildPrimBVH();
+		// AABB world di tutte le primitive analitiche: prima le sfere, poi i quad.
+		std::vector<AABB> PrimitiveBounds() const;
 	public:
 		glm::vec3 BackgroundColor;
         std::vector<Test> Tests;
@@ -78,26 +74,11 @@ namespace PathTracer {
 		std::vector<MeshInfo> Meshes;
 		std::vector<std::string> MeshNames;       // solo CPU, per la UI
 		std::vector<std::string> MeshPaths;       // solo CPU, path OBJ per la serializzazione
-		std::vector<Triangle> Triangles;          // authoring CPU, sorgente per il BVH
-		std::vector<TrianglePosition> TriPositions; // caricati sulla GPU (binding 3)
-		std::vector<TriangleNormal> TriNormals;    // caricate sulla GPU (binding 8)
-		std::vector<TriangleUV> TriUVs;            // caricate sulla GPU (binding 10)
+		std::vector<Triangle> Triangles;          // authoring CPU, sorgente dei buffer GPU
+		std::vector<TrianglePosition> TriPositions; // caricati sulla GPU, ingresso dei BLAS
+		std::vector<TriangleNormal> TriNormals;    // caricate sulla GPU
+		std::vector<TriangleUV> TriUVs;            // caricate sulla GPU
 		std::vector<std::string> TexturePaths;     // un layer del sampler2DArray ciascuna
-		std::vector<int> TriIndex;
-		std::vector<BVH4Node> BVH4Nodes;   // BVH a 4 vie, caricato sulla GPU (binding 6)
-		// BVH sulle primitive analitiche (sfere + quad). Prima venivano scandite linearmente
-		// a ogni raggio: con 488 sfere o 726 quad era il costo dominante della scena. I suoi
-		// nodi vivono in coda a BVH4Nodes (stesso buffer e stessa traversal dei BLAS mesh);
-		// le foglie indicizzano PrimIndex, dove ogni voce e' (indice << 1) | tipo,
-		// con tipo 0 = sfera, 1 = quad.
-		std::vector<int> PrimIndex;
-		int PrimBvhRoot = -1;              // radice in BVH4Nodes, -1 = nessuna primitiva
-		// TLAS: BVH sulle AABB world delle mesh. Sta in coda a BVH4Nodes come quello delle
-		// primitive e le sue foglie contengono indici di mesh, in coda a PrimIndex.
-		int TlasRoot = -1;                 // radice in BVH4Nodes, -1 = scansione lineare
-		// I primi BlasNodeCount nodi di BVH4Nodes sono i BLAS, che cambiano solo con la geometria.
-		// Il resto (BVH primitive + TLAS) si ricostruisce a ogni reset.
-		int BlasNodeCount = 0;
 		// Cresce a ogni modifica di triangoli e BLAS: evita di ricaricarli sulla GPU a ogni reset.
 		int GeometryVersion = 0;
 		int CurrentScene = 6;
@@ -120,9 +101,7 @@ namespace PathTracer {
 		int RegisterTexture(const std::string& path);      // dedup in TexturePaths, ritorna il layer
 		Material MaterialFromMtl(const MtlMaterial& mtl);  // MtlMaterial -> Material dell'engine
 
-		void BuildBVH();
-		void BuildPrimBVH();
-		void BuildTLAS();
+		void BuildTriangleBuffers();
 
 		void CreateCornellBox();
 	};
