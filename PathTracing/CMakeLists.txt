@@ -16,8 +16,6 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
-set(OpenGL_GL_PREFERENCE "GLVND")
-
 set(CMAKE_CXX_STANDARD 17)
 
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
@@ -47,13 +45,11 @@ target_precompile_headers(${PROJECT_NAME} PRIVATE "src/ptpch.h")
 # set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 # set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
-find_package(OpenGL REQUIRED)
+find_package(Vulkan REQUIRED)
 find_package(glfw3 REQUIRED)
-find_package(GLEW REQUIRED)
 
-target_link_libraries(${PROJECT_NAME} PRIVATE OpenGL::GL)
+target_link_libraries(${PROJECT_NAME} PRIVATE Vulkan::Vulkan)
 target_link_libraries(${PROJECT_NAME} PRIVATE glfw)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${GLEW_LIBRARIES})
 include_directories(
 		"${LIB_DIR}/glm"
 		"${SRC_DIR}"
@@ -64,14 +60,29 @@ include_directories(
 )
 
 
-# include_directories("${LIB_DIR}/glew/include")
+target_compile_definitions(${PROJECT_NAME} PUBLIC -DImTextureID=ImU64 -DGLFW_INCLUDE_NONE)
 
-# target_link_libraries(${PROJECT_NAME} PRIVATE "${LIB_DIR}/glew/lib/Release/x64/glew32.lib")
+# Shader: SPIR-V generato a build time. glslc risolve da se' gli #include, quindi un compute
+# dipende da tutti i .glsl: modificarne uno ricompila solo gli shader.
+find_program(GLSLC glslc REQUIRED)
+set(SHADER_DIR "${RES_DIR}/shaders")
+set(SPV_DIR "${SHADER_DIR}/spv")
+file(MAKE_DIRECTORY ${SPV_DIR})
+file(GLOB_RECURSE SHADER_INCLUDES CONFIGURE_DEPENDS "${SHADER_DIR}/*.glsl")
+file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS "${SHADER_DIR}/*.comp")
 
-# file(GLOB DLLS "libs/glew/glew32.dll")
-# file(COPY ${DLLS} DESTINATION ${RES_DIR})
-
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DImTextureID=ImU64)
+set(SPV_FILES "")
+foreach(source ${SHADER_SOURCES})
+  get_filename_component(name ${source} NAME_WE)
+  set(output "${SPV_DIR}/${name}.spv")
+  add_custom_command(OUTPUT ${output}
+    COMMAND ${GLSLC} --target-env=vulkan1.3 -O -I ${SHADER_DIR} -o ${output} ${source}
+    DEPENDS ${source} ${SHADER_INCLUDES}
+    COMMENT "glslc ${name}.comp")
+  list(APPEND SPV_FILES ${output})
+endforeach()
+add_custom_target(Shaders ALL DEPENDS ${SPV_FILES})
+add_dependencies(${PROJECT_NAME} Shaders)
 
 # set(CMAKE_EXE_LINKER_FLAGS "-static")
 
