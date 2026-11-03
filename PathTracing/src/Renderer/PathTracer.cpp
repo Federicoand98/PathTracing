@@ -195,6 +195,10 @@ namespace PathTracer {
 		frame.PrevCameraPosition = container.PrevCameraPosition;
 		frame.SamplesPerPixel = static_cast<int>(container.SamplesPerPixel);
 		frame.BackgroundColor = world.BackgroundColor;
+		if (world.Sun.Enabled) {
+			frame.SunDirection = glm::vec4(world.Sun.Direction(), world.Sun.CosMax());
+			frame.SunRadiance = glm::vec4(world.Sun.Radiance(), world.Sun.SolidAngle());
+		}
 		frame.RayDepth = static_cast<int>(container.RayDepth);
 		frame.PickPixel = container.PickPixel;
 		frame.AovView = container.AOVView;

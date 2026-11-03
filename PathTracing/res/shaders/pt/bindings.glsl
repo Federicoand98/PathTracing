@@ -41,6 +41,10 @@ layout(std140, binding = 8) uniform FrameParams {
     int samplesPerPixel;
     vec3 BackgroundColor;
     int rayDepth;
+    // Il Sole (ADR 0006), anche fuori dalla light list: un raggio BSDF che lo colpisce deve
+    // vederlo pure con la NEE spenta, come vede le superfici emissive.
+    vec4 sunDirection;    // xyz = verso il Sole, w = cos del raggio angolare
+    vec4 sunRadiance;     // rgb = radianza del disco, w = angolo solido (0 = nessun Sole)
     ivec2 pickPixel;      // pixel da campionare per il picking, (-1,-1) = nessuno
     int aovView;          // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth (vista di debug)
     int numLights;        // emettitori per la NEE; 0 = NEE disattivata

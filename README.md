@@ -30,7 +30,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <h3 align="center">PathTracing in OpenGL</h3>
+  <h3 align="center">PathTracing in Vulkan</h3>
 
   <p align="center">
     A GPU-based PathTracing renderer for creating images with global illumination, advanced reflections, and physically-based materials.
@@ -65,8 +65,8 @@
         <li><a href="#installation">Installation</a></li>
       </ul>
     </li>
-    <li><a href="#usage">Usage</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#some-renders">Some Renders</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
     <li><a href="#contact">Contact</a></li>
@@ -79,35 +79,28 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-This project is a full GPU-based RayTracing with PathTracing Renderer written in C++ and OpenGL 4.3.
+This project is a GPU path tracer written in C++ and Vulkan 1.3. It traces rays in hardware through `VK_KHR_ray_query`, from a single compute shader.
 
 ![Product Name Screen Shot][product-screenshot]
 
-This PathTracer project utilizes GPU acceleration through OpenGL Compute Shader to render various geometric shapes such as spheres, squares, triangles, cubes, and meshes.
-It employs global illumination and a BSDF (Bidirectional Scattering Distribution Function) lighting model, incorporating features like Russian roulette for ray termination, 
-optimized ray-object intersections using Bounding Boxes and Axis-Aligned Bounding Boxes (AABB), and the Fresnel-Schlick approximation.
+Up to version 1.3 the renderer ran on OpenGL 4.3 compute shaders, with a BVH built and traversed in software. Version 2.0 moved it to Vulkan: the driver now builds the acceleration structures, and on the Sponza test scene a frame went from 52.6 ms to 1.2 ms at 1280×720. The OpenGL version is kept under the `v1.3-opengl` tag.
 
 This PathTracer currently has:
-- GPU acceleration via compute shader
-- Monte Carlo unidirectional integrator
-- BSDF supporting Diffuse, Metal, Glossy, Emissive, and Glass
-- Russian Roulette for path termination
-- Super Sampling Antialiasing (SSAA)
-- Environment mapping with skybox
-- Support for wavefront obj meshes
-- HDR
-- A customizable PostProcessor
-- Support for triangles, squares, cubes, spheres, and meshes
-- AABB for cubes and meshes
-- Every scene element can be modified in real time from GUI
-- Interactive camera
-- A material system that can be modified in every parameter
-
-We are looking to implement:
-- Acceleration structures (BHV)
-- Some boom effects
-- Texture mapping
-- Normal mapping
+- Hardware ray tracing with `VK_KHR_ray_query`: one BLAS per mesh, a procedural BLAS for spheres and quads, and a TLAS rebuilt when the scene changes
+- Monte Carlo unidirectional integrator with Russian roulette
+- Next event estimation with multiple importance sampling on emissive spheres and quads
+- GGX microfacet BSDF with visible-normal sampling, for diffuse, metal, glossy, emissive and glass materials
+- Glass with Fresnel, total internal reflection and Beer-Lambert absorption, on spheres and meshes
+- Temporal accumulation with reprojection, so the image keeps converging while the camera moves
+- Edge-avoiding à-trous denoiser guided by albedo, normal and depth
+- Thin-lens depth of field and a firefly clamp
+- Albedo textures with mipmaps, plus procedural checker and Perlin noise materials
+- Wavefront OBJ meshes with MTL materials, and glTF 2.0 scenes
+- Live link with Blender: an add-on exports glTF on save and the renderer reloads it
+- Scenes saved to and loaded from JSON
+- ACES tonemapping and exposure
+- Picking, gizmos and a material editor: every scene element can be changed in real time from the GUI
+- Debug views for albedo, normals, depth and accumulation history
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -115,10 +108,66 @@ We are looking to implement:
 
 ### Built With
 
-* [GLEW][glew-url]
+* [Vulkan][vulkan-url]
 * [GLFW][glfw-url]
 * [GLM][glm-url]
-* [Dear ImGui][imgui-url]
+* [Dear ImGui][imgui-url] and [ImGuizmo][imguizmo-url]
+* [cgltf][cgltf-url], [stb_image][stb-url], [nlohmann/json][json-url], [portable-file-dialogs][pfd-url]
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- GETTING STARTED -->
+## Getting Started
+
+### Prerequisites
+
+* A GPU and driver with Vulkan 1.3, `VK_KHR_ray_query`, `VK_KHR_acceleration_structure` and `VK_KHR_push_descriptor`
+* CMake 3.8 or newer and a C++20 compiler
+* The Vulkan headers and loader, `glslc` and GLFW 3
+
+On Ubuntu:
+
+```sh
+sudo apt install build-essential cmake libvulkan-dev glslc libglfw3-dev
+```
+
+The build has been tested on Linux only.
+
+### Installation
+
+1. Clone the repo
+   ```sh
+   git clone https://github.com/Federicoand98/PathTracing.git
+   cd PathTracing
+   ```
+2. Build. The shaders are compiled to SPIR-V as part of the build
+   ```sh
+   cmake -S PathTracing -B PathTracing/build
+   cmake --build PathTracing/build
+   ```
+3. Run. The executable is written to `PathTracing/res`
+   ```sh
+   ./PathTracing/res/PathTracing
+   ```
+
+To enable the Vulkan validation layers in a Release build, set `PT_VALIDATION=1`.
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- ROADMAP -->
+## Roadmap
+
+- Normal maps and alpha-masked geometry
+- Directional, point and spot lights
+- HDR environment maps with importance sampling
+- Roughness, metallic and emissive texture maps
+- A stronger denoiser
+
+See the [open issues][issues-url] for the full list.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -150,7 +199,7 @@ Don't forget to give the project a star! Thanks again!
 <!-- LICENSE -->
 ## License
 
-Distributed under the Apache License. See `LICENSE.txt` for more information.
+Distributed under the Apache License 2.0. See `LICENSE` for more information.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -170,7 +219,8 @@ Project Link: [https://github.com/Federicoand98/PathTracing](https://github.com/
 
 Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
 
-* [OpenGL Compute Shaders](https://learnopengl.com/Guest-Articles/2022/Compute-Shaders/Introduction)
+* [Vulkan ray query](https://docs.vulkan.org/spec/latest/chapters/raytraversal.html)
+* [OpenGL Compute Shaders](https://learnopengl.com/Guest-Articles/2022/Compute-Shaders/Introduction), used up to version 1.3
 * [RayTracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html)
 * [BSDF](https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/)
 
@@ -189,11 +239,16 @@ Use this space to list resources you find helpful and would like to give credit 
 [issues-shield]: https://img.shields.io/github/issues/Federicoand98/PathTracing.svg?style=for-the-badge
 [issues-url]: https://github.com/Federicoand98/PathTracing/issues
 [license-shield]: https://img.shields.io/github/license/Federicoand98/PathTracing.svg?style=for-the-badge
-[license-url]: https://github.com/Federicoand98/PathTracing/blob/master/LICENSE.txt
+[license-url]: https://github.com/Federicoand98/PathTracing/blob/master/LICENSE
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://linkedin.com/in/Federicoand98
 [imgui-url]: https://github.com/ocornut/imgui
-[glew-url]: https://glew.sourceforge.net/
+[vulkan-url]: https://www.vulkan.org/
+[imguizmo-url]: https://github.com/CedricGuillemet/ImGuizmo
+[cgltf-url]: https://github.com/jkuhlmann/cgltf
+[stb-url]: https://github.com/nothings/stb
+[json-url]: https://github.com/nlohmann/json
+[pfd-url]: https://github.com/samhocevar/portable-file-dialogs
 [glfw-url]: https://www.glfw.org/
 [glm-url]: https://github.com/g-truc/glm
 [product-screenshot]: README/app-2.png

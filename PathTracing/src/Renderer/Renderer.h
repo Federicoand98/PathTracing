@@ -47,7 +47,7 @@ namespace PathTracer {
 	public:
 		bool PathTracing = true;
 		bool PostProcessing = true;
-		bool EnvironmentMapping = true;
+		bool EnvironmentMapping = false; // true = cubemap, false = BackgroundColor
 		float FireflyClamp = 0.0f;   // 0 = off
 		float Aperture = 0.0f;       // raggio lente; 0 = pinhole, niente DOF
 		float FocusDistance = 5.0f;  // distanza del piano di fuoco

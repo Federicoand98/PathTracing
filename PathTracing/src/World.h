@@ -66,6 +66,7 @@ namespace PathTracer {
 		std::vector<AABB> PrimitiveBounds() const;
 	public:
 		glm::vec3 BackgroundColor;
+		SunParams Sun;                    // al massimo un Sole per scena (ADR 0006)
         std::vector<Test> Tests;
 		std::vector<Sphere> Spheres;
 		std::vector<Quad> Quads;
