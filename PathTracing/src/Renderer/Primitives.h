@@ -118,10 +118,38 @@ namespace PathTracer {
         glm::vec4 U{ 0.0f };         // quad: vettore-spigolo U (fisico) ; sfera: inutilizzato
         glm::vec4 V{ 0.0f };         // quad: vettore-spigolo V (fisico) ; sfera: inutilizzato
         glm::vec4 Normal{ 0.0f };    // quad: normale.xyz ; sfera: inutilizzato
-        glm::ivec4 Meta{ 0 };        // x = tipo (0 sfera, 1 quad), y = objType, z = objIndex
+        glm::ivec4 Meta{ 0 };        // x = tipo (0 sfera, 1 quad, 2 Sole), y = objType, z = objIndex
     };
 
     static_assert(sizeof(GPULight) == 96, "GPULight deve essere 96 byte per combaciare con lo std430");
+
+    // Il Sole: l'Emitter senza geometria (ADR 0006). Angoli in gradi. Elevazione 0 = orizzonte,
+    // 90 = zenit; azimut attorno all'asse y, 0 = verso +z, 90 = verso +x.
+    struct SunParams {
+        bool Enabled = false;
+        float Elevation = 45.0f;
+        float Azimuth = 0.0f;
+        float AngularRadius = 0.27f;   // raggio del disco, non il diametro: e' quello del sole reale
+        glm::vec3 Color{ 1.0f };
+        float Irradiance = 3.0f;       // luce su una superficie perpendicolare al Sole
+
+        // Verso il Sole, dalla superficie alla luce: la stessa convenzione di wi nella NEE.
+        glm::vec3 Direction() const {
+            const float el = glm::radians(Elevation), az = glm::radians(Azimuth);
+            return glm::vec3(std::cos(el) * std::sin(az), std::sin(el), std::cos(el) * std::cos(az));
+        }
+
+        float CosMax() const { return std::cos(glm::radians(AngularRadius)); }
+        float SolidAngle() const { return 2.0f * 3.14159265f * (1.0f - CosMax()); }
+
+        // Radianza del disco ricavata dall'irradianza: E = L * pi * sin^2(theta) per un disco
+        // uniforme visto di fronte. Cosi' allargare il disco ammorbidisce le ombre senza
+        // cambiare quanta luce arriva.
+        glm::vec3 Radiance() const {
+            const float s = std::sin(glm::radians(AngularRadius));
+            return Color * (Irradiance / (3.14159265f * s * s));
+        }
+    };
 
     struct Box {
         glm::vec4 Min{ 0.0f };

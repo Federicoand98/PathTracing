@@ -23,7 +23,7 @@ namespace PathTracer {
 		// Usiamo invece i flag: il dockspace ha NoBringToFrontOnFocus, i pannelli no.
 		const char* HoveredWindowName() {
 			ImGuiWindow* hovered = ImGui::GetCurrentContext()->HoveredWindow;
-			return hovered ? hovered->Name : "(nessuna)";
+			return hovered ? hovered->Name : "(none)";
 		}
 
 		// Proietta un punto world sullo schermo. Ritorna false se sta dietro la camera:
@@ -447,7 +447,7 @@ namespace PathTracer {
 		if (ImGui::Button("...")) {
 			// Dialog nativo (zenity su Linux). Parte dalla cartella del path corrente, se valida.
 			std::string start = std::filesystem::path(gltfPath).parent_path().string();
-			auto sel = pfd::open_file("Apri scena glTF", start,
+			auto sel = pfd::open_file("Open glTF scene", start,
 				{ "glTF", "*.gltf *.glb", "Tutti i file", "*" }).result();
 			if (!sel.empty())
 				loadGltfFromUI(sel[0]);
@@ -467,6 +467,22 @@ namespace PathTracer {
 		if (!m_Renderer.EnvironmentMapping)
 			if (ImGui::ColorEdit3("Background", glm::value_ptr(m_World.BackgroundColor)))
 				m_Renderer.ResetPathTracingCounter();
+
+		ImGui::SeparatorText("Sun");
+		{
+			// Ogni parametro del Sole cambia l'immagine e la light list: tutti azzerano l'accumulo.
+			SunParams& sun = m_World.Sun;
+			bool changed = ImGui::Checkbox("Sun enabled", &sun.Enabled);
+			if (sun.Enabled) {
+				changed |= ImGui::SliderFloat("Elevation", &sun.Elevation, -90.0f, 90.0f, "%.1f deg");
+				changed |= ImGui::SliderFloat("Azimuth", &sun.Azimuth, 0.0f, 360.0f, "%.1f deg");
+				changed |= ImGui::SliderFloat("Angular radius", &sun.AngularRadius, 0.01f, 5.0f, "%.2f deg", ImGuiSliderFlags_Logarithmic);
+				changed |= ImGui::ColorEdit3("Sun color", glm::value_ptr(sun.Color));
+				changed |= ImGui::DragFloat("Irradiance", &sun.Irradiance, 0.05f, 0.0f, 1000.0f, "%.2f");
+			}
+			if (changed)
+				m_Renderer.ResetPathTracingCounter();
+		}
 
 		ImGui::SeparatorText("Scene file");
 		ImGui::PushItemWidth(200.0f);
@@ -518,7 +534,7 @@ namespace PathTracer {
 		ImGui::BeginChild("OutlinerList", ImVec2(0.0f, 190.0f), true);
 
 		if (empty)
-			ImGui::TextDisabled("scena vuota");
+			ImGui::TextDisabled("empty scene");
 
 		if (!m_World.Spheres.empty() && ImGui::TreeNodeEx("spheres", ImGuiTreeNodeFlags_DefaultOpen, "Spheres (%zu)", m_World.Spheres.size())) {
 			for (size_t i = 0; i < m_World.Spheres.size(); i++)
@@ -603,8 +619,8 @@ namespace PathTracer {
 
 	void Application::DrawSelectionProperties() {
 		if (!m_Selection.IsValid()) {
-			ImGui::TextDisabled("Nessun oggetto selezionato.");
-			ImGui::TextDisabled("Click nella viewport, o su una riga dell'outliner.");
+			ImGui::TextDisabled("No object selected.");
+			ImGui::TextDisabled("Click in the viewport, or on an outliner row.");
 			return;
 		}
 
@@ -630,7 +646,7 @@ namespace PathTracer {
 			if (ImGui::DragFloat("Width", &quad.Width, 0.1f, 0.001f, 1000.0f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Height", &quad.Height, 0.1f, 0.001f, 1000.0f)) m_Renderer.ResetPathTracingCounter();
 			if (MaterialCombo("Material", quad.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
-			ImGui::TextDisabled("pivot = angolo inferiore sinistro");
+			ImGui::TextDisabled("pivot = lower-left corner");
 			break;
 		}
 		case SelectionType::Box: {
@@ -645,12 +661,12 @@ namespace PathTracer {
 				box.UpdateBox(m_World.Quads); // un box e' 6 quad: vanno riscritti
 				m_Renderer.ResetPathTracingCounter();
 			}
-			ImGui::TextDisabled("axis-aligned: non ruotabile");
+			ImGui::TextDisabled("axis-aligned: cannot be rotated");
 			break;
 		}
 		case SelectionType::Mesh: {
 			MeshInfo& mesh = m_World.Meshes.at(m_Selection.Index);
-			ImGui::Text("Triangoli: %d", static_cast<int>(mesh.NumTriangles));
+			ImGui::Text("Triangles: %d", static_cast<int>(mesh.NumTriangles));
 
 			glm::vec3 position = glm::vec3(mesh.Transform[3]); // la traslazione e' l'ultima colonna
 			if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f)) {
@@ -675,11 +691,11 @@ namespace PathTracer {
 		ImGui::PopItemWidth();
 
 		ImGui::Spacing();
-		if (ImGui::Button("Deseleziona (ESC)"))
+		if (ImGui::Button("Deselect (ESC)"))
 			m_Selection = {};
 
 		ImGui::SameLine();
-		if (ImGui::Button("Elimina (Canc)"))
+		if (ImGui::Button("Delete (Del)"))
 			m_DeleteRequested = true;
 	}
 
@@ -898,15 +914,15 @@ namespace PathTracer {
 				return;
 			}
 
-			ImGui::Text("Eliminare %s?", GetSelectionName().c_str());
+			ImGui::Text("Delete %s?", GetSelectionName().c_str());
 
 			switch (m_Selection.Type) {
 			case SelectionType::Mesh:
-				ImGui::TextDisabled("%d triangoli - i BLAS verranno ricostruiti",
+				ImGui::TextDisabled("%d triangles - BLASes will be rebuilt",
 					static_cast<int>(m_World.Meshes[m_Selection.Index].NumTriangles));
 				break;
 			case SelectionType::Box:
-				ImGui::TextDisabled("porta via anche le sue 6 facce");
+				ImGui::TextDisabled("also removes its 6 faces");
 				break;
 			default:
 				break;
@@ -916,14 +932,14 @@ namespace PathTracer {
 			ImGui::Separator();
 			ImGui::Spacing();
 
-			if (ImGui::Button("Elimina", ImVec2(120, 0))) {
+			if (ImGui::Button("Delete", ImVec2(120, 0))) {
 				DeleteSelection();
 				m_ShowDeletePopup = false;
 				ImGui::CloseCurrentPopup();
 			}
 			ImGui::SetItemDefaultFocus();
 			ImGui::SameLine();
-			if (ImGui::Button("Annulla", ImVec2(120, 0))) {
+			if (ImGui::Button("Cancel", ImVec2(120, 0))) {
 				m_ShowDeletePopup = false;
 				ImGui::CloseCurrentPopup();
 			}
@@ -982,7 +998,7 @@ namespace PathTracer {
 		}
 		ImGui::EndDisabled();
 		if (isMetal)
-			ImGui::TextDisabled("metallo: niente diffuso ne' trasmissione, riflesso tinto dall'albedo");
+			ImGui::TextDisabled("metal: no diffuse or transmission, reflection tinted by albedo");
 
 		// Specular level (F0 dielettrico) sepolto in Advanced, come in Blender: quasi
 		// nessuno lo tocca. F0 = 0.08 * livello, quindi 0.5 -> 0.04 (dielettrico standard).
@@ -994,7 +1010,7 @@ namespace PathTracer {
 				changed = true;
 			}
 			ImGui::EndDisabled();
-			ImGui::TextDisabled("F0 dielettrico. 0.5 = 0.04, il valore fisico standard");
+			ImGui::TextDisabled("dielectric F0. 0.5 = 0.04, the standard physical value");
 			ImGui::TreePop();
 		}
 
@@ -1037,11 +1053,11 @@ namespace PathTracer {
 		}
 		else {
 			material.AlbedoTexture = -1.0f;
-			ImGui::TextDisabled("(nessuna texture caricata in questa scena)");
+			ImGui::TextDisabled("(no textures loaded in this scene)");
 		}
 		ImGui::EndDisabled();
 		if (checkerWins)
-			ImGui::TextDisabled("checker attivo: ha la precedenza, la texture e' ignorata");
+			ImGui::TextDisabled("checker on: it takes precedence, the texture is ignored");
 
 		ImGui::SeparatorText("Procedural noise");
 		int noiseMode = static_cast<int>(material.NoiseType + 0.5f);
@@ -1071,7 +1087,7 @@ namespace PathTracer {
 			if (ImGui::ColorEdit3("Noise color A", glm::value_ptr(material.NoiseColorA))) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::ColorEdit3("Noise color B", glm::value_ptr(material.NoiseColorB))) m_Renderer.ResetPathTracingCounter();
 
-			ImGui::TextDisabled("Valutato in world space: l'oggetto \"scorre\" nel rumore se lo sposti");
+			ImGui::TextDisabled("Evaluated in world space: the object \"slides\" through the noise if you move it");
 		}
 
 		ImGui::Spacing();
@@ -1116,7 +1132,7 @@ namespace PathTracer {
 		ImGui::SeparatorText("Textures");
 
 		if (m_World.TexturePaths.empty())
-			ImGui::TextDisabled("nessuna texture caricata");
+			ImGui::TextDisabled("no textures loaded");
 
 		for (size_t i = 0; i < m_World.TexturePaths.size(); i++)
 			ImGui::BulletText("layer %d  -  %s", (int)i, m_World.TexturePaths[i].c_str());
@@ -1139,7 +1155,7 @@ namespace PathTracer {
 		}
 
 		if (m_TextureFiles.empty()) {
-			ImGui::TextDisabled("(nessun file in res/textures)");
+			ImGui::TextDisabled("(no files in res/textures)");
 			return;
 		}
 
@@ -1170,10 +1186,10 @@ namespace PathTracer {
 
 		if (alreadyLoaded) {
 			ImGui::SameLine();
-			ImGui::TextDisabled("gia' caricata");
+			ImGui::TextDisabled("already loaded");
 		}
 
-		ImGui::TextDisabled("solo append: i layer sono indicizzati dai materiali");
+		ImGui::TextDisabled("append only: layers are indexed by materials");
 	}
 
 	void Application::DrawMaterialsTab() {
@@ -1189,7 +1205,7 @@ namespace PathTracer {
 		}
 
 		if (m_World.Materials.empty()) {
-			ImGui::TextDisabled("nessun materiale in questa scena");
+			ImGui::TextDisabled("no materials in this scene");
 			return;
 		}
 
@@ -1232,11 +1248,11 @@ namespace PathTracer {
 		// Render scale: risoluzione ridotta SOLO mentre la camera si muove (piu' fluido),
 		// piena risoluzione + accumulo da fermi. Nessun reset qui: agisce al prossimo movimento.
 		{
-			const char* labels[] = { "1.0 (piena)", "0.75", "0.5", "0.25" };
+			const char* labels[] = { "1.0 (full)", "0.75", "0.5", "0.25" };
 			const float values[] = { 1.0f, 0.75f, 0.5f, 0.25f };
 			int idx = 0;
 			for (int i = 0; i < 4; i++) if (m_Renderer.RenderScale == values[i]) idx = i;
-			if (ImGui::Combo("Render scale (in movimento)", &idx, labels, 4))
+			if (ImGui::Combo("Render scale (while moving)", &idx, labels, 4))
 				m_Renderer.RenderScale = values[idx];
 		}
 
@@ -1267,7 +1283,7 @@ namespace PathTracer {
 			m_Camera.ResetPosition();
 			m_Renderer.ResetPathTracingCounter();
 		}
-		ImGui::TextDisabled("tasto destro + WASD per navigare");
+		ImGui::TextDisabled("right mouse + WASD to navigate");
 
 		ImGui::SeparatorText("Depth of field");
 		// Apertura e fuoco cambiano i raggi PRIMARI: vanno resettati (a differenza
@@ -1287,17 +1303,17 @@ namespace PathTracer {
 		// pick del punto di fuoco: arma la modalita', il prossimo click nel viewport
 		// mette a fuoco esattamente li'
 		if (m_FocusPickArmed) {
-			if (ImGui::Button("Annulla pick")) m_FocusPickArmed = false;
+			if (ImGui::Button("Cancel pick")) m_FocusPickArmed = false;
 			ImGui::SameLine();
-			ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "clicca un punto nella scena...");
+			ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "click a point in the scene...");
 		}
-		else if (ImGui::Button("Pick focus (clicca un oggetto)")) {
+		else if (ImGui::Button("Pick focus (click an object)")) {
 			m_FocusPickArmed = true;
 		}
 		ImGui::EndDisabled();
 
 		if (dofOff)
-			ImGui::TextDisabled("apertura a 0: DOF disattivato (pinhole)");
+			ImGui::TextDisabled("aperture 0: DOF off (pinhole)");
 
 		ImGui::PopItemWidth();
 
@@ -1318,19 +1334,19 @@ namespace PathTracer {
 		if (ImGui::Combo("View", &m_Renderer.AOVView, "Beauty\0Albedo\0Normal\0Depth\0History\0\0"))
 			m_Renderer.ResetPathTracingCounter();
 		if (m_Renderer.AOVView == 4)
-			ImGui::TextDisabled("verde = storia matura, rosso = ripartita (disocclusione)");
+			ImGui::TextDisabled("green = mature history, red = restarted (disocclusion)");
 		else if (m_Renderer.AOVView != 0)
-			ImGui::TextDisabled("vista AOV di debug: nessun tonemap");
+			ImGui::TextDisabled("AOV debug view: no tonemap");
 
 		// Riproiezione temporale (ADR 0002)
 		ImGui::Spacing();
-		if (ImGui::Checkbox("Riproiezione temporale", &m_Renderer.Reproject))
+		if (ImGui::Checkbox("Temporal reprojection", &m_Renderer.Reproject))
 			m_Renderer.ResetPathTracingCounter();
 		if (m_Renderer.Reproject) {
 			ImGui::SliderInt("History cap", &m_Renderer.HistoryCap, 1, 128);
 			ImGui::TextDisabled("cap solo in movimento; da fermo N cresce libero");
 		} else {
-			ImGui::TextDisabled("spenta: la camera che si muove azzera l'accumulo");
+			ImGui::TextDisabled("off: moving the camera resets accumulation");
 		}
 
 		// Denoiser à-trous: e' un view filter read-only, non tocca l'accumulo -> niente reset.
@@ -1340,40 +1356,40 @@ namespace PathTracer {
 		if (ImGui::Checkbox("Next Event Estimation", &m_Renderer.NEE))
 			m_Renderer.ResetPathTracingCounter();
 		ImGui::TextDisabled(m_Renderer.NEE
-			? "campiona le luci direttamente (utile solo con geometria emissiva)"
-			: "spenta: le luci si trovano solo per rimbalzo casuale (piu' rumore)");
+			? "samples lights directly (needs an emitter: emissive geometry or the sun)"
+			: "off: lights are found only by random bounces (more noise)");
 
 		ImGui::Spacing();
 		ImGui::Checkbox("Denoise (a-trous)", &m_Renderer.Denoise);
 		if (m_Renderer.Denoise) {
 			if (m_Renderer.AOVView != 0) {
-				ImGui::TextDisabled("attivo solo in vista Beauty");
+				ImGui::TextDisabled("active in Beauty view only");
 			} else {
 				ImGui::SliderFloat("Strength", &m_Renderer.DenoiseStrength, 0.0f, 1.0f, "%.2f");
-				ImGui::Checkbox("Attenua con accumulo", &m_Renderer.DenoiseAutoFade);
+				ImGui::Checkbox("Fade with accumulation", &m_Renderer.DenoiseAutoFade);
 				if (m_Renderer.DenoiseAutoFade)
-					ImGui::TextDisabled("si spegne a immagine convergente (~1/sqrt N)");
-				ImGui::SliderFloat("Sigma luminanza", &m_Renderer.DenoiseCPhi, 0.05f, 10.0f, "%.2f");
-				ImGui::SliderFloat("Sigma normale", &m_Renderer.DenoiseNPhi, 1.0f, 128.0f, "%.0f");
-				ImGui::SliderFloat("Sigma profondita", &m_Renderer.DenoisePPhi, 0.05f, 10.0f, "%.2f");
+					ImGui::TextDisabled("fades out as the image converges (~1/sqrt N)");
+				ImGui::SliderFloat("Sigma luminance", &m_Renderer.DenoiseCPhi, 0.05f, 10.0f, "%.2f");
+				ImGui::SliderFloat("Sigma normal", &m_Renderer.DenoiseNPhi, 1.0f, 128.0f, "%.0f");
+				ImGui::SliderFloat("Sigma depth", &m_Renderer.DenoisePPhi, 0.05f, 10.0f, "%.2f");
 				ImGui::SliderFloat("Sigma albedo", &m_Renderer.DenoiseAPhi, 0.02f, 1.0f, "%.2f");
-				ImGui::TextDisabled("view filter: non tocca l'accumulo");
+				ImGui::TextDisabled("view filter: does not touch accumulation");
 			}
 		}
 
 		ImGui::SeparatorText("Picking");
 		ImGui::Text("hovered window : %s", HoveredWindowName());
-		ImGui::Text("viewport hover : %s", m_ViewportHovered ? "SI" : "NO");
+		ImGui::Text("viewport hover : %s", m_ViewportHovered ? "YES" : "NO");
 		ImGui::Text("viewport rect  : (%.0f,%.0f) %.0f x %.0f",
 			m_ViewportPos.x, m_ViewportPos.y, m_ViewportSize.x, m_ViewportSize.y);
-		ImGui::Text("richieste pick : %d", m_PickRequestCount);
-		ImGui::Text("ultimo pixel   : (%d, %d)", m_LastPickPixel.x, m_LastPickPixel.y);
-		ImGui::Text("ultimo esito   : type=%d index=%d", m_LastPickType, m_LastPickIndex);
-		ImGui::TextDisabled("-2 = lo shader non ha scritto, -1 = raggio a vuoto");
+		ImGui::Text("pick requests  : %d", m_PickRequestCount);
+		ImGui::Text("last pixel     : (%d, %d)", m_LastPickPixel.x, m_LastPickPixel.y);
+		ImGui::Text("last result    : type=%d index=%d", m_LastPickType, m_LastPickIndex);
+		ImGui::TextDisabled("-2 = not written by the shader, -1 = ray missed");
 
 		// Bypassa il gate del mouse: se questo seleziona ma il click no, il problema
 		// e' nel gate; se non seleziona nemmeno questo, e' nella pipeline di picking.
-		if (ImGui::Button("Pick al centro della viewport")) {
+		if (ImGui::Button("Pick at viewport center")) {
 			m_LastPickPixel = { (int)m_ViewportSize.x / 2, (int)m_ViewportSize.y / 2 };
 			m_PickRequestCount++;
 			m_Renderer.RequestPick(m_LastPickPixel.x, m_LastPickPixel.y);
@@ -1479,7 +1495,7 @@ namespace PathTracer {
 
 	std::string Application::GetSelectionLabel() const {
 		if (!m_Selection.IsValid())
-			return "Nessuna selezione  -  click su un oggetto per selezionarlo";
+			return "No selection  -  click an object to select it";
 
 		const ImGuizmo::OPERATION effective = EffectiveGizmoOperation();
 		const char* operation = effective == ImGuizmo::ROTATE ? "Rotate"

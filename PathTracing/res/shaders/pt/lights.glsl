@@ -1,5 +1,9 @@
 // ---- NEE: sampling delle luci e pdf per la MIS --------------------------------
 
+// Distanza a cui si mette il Sole per il raggio d'ombra: e' all'infinito, ma basta oltre
+// qualunque geometria. Combacia con il tMax di TraceRay.
+const float SUN_DISTANCE = 100000.0;
+
 // Campiona un emettitore (scelto uniformemente) e restituisce direzione, distanza, radianza
 // e pdf in solid angle (gia' comprensiva di 1/numLights). false = campione non valido.
 bool SampleLight(vec3 p, out vec3 wi, out float dist, out vec3 Lrad, out float pdf) {
@@ -11,6 +15,20 @@ bool SampleLight(vec3 p, out vec3 wi, out float dist, out vec3 Lrad, out float p
     Light L = Lights[li];
     Lrad = L.Emission.rgb;
     float pickPdf = 1.0 / float(numLights);
+
+    if(L.Meta.x == 2) {
+        // ---- Sole: cono uniforme attorno alla sua direzione, uguale da ogni punto ----
+        float cosMax = L.P.w;
+        float cosT = 1.0 - GetRandomFloat() * (1.0 - cosMax);
+        float sinT = sqrt(max(0.0, 1.0 - cosT * cosT));
+        float phi = 2.0 * PI * GetRandomFloat();
+
+        vec3 tx, ty; BuildBasis(L.P.xyz, tx, ty);
+        wi = normalize(tx * (sinT * cos(phi)) + ty * (sinT * sin(phi)) + L.P.xyz * cosT);
+        dist = SUN_DISTANCE;
+        pdf = pickPdf / max(L.Emission.a, 1e-12);
+        return true;
+    }
 
     if(L.Meta.x == 0) {
         // ---- sfera: cone sampling (Shirley) ----

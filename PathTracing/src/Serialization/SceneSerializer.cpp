@@ -105,6 +105,9 @@ namespace PathTracer {
 		json root;
 		root["version"] = 1;
 		root["background"] = ToJson(m_World.BackgroundColor);
+		const SunParams& sun = m_World.Sun;
+		root["sun"] = { { "enabled", sun.Enabled }, { "elevation", sun.Elevation }, { "azimuth", sun.Azimuth },
+		                { "angularRadius", sun.AngularRadius }, { "color", ToJson(sun.Color) }, { "irradiance", sun.Irradiance } };
 
 		for (const Material& m : m_World.Materials)
 			root["materials"].push_back(MaterialToJson(m));
@@ -178,6 +181,18 @@ namespace PathTracer {
 		m_World.DestroyScene();
 
 		m_World.BackgroundColor = ReadVec3(root.value("background", json()), glm::vec3(0.6f, 0.7f, 0.9f));
+
+		// Una scena salvata prima del Sole non ha il blocco: resta spento, come dopo DestroyScene.
+		if (root.contains("sun")) {
+			const json& sj = root["sun"];
+			SunParams& sun = m_World.Sun;
+			sun.Enabled = sj.value("enabled", sun.Enabled);
+			sun.Elevation = sj.value("elevation", sun.Elevation);
+			sun.Azimuth = sj.value("azimuth", sun.Azimuth);
+			sun.AngularRadius = sj.value("angularRadius", sun.AngularRadius);
+			sun.Color = ReadVec3(sj.value("color", json()), sun.Color);
+			sun.Irradiance = sj.value("irradiance", sun.Irradiance);
+		}
 
 		for (const json& mj : root.value("materials", json::array()))
 			m_World.Materials.push_back(MaterialFromJson(mj));

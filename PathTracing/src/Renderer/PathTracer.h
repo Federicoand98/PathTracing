@@ -20,6 +20,8 @@ namespace PathTracer {
 		int SamplesPerPixel;
 		glm::vec3 BackgroundColor;
 		int RayDepth;
+		glm::vec4 SunDirection;
+		glm::vec4 SunRadiance;
 		glm::ivec2 PickPixel;
 		int AovView;
 		int NumLights;
@@ -35,7 +37,7 @@ namespace PathTracer {
 		int NumMaterials;
 		int Padding[2];
 	};
-	static_assert(sizeof(FrameParams) == 304, "FrameParams deve combaciare con il layout std140 dello shader");
+	static_assert(sizeof(FrameParams) == 336, "FrameParams deve combaciare con il layout std140 dello shader");
 
 	struct ComputeUniformContainer {
 		uint32_t NumFrames;

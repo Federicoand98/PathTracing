@@ -73,6 +73,7 @@ namespace PathTracer {
 		MeshNames.clear();
 		MeshPaths.clear();
 		Boxes.clear();
+		Sun = SunParams{}; // spento: ogni scena accende il suo
 	}
 
 	void World::PrepareMaterials() {
@@ -742,10 +743,13 @@ namespace PathTracer {
 	// materiali e texture e rimappa gli indici per-triangolo).
 	void World::PrepareSponza() {
 		// L'OBJ e' in unita' enormi (~3700 di larghezza): lo scalo a ~37 unita', in linea
-		// con le altre scene. Sponza non ha materiali emissivi, quindi la luce arriva tutta
-		// dal cielo: l'atrio e' aperto in alto, un background luminoso lo illumina in modo
-		// naturale (i raggi che mancano la geometria ritornano BackgroundColor come radianza).
-		BackgroundColor = glm::vec3(1.0f, 1.0f, 1.0f);
+		// con le altre scene. Sponza non ha materiali emissivi: la luce viene dal Sole, che
+		// entra dal cortile aperto (ADR 0006), e da un cielo debole che riempie le ombre. Il
+		// cortile e' stretto e alto, quindi il Sole lo raggiunge solo da un'elevazione alta.
+		BackgroundColor = glm::vec3(0.12f);
+		Sun.Enabled = true;
+		Sun.Elevation = 75.0f;
+		Sun.Azimuth = 100.0f;
 
 		Model sponza;
 		sponza.LoadObj("models/Sponza/sponza.obj");
@@ -946,6 +950,19 @@ namespace PathTracer {
 			L.Normal = glm::vec4(n, 0.0f);
 			L.Meta = glm::ivec4(1, 1, static_cast<int>(i), 0);
 			lights.push_back(L);
+		}
+
+		// Il Sole: P = direzione verso la luce + cos(raggio angolare), Emission.a = angolo solido
+		// del disco. Meta.y = -1: nessun oggetto in scena lo rappresenta.
+		if (Sun.Enabled) {
+			const glm::vec3 rad = Sun.Radiance();
+			if (glm::dot(rad, glm::vec3(0.2126f, 0.7152f, 0.0722f)) > 1e-4f) {
+				GPULight L;
+				L.Emission = glm::vec4(rad, Sun.SolidAngle());
+				L.P = glm::vec4(Sun.Direction(), Sun.CosMax());
+				L.Meta = glm::ivec4(2, -1, -1, 0);
+				lights.push_back(L);
+			}
 		}
 
 		return lights;

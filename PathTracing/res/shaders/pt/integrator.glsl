@@ -47,11 +47,22 @@ vec3 PerPixel(vec2 ndc) {
 
         if(hit.HitDistance < 0.0) {
             // L'ambiente non e' nel set NEE (sfondo uniforme -> campionarlo non aiuta): peso 1.
-            // Attenzione: EnvironmentMapping == true seleziona il colore piatto, false la cubemap.
-            vec3 envRadiance = (!EnvironmentMapping)
+            // EnvironmentMapping: la cubemap, altrimenti il colore piatto di BackgroundColor.
+            vec3 envRadiance = EnvironmentMapping
                 ? textureLod(SamplerEnvironment, ray.Direction, 0.0).rgb
                 : BackgroundColor;
             light += envRadiance * throughput;
+
+            // Il Sole visto da un raggio BSDF (ADR 0006): stessa MIS degli altri Emitter. Dopo un
+            // lobo delta, o con la NEE spenta, la NEE non poteva trovarlo: peso 1.
+            if(sunRadiance.w > 0.0 && dot(ray.Direction, sunDirection.xyz) >= sunDirection.w) {
+                float w = 1.0;
+                if(!prevDelta && numLights > 0) {
+                    float pdfL = (1.0 / float(numLights)) / sunRadiance.w;
+                    w = prevPdfBsdf / (prevPdfBsdf + pdfL);
+                }
+                light += sunRadiance.rgb * throughput * w;
+            }
             break;
         }
 
