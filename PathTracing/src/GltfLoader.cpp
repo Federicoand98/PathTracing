@@ -37,9 +37,10 @@ namespace PathTracer {
 
 		// pbrMetallicRoughness -> Material dell'engine. La registrazione della texture (privata
 		// del World) la fa il chiamante: qui il path della base color texture esce da baseTexOut.
-		Material MaterialFromGltf(const cgltf_material& gm, const std::string& gltfDir, std::string& baseTexOut) {
+		Material MaterialFromGltf(const cgltf_material& gm, const std::string& gltfDir, std::string& baseTexOut, std::string& normalTexOut) {
 			Material m;
 			baseTexOut.clear();
+			normalTexOut.clear();
 
 			glm::vec4 baseColor(1.0f);
 			const cgltf_texture* baseTex = nullptr;
@@ -79,6 +80,12 @@ namespace PathTracer {
 
 			if (baseTex && baseTex->image)
 				baseTexOut = ResolveTextureUri(gltfDir, baseTex->image);
+
+			// normalTexture: convenzione OpenGL (+Y), e lo scale glTF e' la nostra NormalStrength
+			if (gm.normal_texture.texture && gm.normal_texture.texture->image) {
+				normalTexOut = ResolveTextureUri(gltfDir, gm.normal_texture.texture->image);
+				m.NormalStrength = gm.normal_texture.scale;
+			}
 			return m;
 		}
 
@@ -115,8 +122,10 @@ namespace PathTracer {
 		for (size_t i = 0; i < data->materials_count; i++) {
 			const cgltf_material& gm = data->materials[i];
 			matIndex[&gm] = static_cast<int>(Materials.size());
-			std::string baseTex;
-			Material m = MaterialFromGltf(gm, gltfDir, baseTex);
+			std::string baseTex, normalTex;
+			Material m = MaterialFromGltf(gm, gltfDir, baseTex, normalTex);
+			if (!normalTex.empty())
+				m.NormalTexture = static_cast<float>(RegisterNormalTexture(normalTex));
 			if (!baseTex.empty()) {
 				m.AlbedoTexture = static_cast<float>(RegisterTexture(baseTex));
 				m.Color = glm::vec4(1.0f); // la texture porta il colore, non tingerla due volte
@@ -162,6 +171,10 @@ namespace PathTracer {
 					cgltf_accessor_read_float(posA, v, glm::value_ptr(pos[v]), 3);
 					if (nrmA) cgltf_accessor_read_float(nrmA, v, glm::value_ptr(nrm[v]), 3);
 					if (uvA)  cgltf_accessor_read_float(uvA, v, glm::value_ptr(uv[v]), 2);
+					// glTF ha l'origine delle UV in alto a sinistra, ma TextureArray capovolge le
+					// immagini per la convenzione OBJ (origine in basso): senza questo le texture
+					// glTF escono specchiate in verticale, e i normal map col verde invertito
+					uv[v].y = 1.0f - uv[v].y;
 				}
 
 				// indici: se assenti, la primitive e' non indicizzata (0,1,2,3,...)

@@ -24,7 +24,8 @@ namespace PathTracer {
 		~TextureArray() { Release(); }
 
 		// Se paths e' vuoto crea comunque un layer bianco: lo shader campiona sempre.
-		void Load(const std::vector<std::string>& paths, uint32_t size = 1024);
+		// format: SRGB per il colore, UNORM per i dati (normal map)
+		void Load(const std::vector<std::string>& paths, uint32_t size = 1024, VkFormat format = VK_FORMAT_R8G8B8A8_SRGB);
 		void Release();
 
 		const GpuImage& Image() const { return m_Image; }

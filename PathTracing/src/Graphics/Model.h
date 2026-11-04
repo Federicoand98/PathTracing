@@ -21,6 +21,7 @@ namespace PathTracer {
 		float Pr = -1.0f;       // roughness PBR (-1 = assente)
 		float Pm = -1.0f;       // metallic PBR  (-1 = assente)
 		std::string map_Kd;     // path texture diffuse gia' risolto, vuoto = nessuna
+		std::string map_Bump;   // normal map in spazio tangente (map_Bump, bump o map_Disp)
 	};
 
 	class Model {

@@ -66,6 +66,9 @@ namespace PathTracer {
 			{ "noiseColorB", ToJson(m.NoiseColorB) },
 			{ "metalness", m.Metalness },
 			{ "specularTint", m.SpecularTint },
+			{ "normalTexture", m.NormalTexture },
+			{ "normalStrength", m.NormalStrength },
+			{ "normalFlipY", m.NormalFlipY },
 		};
 	}
 
@@ -96,6 +99,9 @@ namespace PathTracer {
 		m.NoiseColorB = v4("noiseColorB", m.NoiseColorB);
 		m.Metalness = f("metalness", m.Metalness);
 		m.SpecularTint = f("specularTint", m.SpecularTint);
+		m.NormalTexture = f("normalTexture", m.NormalTexture);
+		m.NormalStrength = f("normalStrength", m.NormalStrength);
+		m.NormalFlipY = f("normalFlipY", m.NormalFlipY);
 		return m;
 	}
 
@@ -147,6 +153,7 @@ namespace PathTracer {
 		}
 
 		root["textures"] = m_World.TexturePaths;
+		root["normalTextures"] = m_World.NormalTexturePaths;
 
 		std::ofstream file(path);
 		if (!file) {
@@ -223,6 +230,7 @@ namespace PathTracer {
 							  (float)bj.value("material", 0));
 
 		m_World.TexturePaths = root.value("textures", std::vector<std::string>{});
+		m_World.NormalTexturePaths = root.value("normalTextures", std::vector<std::string>{});
 
 		// AddMesh rifa' i buffer dei triangoli a ogni chiamata: su tante mesh pesanti il load
 		// puo' impiegare qualche secondo. Va bene, e' un'operazione one-shot.

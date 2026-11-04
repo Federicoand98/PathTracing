@@ -80,6 +80,7 @@ namespace PathTracer {
 		std::vector<TriangleNormal> TriNormals;    // caricate sulla GPU
 		std::vector<TriangleUV> TriUVs;            // caricate sulla GPU
 		std::vector<std::string> TexturePaths;     // un layer del sampler2DArray ciascuna
+		std::vector<std::string> NormalTexturePaths; // normal map, in un array UNORM a parte
 		// Cresce a ogni modifica di triangoli e BLAS: evita di ricaricarli sulla GPU a ogni reset.
 		int GeometryVersion = 0;
 		int CurrentScene = 6;
@@ -100,6 +101,7 @@ namespace PathTracer {
 		// Traduzione MTL -> engine. Vivono qui perche' toccano Materials e TexturePaths.
 		int RegisterMtlMaterials(const Model& model);      // appende i materiali MTL, ritorna l'indice base (-1 se l'OBJ non ha MTL)
 		int RegisterTexture(const std::string& path);      // dedup in TexturePaths, ritorna il layer
+		int RegisterNormalTexture(const std::string& path); // idem in NormalTexturePaths
 		Material MaterialFromMtl(const MtlMaterial& mtl);  // MtlMaterial -> Material dell'engine
 
 		void BuildTriangleBuffers();

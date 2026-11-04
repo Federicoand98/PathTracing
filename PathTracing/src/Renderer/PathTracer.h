@@ -97,7 +97,9 @@ namespace PathTracer {
 		GpuBuffer m_Frame;  // host-visible: parametri del frame
 
 		TextureArray m_AlbedoTextures;
+		TextureArray m_NormalTextures;
 		std::vector<std::string> m_LoadedTexturePaths;
+		std::vector<std::string> m_LoadedNormalTexturePaths;
 		GpuImage m_Environment;
 		VkSampler m_EnvironmentSampler = VK_NULL_HANDLE;
 

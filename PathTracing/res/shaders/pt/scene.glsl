@@ -6,10 +6,46 @@ Ray CalculateRayFromCamera(mat4 inverseProj, mat4 inverseView, vec3 cameraPos, v
 }
 
 HitInfo NoHit() {
-    return HitInfo(-1.0, vec3(0.0), vec3(0.0), -1, -1, false, vec2(0.0), -1);
+    return HitInfo(-1.0, vec3(0.0), vec3(0.0), -1, -1, false, vec2(0.0), -1, vec3(0.0));
 }
 
-HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit, float u, float v, int meshIndex) {
+// Applica il normal map alla normale di shading N. La tangente si ricava per triangolo dalle
+// posizioni e dalle UV (ADR 0007): niente buffer di tangenti, ma la tangente salta da un
+// triangolo all'altro (issue #22). T e B sono in local space, la base si ortogonalizza contro N
+// gia' in world space. Ritorna N invariata se le UV sono degeneri.
+vec3 ApplyNormalMap(vec3 N, int index, int meshIndex, TriangleUV tuv, vec2 uv, Material material, float lod) {
+    TrianglePosition tp = TriPositions[index];
+    vec3 e1 = tp.B.xyz - tp.A.xyz, e2 = tp.C.xyz - tp.A.xyz;
+    vec2 d1 = tuv.B.xy - tuv.A.xy, d2 = tuv.C.xy - tuv.A.xy;
+    float det = d1.x * d2.y - d2.x * d1.y;
+    if(abs(det) < 1e-12)
+        return N;
+
+    // dP/du e dP/dv: il verde del normal map segue la direzione in cui cresce v
+    mat3 toWorld = mat3(Meshes[meshIndex].Transform);
+    vec3 T = toWorld * ((e1 * d2.y - e2 * d1.y) / det);
+    vec3 B = toWorld * ((e2 * d1.x - e1 * d2.x) / det);
+
+    T -= N * dot(N, T);
+    if(dot(T, T) < 1e-12)
+        return N;
+    T = normalize(T);
+    // B si ricostruisce ortogonale, tenendo solo il verso di dP/dv: cosi' le UV specchiate e le
+    // normali ribaltate verso il raggio restano coerenti
+    vec3 Bo = cross(N, T);
+    if(dot(Bo, B) < 0.0)
+        Bo = -Bo;
+
+    vec3 c = textureLod(NormalTextures, vec3(uv, material.NormalTexture), lod).xyz * 2.0 - 1.0;
+    if(material.NormalFlipY > 0.5)
+        c.y = -c.y;
+    c.xy *= material.NormalStrength;
+    // z > 0: la normale perturbata resta nell'emisfero di N
+    return normalize(T * c.x + Bo * c.y + N * max(c.z, 1e-3));
+}
+
+// lod: livello di mip per il normal map (0 sul raggio primario, come l'albedo)
+HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insideHit, float u, float v, int meshIndex, float lod) {
     HitInfo hit;
 
     if(objType == 0) { // SPHERE
@@ -21,7 +57,7 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         vec3 normal = normalize(hitPosition);
         hitPosition += closestPosition;
 
-        hit = HitInfo(hitDistance, hitPosition, normal, index, 0, insideHit, SphereUV(normal), int(Spheres[index].Mat));
+        hit = HitInfo(hitDistance, hitPosition, normal, index, 0, insideHit, SphereUV(normal), int(Spheres[index].Mat), normal);
     }
     else if(objType == 1) { // QUAD
         Quad quad = Quads[index];
@@ -40,7 +76,7 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
 
         hitPosition += closestPosition;
 
-        hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit, uv, int(Quads[index].MaterialIndex));
+        hit = HitInfo(hitDistance, hitPosition, normal, index, 1, insideHit, uv, int(Quads[index].MaterialIndex), normal);
     }
     else if(objType == 2) { // MESH
         // il raggio e' in world space e t e' lo stesso nei due spazi (direzione locale
@@ -78,11 +114,16 @@ HitInfo HandleHit(Ray ray, float hitDistance, int index, int objType, bool insid
         // solo un materiale rifrattivo: una mesh aperta e opaca (un muro, una tenda) vista da
         // dietro e' una superficie normale, non un mezzo che assorbe. Chi usa Inside ribalta
         // la normale, quindi qui va lasciata concorde col raggio.
-        bool inside = insideHit && Materials[clamp(triMaterial, 0, numMaterials - 1)].RefractionProbability > 0.0;
+        Material material = Materials[clamp(triMaterial, 0, numMaterials - 1)];
+        bool inside = insideHit && material.RefractionProbability > 0.0;
         if(inside)
             normal = -normal;
 
-        hit = HitInfo(hitDistance, hitPosition, normal, meshIndex, 2, inside, uv, triMaterial);
+        vec3 shadingNormal = normal;
+        if(material.NormalTexture >= 0.0)
+            shadingNormal = ApplyNormalMap(normal, index, meshIndex, tuv, uv, material, lod);
+
+        hit = HitInfo(hitDistance, hitPosition, shadingNormal, meshIndex, 2, inside, uv, triMaterial, normal);
     }
 
     return hit;
@@ -113,7 +154,7 @@ void CommitProcedural(rayQueryEXT query, Ray ray, float tMin, float tMax) {
         rayQueryGenerateIntersectionEXT(query, t);
 }
 
-HitInfo TraceRay(Ray ray) {
+HitInfo TraceRay(Ray ray, float lod) {
     const float tMax = 100000.0;
     rayQueryEXT query;
     rayQueryInitializeEXT(query, topLevel, gl_RayFlagsOpaqueEXT,
@@ -133,16 +174,16 @@ HitInfo TraceRay(Ray ray) {
         int mesh = rayQueryGetIntersectionInstanceCustomIndexEXT(query, true);
         vec2 barycentrics = rayQueryGetIntersectionBarycentricsEXT(query, true);
         bool backFace = !rayQueryGetIntersectionFrontFaceEXT(query, true);
-        return HandleHit(ray, t, int(Meshes[mesh].FirstTriangle) + primitive, 2, backFace, barycentrics.x, barycentrics.y, mesh);
+        return HandleHit(ray, t, int(Meshes[mesh].FirstTriangle) + primitive, 2, backFace, barycentrics.x, barycentrics.y, mesh, lod);
     }
 
     if(primitive < numSpheres) {
         Sphere sphere = Spheres[primitive];
         float t1, t2;
         HitSphere(ray, sphere, t1, t2);
-        return HandleHit(ray, t, primitive, 0, t == t2, 0.0, 0.0, -1);
+        return HandleHit(ray, t, primitive, 0, t == t2, 0.0, 0.0, -1, lod);
     }
-    return HandleHit(ray, t, primitive - numSpheres, 1, false, 0.0, 0.0, -1);
+    return HandleHit(ray, t, primitive - numSpheres, 1, false, 0.0, 0.0, -1, lod);
 }
 
 // Shadow ray: c'e' un occlusore tra origin e la luce (entro maxDist)? Si ferma al primo.

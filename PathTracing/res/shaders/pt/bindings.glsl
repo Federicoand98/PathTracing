@@ -105,3 +105,7 @@ layout(std430, binding = 17) restrict readonly buffer LightsBuffer {
 };
 
 layout(binding = 18) uniform accelerationStructureEXT topLevel;
+
+// I normal map sono dati, non colore: un array a parte in formato UNORM, senza la decodifica
+// sRGB che l'array dell'albedo applica in hardware.
+layout(binding = 19) uniform sampler2DArray NormalTextures;

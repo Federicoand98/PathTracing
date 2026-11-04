@@ -63,6 +63,16 @@ namespace PathTracer {
 		}
 
 		// Test/CI headless: PT_NEE=0 forza la NEE spenta (A/B col light sampling).
+		// PT_CAM=x,y,z,dx,dy,dz: posizione e direzione della camera, per catture ripetibili
+		if (const char* c = getenv("PT_CAM")) {
+			glm::vec3 pos, dir;
+			if (sscanf(c, "%f,%f,%f,%f,%f,%f", &pos.x, &pos.y, &pos.z, &dir.x, &dir.y, &dir.z) == 6)
+				m_Camera.SetView(pos, glm::normalize(dir));
+		}
+
+		if (const char* a = getenv("PT_AOV"))
+			m_Renderer.AOVView = atoi(a);
+
 		if (const char* n = getenv("PT_NEE"))
 			m_Renderer.NEE = (atoi(n) != 0);
 		// Test/CI headless: PT_DEPTH=<n> forza la profondita' dei rimbalzi (2 = solo diretta).
@@ -1058,6 +1068,28 @@ namespace PathTracer {
 		ImGui::EndDisabled();
 		if (checkerWins)
 			ImGui::TextDisabled("checker on: it takes precedence, the texture is ignored");
+
+		// Normal map (ADR 0007): solo le mesh hanno le UV e i triangoli da cui si ricava la tangente
+		ImGui::SeparatorText("Normal map");
+		const int normalCount = static_cast<int>(m_World.NormalTexturePaths.size());
+		if (normalCount > 0) {
+			if (ImGui::DragFloat("Normal map layer", &material.NormalTexture, 1.0f, -1.0f, (float)(normalCount - 1)))
+				m_Renderer.ResetPathTracingCounter();
+			if (material.NormalTexture >= 0.0f) {
+				if (ImGui::SliderFloat("Normal strength", &material.NormalStrength, 0.0f, 2.0f))
+					m_Renderer.ResetPathTracingCounter();
+				bool flipY = material.NormalFlipY > 0.5f;
+				if (ImGui::Checkbox("Flip green (DirectX)", &flipY)) {
+					material.NormalFlipY = flipY ? 1.0f : 0.0f;
+					m_Renderer.ResetPathTracingCounter();
+				}
+				ImGui::TextDisabled("applies to meshes only");
+			}
+		}
+		else {
+			material.NormalTexture = -1.0f;
+			ImGui::TextDisabled("(no normal maps loaded in this scene)");
+		}
 
 		ImGui::SeparatorText("Procedural noise");
 		int noiseMode = static_cast<int>(material.NoiseType + 0.5f);

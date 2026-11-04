@@ -37,7 +37,7 @@ namespace PathTracer {
 		m_Sampler = VK_NULL_HANDLE;
 	}
 
-	void TextureArray::Load(const std::vector<std::string>& paths, uint32_t size) {
+	void TextureArray::Load(const std::vector<std::string>& paths, uint32_t size, VkFormat format) {
 		VulkanContext& vk = VulkanContext::Get();
 		Release();
 
@@ -48,7 +48,7 @@ namespace PathTracer {
 		// R8G8B8A8_SRGB: le texture diffuse sono authored in spazio sRGB (gamma ~2.2). Con questo
 		// formato il sampler le decodifica in lineare in hardware, cosi' il path tracer lavora
 		// sempre in lineare. L'alpha resta lineare (non e' colore).
-		m_Image = vk.CreateImage(VK_FORMAT_R8G8B8A8_SRGB, size, size,
+		m_Image = vk.CreateImage(format, size, size,
 		                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 		                         layers, levels, VK_IMAGE_VIEW_TYPE_2D_ARRAY);
 
