@@ -8,6 +8,7 @@
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/compatibility.hpp>
 #include <vector>
+#include <array>
 #include <random>
 #include <cmath>
 #include <iostream>

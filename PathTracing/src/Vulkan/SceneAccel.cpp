@@ -93,9 +93,12 @@ namespace PathTracer {
 		const size_t meshCount = world.Meshes.size();
 		m_MeshBlas.assign(meshCount, VK_NULL_HANDLE);
 
-		std::vector<VkAccelerationStructureGeometryKHR> geometries(meshCount);
+		// Fino a due geometrie per mesh, in quest'ordine: i triangoli opachi e quelli con un
+		// materiale mascherato (ADR 0008). Lo shader ricava l'indice del triangolo dall'indice
+		// di geometria: la geometria 1 parte da NumOpaque, la 0 da zero.
+		std::vector<std::array<VkAccelerationStructureGeometryKHR, 2>> geometries(meshCount);
 		std::vector<VkAccelerationStructureBuildGeometryInfoKHR> infos(meshCount);
-		std::vector<VkAccelerationStructureBuildRangeInfoKHR> ranges(meshCount);
+		std::vector<std::array<VkAccelerationStructureBuildRangeInfoKHR, 2>> ranges(meshCount);
 		std::vector<VkDeviceSize> storageOffsets(meshCount), storageSizes(meshCount), scratchOffsets(meshCount);
 
 		VkDeviceSize storageBytes = 0, scratchBytes = 0;
@@ -107,28 +110,45 @@ namespace PathTracer {
 			if (triangles == 0)
 				continue;
 
-			// TrianglePosition e' tre vec4 consecutivi: triangoli non indicizzati con stride 16.
-			VkAccelerationStructureGeometryKHR& geometry = geometries[i];
-			geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
-			geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
-			geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
-			geometry.geometry.triangles = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR };
-			geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
-			geometry.geometry.triangles.vertexData.deviceAddress = positions.Address + static_cast<VkDeviceSize>(mesh.FirstTriangle) * sizeof(TrianglePosition);
-			geometry.geometry.triangles.vertexStride = sizeof(glm::vec4);
-			geometry.geometry.triangles.maxVertex = triangles * 3 - 1;
-			geometry.geometry.triangles.indexType = VK_INDEX_TYPE_NONE_KHR;
+			const uint32_t opaque = static_cast<uint32_t>(mesh.NumOpaque);
+			uint32_t counts[2];
+			uint32_t geometryCount = 0;
+			for (int part = 0; part < 2; part++) {
+				const uint32_t first = part == 0 ? 0 : opaque;
+				const uint32_t count = part == 0 ? opaque : triangles - opaque;
+				if (count == 0)
+					continue;
+
+				// TrianglePosition e' tre vec4 consecutivi: triangoli non indicizzati con stride 16.
+				VkAccelerationStructureGeometryKHR& geometry = geometries[i][geometryCount];
+				geometry = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
+				geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+				// la geometria mascherata non e' opaca: i suoi candidati passano dallo shader
+				geometry.flags = part == 0 ? VK_GEOMETRY_OPAQUE_BIT_KHR : 0;
+				geometry.geometry.triangles = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR };
+				geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+				geometry.geometry.triangles.vertexData.deviceAddress = positions.Address
+					+ static_cast<VkDeviceSize>(static_cast<uint32_t>(mesh.FirstTriangle) + first) * sizeof(TrianglePosition);
+				geometry.geometry.triangles.vertexStride = sizeof(glm::vec4);
+				geometry.geometry.triangles.maxVertex = count * 3 - 1;
+				geometry.geometry.triangles.indexType = VK_INDEX_TYPE_NONE_KHR;
+
+				counts[geometryCount] = count;
+				ranges[i][geometryCount] = {};
+				ranges[i][geometryCount].primitiveCount = count;
+				geometryCount++;
+			}
 
 			VkAccelerationStructureBuildGeometryInfoKHR& info = infos[i];
 			info = { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR };
 			info.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 			info.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
 			info.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-			info.geometryCount = 1;
-			info.pGeometries = &geometry;
+			info.geometryCount = geometryCount;
+			info.pGeometries = geometries[i].data();
 
 			VkAccelerationStructureBuildSizesInfoKHR sizes{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR };
-			Fn().GetBuildSizes(vk.Device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &info, &triangles, &sizes);
+			Fn().GetBuildSizes(vk.Device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &info, counts, &sizes);
 
 			storageOffsets[i] = storageBytes;
 			storageSizes[i] = sizes.accelerationStructureSize;
@@ -136,7 +156,6 @@ namespace PathTracer {
 			scratchOffsets[i] = scratchBytes;
 			scratchBytes = AlignUp(scratchBytes + sizes.buildScratchSize, m_ScratchAlignment);
 
-			ranges[i].primitiveCount = triangles;
 			built.push_back(static_cast<uint32_t>(i));
 		}
 
@@ -155,7 +174,7 @@ namespace PathTracer {
 			infos[i].dstAccelerationStructure = m_MeshBlas[i];
 			infos[i].scratchData.deviceAddress = scratchBase + scratchOffsets[i];
 			buildInfos.push_back(infos[i]);
-			rangePointers.push_back(&ranges[i]);
+			rangePointers.push_back(ranges[i].data());
 		}
 
 		vk.Immediate([&](VkCommandBuffer cmd) {
@@ -218,23 +237,25 @@ namespace PathTracer {
 		std::vector<VkAccelerationStructureInstanceKHR> instances;
 		instances.reserve(m_MeshBlas.size() + 1);
 
-		auto addInstance = [&](VkAccelerationStructureKHR blas, const glm::mat4& transform, uint32_t customIndex) {
+		auto addInstance = [&](VkAccelerationStructureKHR blas, const glm::mat4& transform, uint32_t customIndex, bool masked) {
 			VkAccelerationStructureInstanceKHR instance{};
 			// da colonne (glm) a righe, 3x4
 			const glm::mat4 t = glm::transpose(transform);
 			memcpy(&instance.transform, &t, sizeof(instance.transform));
 			instance.instanceCustomIndex = customIndex;
 			instance.mask = 0xFF;
-			instance.flags = VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
+			// FORCE_OPAQUE scavalcherebbe il flag delle geometrie: si toglie solo dove serve
+			instance.flags = masked ? 0 : VK_GEOMETRY_INSTANCE_FORCE_OPAQUE_BIT_KHR;
 			instance.accelerationStructureReference = AddressOf(blas);
 			instances.push_back(instance);
 		};
 
 		for (size_t i = 0; i < m_MeshBlas.size(); i++)
 			if (m_MeshBlas[i] != VK_NULL_HANDLE)
-				addInstance(m_MeshBlas[i], world.Meshes[i].Transform, static_cast<uint32_t>(i));
+				addInstance(m_MeshBlas[i], world.Meshes[i].Transform, static_cast<uint32_t>(i),
+				            world.Meshes[i].NumOpaque < world.Meshes[i].NumTriangles);
 		if (m_ProceduralBlas != VK_NULL_HANDLE)
-			addInstance(m_ProceduralBlas, glm::mat4(1.0f), 0);
+			addInstance(m_ProceduralBlas, glm::mat4(1.0f), 0, false);
 
 		const VkDeviceSize instanceBytes = std::max<VkDeviceSize>(instances.size() * sizeof(VkAccelerationStructureInstanceKHR), 64);
 		EnsureBuffer(m_Instances, instanceBytes, INPUT_USAGE,

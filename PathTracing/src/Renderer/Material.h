@@ -49,12 +49,17 @@ namespace PathTracer {
 		// ignorano (il loro F0 è già la base color).
 		float SpecularTint = 0.0f;
 
-		// Normal map in spazio tangente (ADR 0007). Il layer indicizza World::NormalTexturePaths,
+		// Normal map in spazio tangente (ADR 0007). Il layer indicizza World::DataTexturePaths,
 		// un array separato da quello dell'albedo perche' i normal map non sono sRGB.
 		float NormalTexture = -1.0f; // -1 = nessun normal map
 		float NormalStrength = 1.0f; // scala la pendenza: 0 = piatto, 1 = come authored
 		float NormalFlipY = 0.0f;    // 1 = verde invertito (convenzione DirectX)
-		glm::vec3 _pad2{ 0.0f };     // porta la dimensione a 192, multiplo di 16
+
+		// Alpha mask (ADR 0008). AlphaCutoff > 0 = materiale mascherato: i suoi triangoli vanno
+		// nella geometria non opaca del BLAS. Lo decidono i loader, la UI cambia solo la soglia.
+		float AlphaTexture = -1.0f;  // layer in DataTexturePaths (canale rosso), -1 = alpha dell'albedo
+		float AlphaCutoff = 0.0f;    // il raggio passa dove l'alpha e' sotto la soglia; 0 = opaco
+		float _pad2 = 0.0f;          // porta la dimensione a 192, multiplo di 16
 	};
 
 	static_assert(sizeof(Material) == 192, "Material deve essere 192 byte per combaciare con lo std430");
@@ -64,6 +69,7 @@ namespace PathTracer {
 	static_assert(offsetof(Material, Metalness) == 160, "Metalness deve stare a 160");
 	static_assert(offsetof(Material, SpecularTint) == 164, "SpecularTint deve stare a 164");
 	static_assert(offsetof(Material, NormalTexture) == 168, "NormalTexture deve stare a 168");
+	static_assert(offsetof(Material, AlphaCutoff) == 184, "AlphaCutoff deve stare a 184");
 
 	// Dielettrico opaco "sano" nel senso del modello Principled: riflesso non tinto
 	// (SpecularColor bianco), F0 standard 0.04, niente trasmissione. E' il punto di
