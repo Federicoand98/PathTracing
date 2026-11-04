@@ -16,6 +16,7 @@ namespace PathTracer {
 			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		};
 
 		// Layout del PickBuffer: due int + un float, tutti scalari 4 byte. La sentinella e' -2,
@@ -42,6 +43,8 @@ namespace PathTracer {
 		// anche senza texture va creato l'array: lo shader campiona sempre
 		m_AlbedoTextures.Load(world.TexturePaths);
 		m_LoadedTexturePaths = world.TexturePaths;
+		m_NormalTextures.Load(world.NormalTexturePaths, 1024, VK_FORMAT_R8G8B8A8_UNORM);
+		m_LoadedNormalTexturePaths = world.NormalTexturePaths;
 	}
 
 	PathTracer::~PathTracer() {
@@ -177,6 +180,10 @@ namespace PathTracer {
 			m_AlbedoTextures.Load(world.TexturePaths);
 			m_LoadedTexturePaths = world.TexturePaths;
 		}
+		if (world.NormalTexturePaths != m_LoadedNormalTexturePaths) {
+			m_NormalTextures.Load(world.NormalTexturePaths, 1024, VK_FORMAT_R8G8B8A8_UNORM);
+			m_LoadedNormalTexturePaths = world.NormalTexturePaths;
+		}
 
 		if (container.ResetScene || container.NumFrames == 1)
 			UploadScene(world);
@@ -223,6 +230,7 @@ namespace PathTracer {
 			.Buffer(8, m_Frame).Buffer(9, m_Spheres).Buffer(10, m_Materials).Buffer(11, m_Quads)
 			.Buffer(12, m_TriPositions).Buffer(13, m_Meshes).Buffer(14, m_TriNormals).Buffer(15, m_Pick)
 			.Buffer(16, m_TriUVs).Buffer(17, m_Lights).AccelerationStructure(18, m_Accel->TopLevel())
+			.Sampler(19, m_NormalTextures.Image(), m_NormalTextures.Sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 			.Commit(cmd);
 
 		// ceil: con risoluzioni non multiple di 8 (es. render scale) la divisione intera

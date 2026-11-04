@@ -69,6 +69,7 @@ namespace PathTracer {
 		TriNormals.clear();
 		TriUVs.clear();
 		TexturePaths.clear();
+		NormalTexturePaths.clear();
 		Meshes.clear();
 		MeshNames.clear();
 		MeshPaths.clear();
@@ -758,6 +759,12 @@ namespace PathTracer {
 		// ce l'hanno, ma 0 e' comunque un indice MTL valido dopo la registrazione.
 		UploadModel(sponza, { 0.0f, 0.0f, 0.0f }, 0);
 
+		// I _ddn di Sponza sono in convenzione DirectX (verde verso il basso): sopra ogni fuga dei
+		// mattoni il verde e' positivo. L'MTL non lo dice, quindi lo fissa la scena.
+		for (Material& m : Materials)
+			if (m.NormalTexture >= 0.0f)
+				m.NormalFlipY = 1.0f;
+
 		// scala 0.01 + centratura su X/Z (il pavimento resta a y ~ -1.26)
 		const int meshIndex = static_cast<int>(Meshes.size()) - 1;
 		if (meshIndex >= 0) {
@@ -769,13 +776,16 @@ namespace PathTracer {
 
 	// Un layer del sampler2DArray per path, deduplicato: due materiali con la stessa
 	// texture condividono il layer.
-	int World::RegisterTexture(const std::string& path) {
-		for (size_t i = 0; i < TexturePaths.size(); i++)
-			if (TexturePaths[i] == path)
+	static int RegisterPath(std::vector<std::string>& paths, const std::string& path) {
+		for (size_t i = 0; i < paths.size(); i++)
+			if (paths[i] == path)
 				return static_cast<int>(i);
-		TexturePaths.push_back(path);
-		return static_cast<int>(TexturePaths.size()) - 1;
+		paths.push_back(path);
+		return static_cast<int>(paths.size()) - 1;
 	}
+
+	int World::RegisterTexture(const std::string& path) { return RegisterPath(TexturePaths, path); }
+	int World::RegisterNormalTexture(const std::string& path) { return RegisterPath(NormalTexturePaths, path); }
 
 	Material World::MaterialFromMtl(const MtlMaterial& mm) {
 		Material m;
@@ -804,6 +814,8 @@ namespace PathTracer {
 			m.AlbedoTexture = static_cast<float>(RegisterTexture(mm.map_Kd));
 			m.Color = glm::vec4(1.0f);
 		}
+		if (!mm.map_Bump.empty())
+			m.NormalTexture = static_cast<float>(RegisterNormalTexture(mm.map_Bump));
 		return m;
 	}
 

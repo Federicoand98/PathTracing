@@ -34,7 +34,7 @@ void main() {
         vec2 pickNdc = (vec2(texelCoord) + 0.5) / vec2(imageResultSize) * 2.0 - 1.0;
         Ray pickRay = CalculateRayFromCamera(inverseProjection, inverseView, cameraPosition, pickNdc);
 
-        HitInfo pickHit = TraceRay(pickRay);
+        HitInfo pickHit = TraceRay(pickRay, 0.0);
         pickType = pickHit.ObjectType;
         pickIndex = pickHit.ObjectIndex;
         pickDistance = pickHit.HitDistance; // < 0 se il raggio non colpisce niente

@@ -191,13 +191,13 @@ vec3 BSDF(inout Ray ray, HitInfo hit, Material material, BsdfParams pr, out floa
             side = 1.0;
         }
 
-        ray.Origin = hitPos + N * 0.001 * side;
+        ray.Origin = hitPos + hit.GeoNormal * 0.001 * side;
         ray.Direction = normalize(mix(dir, normalize(side * N + GetRandomVector(rndSeed)),
                                       material.RefractionRoughness * material.RefractionRoughness));
         return vec3(1.0 / pr.pRefr); // la tinta arriva dal Beer-Lambert nel segmento interno
     }
 
-    ray.Origin = hitPos + N * 0.001;
+    ray.Origin = hitPos + hit.GeoNormal * 0.001;
 
     if(roll < pr.pRefr + pr.pSpec) {
         // ---- speculare: microfacet GGX con VNDF ----

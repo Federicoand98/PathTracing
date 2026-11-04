@@ -75,6 +75,9 @@ struct Material {
     vec4 NoiseColorB;
     float Metalness;     // 0 = dielettrico, 1 = metallo
     float SpecularTint;  // 0 = riflesso bianco, 1 = tinto verso base color (solo dielettrici)
+    float NormalTexture;  // layer nel sampler2DArray NormalTextures, < 0 = nessun normal map
+    float NormalStrength; // scala la pendenza del normal map: 0 = piatto, 1 = come authored
+    float NormalFlipY;    // 1 = canale verde invertito (convenzione DirectX)
 };
 
 // Emettitore per la Next Event Estimation. Deve combaciare con GPULight (Primitives.h).
@@ -111,4 +114,8 @@ struct HitInfo {
     bool Inside;
     vec2 UV;
     int MaterialIndex; // materiale gia' risolto: per-triangolo sulle mesh, altrimenti dell'oggetto
+    // Normal e' la normale di SHADING (col normal map, se c'e'); GeoNormal quella senza normal
+    // map, orientata allo stesso modo. Gli offset dei raggi e il test d'orizzonte usano GeoNormal:
+    // la normale perturbata puo' puntare sotto la superficie vera (ADR 0007).
+    vec3 GeoNormal;
 };

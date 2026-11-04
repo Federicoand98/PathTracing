@@ -234,8 +234,10 @@ namespace PathTracer {
 	}
 
 	// Parser MTL: legge SOLO i campi che il nostro Material sa rappresentare (vedi MtlMaterial).
-	// I path delle texture sono risolti rispetto alla cartella del .mtl. Ka, map_Bump, map_d,
-	// illum, ecc. sono deliberatamente ignorati (non hanno un equivalente, per ora).
+	// I path delle texture sono risolti rispetto alla cartella del .mtl. Ka, map_d, illum, ecc.
+	// sono deliberatamente ignorati (non hanno un equivalente, per ora). map_Bump, bump e
+	// map_Disp si leggono tutti come normal map in spazio tangente: e' l'uso che ne fanno gli
+	// asset reali (Sponza mette i suoi _ddn su map_Disp), le height map vere non le gestiamo.
 	void Model::ParseMtl(const std::string& mtlPath) {
 		std::ifstream file(mtlPath);
 		if (!file.is_open()) {
@@ -270,12 +272,17 @@ namespace PathTracer {
 				else if (prefix == "Tr") { float tr; ss >> tr; m.d = 1.0f - tr; } // Tr = 1 - d
 				else if (prefix == "Pr") ss >> m.Pr;
 				else if (prefix == "Pm") ss >> m.Pm;
-				else if (prefix == "map_Kd") {
-					// map_Kd puo' avere opzioni (-o, -s, ...): il filename e' l'ULTIMO token
+				else if (prefix == "map_Kd" || prefix == "map_Bump" || prefix == "map_bump"
+				         || prefix == "bump" || prefix == "map_Disp" || prefix == "disp") {
+					// le map possono avere opzioni (-o, -s, -bm, ...): il filename e' l'ULTIMO token
 					std::string token, last;
 					while (ss >> token) last = token;
-					if (!last.empty())
-						m.map_Kd = (mtlDir / last).lexically_normal().string();
+					if (last.empty())
+						continue;
+					std::string& target = (prefix == "map_Kd") ? m.map_Kd : m.map_Bump;
+					// se un materiale ne ha piu' d'uno, vince il primo
+					if (prefix == "map_Kd" || target.empty())
+						target = (mtlDir / last).lexically_normal().string();
 				}
 			}
 		}

@@ -43,7 +43,7 @@ vec3 PerPixel(vec2 ndc) {
     vec3  prevPos = ray.Origin;
 
     for(int i = 0; i < rayDepth; i++) {
-        HitInfo hit = TraceRay(ray);
+        HitInfo hit = TraceRay(ray, i == 0 ? 0.0 : SECONDARY_TEXTURE_LOD);
 
         if(hit.HitDistance < 0.0) {
             // L'ambiente non e' nel set NEE (sfondo uniforme -> campionarlo non aiuta): peso 1.
@@ -72,6 +72,7 @@ vec3 PerPixel(vec2 ndc) {
 
         if(hit.Inside) {
             hit.Normal *= -1.0;
+            hit.GeoNormal *= -1.0;
             // Beer-Lambert: la trasmittanza sul segmento interno e' RefractionColor^distanza,
             // cioe' RefractionColor e' il colore trasmesso a distanza unitaria (rosso -> vetro
             // rosso; bianco -> trasparente). L'assorbimento e' -log(colore): usare RefractionColor
@@ -105,11 +106,13 @@ vec3 PerPixel(vec2 ndc) {
         if(numLights > 0 && !hit.Inside) {
             vec3 wi; float dist; vec3 Lrad; float pdfLight;
             if(SampleLight(hit.HitPosition, wi, dist, Lrad, pdfLight) && pdfLight > 1e-8) {
-                if(dot(N, wi) > 0.0) {
+                // Col normal map la luce deve stare sopra anche la superficie vera, non solo
+                // sopra la normale di shading: altrimenti illuminerebbe da sotto (ADR 0007).
+                if(dot(N, wi) > 0.0 && (material.NormalTexture < 0.0 || dot(hit.GeoNormal, wi) > 0.0)) {
                     vec3 f; float pdfBsdfDir;
                     EvalBsdf(pr, N, V, wi, f, pdfBsdfDir);
                     if(any(greaterThan(f, vec3(0.0)))) {
-                        vec3 sorigin = hit.HitPosition + N * 0.001;
+                        vec3 sorigin = hit.HitPosition + hit.GeoNormal * 0.001;
                         if(!Occluded(sorigin, wi, dist - 0.002)) {
                             float w = pdfLight / (pdfLight + pdfBsdfDir);
                             light += throughput * f * dot(N, wi) * Lrad / pdfLight * w;
@@ -124,6 +127,12 @@ vec3 PerPixel(vec2 ndc) {
         vec3 bsdfWeight = BSDF(ray, hit, material, pr, pdfBsdf, delta);
 
         throughput *= bsdfWeight;
+
+        // Una direzione sopra la normale di shading ma sotto la superficie vera attraverserebbe
+        // la geometria: il cammino si chiude (ADR 0007). Senza normal map le due normali
+        // coincidono e il caso non esiste.
+        if(!delta && material.NormalTexture >= 0.0 && dot(ray.Direction, hit.GeoNormal) <= 0.0)
+            break;
         prevPdfBsdf = pdfBsdf;
         prevDelta = delta;
         prevPos = hit.HitPosition;
