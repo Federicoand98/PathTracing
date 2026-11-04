@@ -43,8 +43,8 @@ namespace PathTracer {
 		// anche senza texture va creato l'array: lo shader campiona sempre
 		m_AlbedoTextures.Load(world.TexturePaths);
 		m_LoadedTexturePaths = world.TexturePaths;
-		m_NormalTextures.Load(world.NormalTexturePaths, 1024, VK_FORMAT_R8G8B8A8_UNORM);
-		m_LoadedNormalTexturePaths = world.NormalTexturePaths;
+		m_DataTextures.Load(world.DataTexturePaths, 1024, VK_FORMAT_R8G8B8A8_UNORM);
+		m_LoadedDataTexturePaths = world.DataTexturePaths;
 	}
 
 	PathTracer::~PathTracer() {
@@ -180,9 +180,9 @@ namespace PathTracer {
 			m_AlbedoTextures.Load(world.TexturePaths);
 			m_LoadedTexturePaths = world.TexturePaths;
 		}
-		if (world.NormalTexturePaths != m_LoadedNormalTexturePaths) {
-			m_NormalTextures.Load(world.NormalTexturePaths, 1024, VK_FORMAT_R8G8B8A8_UNORM);
-			m_LoadedNormalTexturePaths = world.NormalTexturePaths;
+		if (world.DataTexturePaths != m_LoadedDataTexturePaths) {
+			m_DataTextures.Load(world.DataTexturePaths, 1024, VK_FORMAT_R8G8B8A8_UNORM);
+			m_LoadedDataTexturePaths = world.DataTexturePaths;
 		}
 
 		if (container.ResetScene || container.NumFrames == 1)
@@ -230,7 +230,7 @@ namespace PathTracer {
 			.Buffer(8, m_Frame).Buffer(9, m_Spheres).Buffer(10, m_Materials).Buffer(11, m_Quads)
 			.Buffer(12, m_TriPositions).Buffer(13, m_Meshes).Buffer(14, m_TriNormals).Buffer(15, m_Pick)
 			.Buffer(16, m_TriUVs).Buffer(17, m_Lights).AccelerationStructure(18, m_Accel->TopLevel())
-			.Sampler(19, m_NormalTextures.Image(), m_NormalTextures.Sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+			.Sampler(19, m_DataTextures.Image(), m_DataTextures.Sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
 			.Commit(cmd);
 
 		// ceil: con risoluzioni non multiple di 8 (es. render scale) la divisione intera

@@ -36,7 +36,7 @@ vec3 ApplyNormalMap(vec3 N, int index, int meshIndex, TriangleUV tuv, vec2 uv, M
     if(dot(Bo, B) < 0.0)
         Bo = -Bo;
 
-    vec3 c = textureLod(NormalTextures, vec3(uv, material.NormalTexture), lod).xyz * 2.0 - 1.0;
+    vec3 c = textureLod(DataTextures, vec3(uv, material.NormalTexture), lod).xyz * 2.0 - 1.0;
     if(material.NormalFlipY > 0.5)
         c.y = -c.y;
     c.xy *= material.NormalStrength;
@@ -154,14 +154,51 @@ void CommitProcedural(rayQueryEXT query, Ray ray, float tMin, float tMax) {
         rayQueryGenerateIntersectionEXT(query, t);
 }
 
+// Indice globale del triangolo colpito. Una mesh ha fino a due geometrie nel BLAS: i triangoli
+// opachi (geometria 0) e, in coda, quelli mascherati (geometria 1, parte da NumOpaque). Se la mesh
+// ha solo triangoli mascherati la sua unica geometria e' la 0, e NumOpaque vale 0: torna lo stesso.
+int TriangleIndex(int mesh, int geometry, int primitive) {
+    return int(Meshes[mesh].FirstTriangle) + (geometry == 1 ? int(Meshes[mesh].NumOpaque) : 0) + primitive;
+}
+
+// Alpha mask (ADR 0008): un candidato triangolo non opaco si conferma solo se l'alpha, letta alle
+// sue UV, raggiunge la soglia del materiale. Sempre al mip 0, cosi' la sagoma e' la stessa per
+// raggi camera, rimbalzi e ombre.
+bool AlphaPasses(rayQueryEXT query) {
+    int mesh = rayQueryGetIntersectionInstanceCustomIndexEXT(query, false);
+    int index = TriangleIndex(mesh, rayQueryGetIntersectionGeometryIndexEXT(query, false),
+                              rayQueryGetIntersectionPrimitiveIndexEXT(query, false));
+    vec2 b = rayQueryGetIntersectionBarycentricsEXT(query, false);
+    TriangleUV tuv = TriUVs[index];
+    vec2 uv = tuv.A.xy * (1.0 - b.x - b.y) + tuv.B.xy * b.x + tuv.C.xy * b.y;
+
+    int mi = tuv.A.z >= 0.0 ? int(tuv.A.z) : int(Meshes[mesh].MaterialIndex);
+    Material material = Materials[clamp(mi, 0, numMaterials - 1)];
+    if(material.AlphaCutoff <= 0.0)
+        return true;
+
+    float alpha;
+    if(material.AlphaTexture >= 0.0)
+        alpha = textureLod(DataTextures, vec3(uv, material.AlphaTexture), 0.0).r;
+    else
+        alpha = material.Color.a * (material.AlbedoTexture >= 0.0
+              ? textureLod(AlbedoTextures, vec3(uv, material.AlbedoTexture), 0.0).a : 1.0);
+    return alpha >= material.AlphaCutoff;
+}
+
 HitInfo TraceRay(Ray ray, float lod) {
     const float tMax = 100000.0;
     rayQueryEXT query;
-    rayQueryInitializeEXT(query, topLevel, gl_RayFlagsOpaqueEXT,
+    // Niente gl_RayFlagsOpaqueEXT: forzerebbe opache anche le geometrie mascherate. Le altre
+    // restano opache per il loro flag e non arrivano mai qui come candidati.
+    rayQueryInitializeEXT(query, topLevel, gl_RayFlagsNoneEXT,
                           0xFF, ray.Origin, 0.0, ray.Direction, tMax);
-    while(rayQueryProceedEXT(query))
+    while(rayQueryProceedEXT(query)) {
         if(rayQueryGetIntersectionTypeEXT(query, false) == gl_RayQueryCandidateIntersectionAABBEXT)
             CommitProcedural(query, ray, 1e-4, tMax);
+        else if(AlphaPasses(query))
+            rayQueryConfirmIntersectionEXT(query);
+    }
 
     uint type = rayQueryGetIntersectionTypeEXT(query, true);
     if(type == gl_RayQueryCommittedIntersectionNoneEXT)
@@ -174,7 +211,8 @@ HitInfo TraceRay(Ray ray, float lod) {
         int mesh = rayQueryGetIntersectionInstanceCustomIndexEXT(query, true);
         vec2 barycentrics = rayQueryGetIntersectionBarycentricsEXT(query, true);
         bool backFace = !rayQueryGetIntersectionFrontFaceEXT(query, true);
-        return HandleHit(ray, t, int(Meshes[mesh].FirstTriangle) + primitive, 2, backFace, barycentrics.x, barycentrics.y, mesh, lod);
+        int index = TriangleIndex(mesh, rayQueryGetIntersectionGeometryIndexEXT(query, true), primitive);
+        return HandleHit(ray, t, index, 2, backFace, barycentrics.x, barycentrics.y, mesh, lod);
     }
 
     if(primitive < numSpheres) {
@@ -191,11 +229,15 @@ bool Occluded(vec3 origin, vec3 dir, float maxDist) {
     Ray ray = Ray(origin, dir, 0.0);
     rayQueryEXT query;
     rayQueryInitializeEXT(query, topLevel,
-                          gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+                          gl_RayFlagsTerminateOnFirstHitEXT,
                           0xFF, origin, EPSILON, dir, maxDist);
-    while(rayQueryProceedEXT(query))
+    // le ombre seguono la stessa maschera dei raggi camera: una foglia proietta la sua sagoma
+    while(rayQueryProceedEXT(query)) {
         if(rayQueryGetIntersectionTypeEXT(query, false) == gl_RayQueryCandidateIntersectionAABBEXT)
             CommitProcedural(query, ray, EPSILON, maxDist);
+        else if(AlphaPasses(query))
+            rayQueryConfirmIntersectionEXT(query);
+    }
 
     return rayQueryGetIntersectionTypeEXT(query, true) != gl_RayQueryCommittedIntersectionNoneEXT;
 }

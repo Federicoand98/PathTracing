@@ -69,7 +69,7 @@ namespace PathTracer {
 		TriNormals.clear();
 		TriUVs.clear();
 		TexturePaths.clear();
-		NormalTexturePaths.clear();
+		DataTexturePaths.clear();
 		Meshes.clear();
 		MeshNames.clear();
 		MeshPaths.clear();
@@ -785,7 +785,7 @@ namespace PathTracer {
 	}
 
 	int World::RegisterTexture(const std::string& path) { return RegisterPath(TexturePaths, path); }
-	int World::RegisterNormalTexture(const std::string& path) { return RegisterPath(NormalTexturePaths, path); }
+	int World::RegisterDataTexture(const std::string& path) { return RegisterPath(DataTexturePaths, path); }
 
 	Material World::MaterialFromMtl(const MtlMaterial& mm) {
 		Material m;
@@ -815,7 +815,14 @@ namespace PathTracer {
 			m.Color = glm::vec4(1.0f);
 		}
 		if (!mm.map_Bump.empty())
-			m.NormalTexture = static_cast<float>(RegisterNormalTexture(mm.map_Bump));
+			m.NormalTexture = static_cast<float>(RegisterDataTexture(mm.map_Bump));
+		// Molte copie di Sponza citano un _mask.tga che non distribuiscono e tengono la maschera
+		// nell'alpha della diffusa: se il file manca si usa quella (AlphaTexture = -1).
+		if (!mm.map_d.empty()) {
+			if (std::filesystem::exists(mm.map_d))
+				m.AlphaTexture = static_cast<float>(RegisterDataTexture(mm.map_d));
+			m.AlphaCutoff = 0.5f;
+		}
 		return m;
 	}
 
@@ -1085,6 +1092,20 @@ namespace PathTracer {
 	// li costruisce il driver a partire da qui: vedi Vulkan/SceneAccel.
 	void World::BuildTriangleBuffers() {
 		GeometryVersion++;
+
+		// Dentro ogni mesh i triangoli mascherati vanno in coda: diventano la seconda geometria
+		// del BLAS, l'unica senza il flag opaco (ADR 0008). L'ordine dentro una mesh non conta
+		// per nessun altro, e la partizione stabile e' idempotente.
+		for (MeshInfo& mesh : Meshes) {
+			auto first = Triangles.begin() + static_cast<ptrdiff_t>(mesh.FirstTriangle);
+			auto last = first + static_cast<ptrdiff_t>(mesh.NumTriangles);
+			auto opaqueEnd = std::stable_partition(first, last, [&](const Triangle& t) {
+				const int mi = t.MaterialIndex >= 0.0f ? static_cast<int>(t.MaterialIndex) : static_cast<int>(mesh.MaterialIndex);
+				return mi < 0 || mi >= static_cast<int>(Materials.size()) || Materials[mi].AlphaCutoff <= 0.0f;
+			});
+			mesh.NumOpaque = static_cast<float>(opaqueEnd - first);
+		}
+
 		TriPositions.clear();
 		TriNormals.clear();
 		TriUVs.clear();

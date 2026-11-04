@@ -81,6 +81,13 @@ namespace PathTracer {
 			if (baseTex && baseTex->image)
 				baseTexOut = ResolveTextureUri(gltfDir, baseTex->image);
 
+			// MASK e BLEND diventano entrambi una maschera sull'alpha dell'albedo: la trasparenza
+			// parziale non e' gestita (ADR 0008). cgltf mette gia' a 0.5 il cutoff assente.
+			if (gm.alpha_mode == cgltf_alpha_mode_mask)
+				m.AlphaCutoff = glm::max(gm.alpha_cutoff, 1e-3f);
+			else if (gm.alpha_mode == cgltf_alpha_mode_blend)
+				m.AlphaCutoff = 0.5f;
+
 			// normalTexture: convenzione OpenGL (+Y), e lo scale glTF e' la nostra NormalStrength
 			if (gm.normal_texture.texture && gm.normal_texture.texture->image) {
 				normalTexOut = ResolveTextureUri(gltfDir, gm.normal_texture.texture->image);
@@ -125,7 +132,7 @@ namespace PathTracer {
 			std::string baseTex, normalTex;
 			Material m = MaterialFromGltf(gm, gltfDir, baseTex, normalTex);
 			if (!normalTex.empty())
-				m.NormalTexture = static_cast<float>(RegisterNormalTexture(normalTex));
+				m.NormalTexture = static_cast<float>(RegisterDataTexture(normalTex));
 			if (!baseTex.empty()) {
 				m.AlbedoTexture = static_cast<float>(RegisterTexture(baseTex));
 				m.Color = glm::vec4(1.0f); // la texture porta il colore, non tingerla due volte

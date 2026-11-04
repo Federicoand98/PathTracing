@@ -28,7 +28,7 @@ struct MeshInfo {
     float FirstTriangle;
     float NumTriangles;
     float MaterialIndex;
-    float Padding;
+    float NumOpaque;  // i primi NumOpaque triangoli sono la geometria opaca del BLAS, gli altri la mascherata
 };
 
 // Posizioni e normali sono in due buffer separati: le posizioni sono anche l'ingresso dei BLAS,
@@ -75,9 +75,11 @@ struct Material {
     vec4 NoiseColorB;
     float Metalness;     // 0 = dielettrico, 1 = metallo
     float SpecularTint;  // 0 = riflesso bianco, 1 = tinto verso base color (solo dielettrici)
-    float NormalTexture;  // layer nel sampler2DArray NormalTextures, < 0 = nessun normal map
+    float NormalTexture;  // layer nel sampler2DArray DataTextures, < 0 = nessun normal map
     float NormalStrength; // scala la pendenza del normal map: 0 = piatto, 1 = come authored
     float NormalFlipY;    // 1 = canale verde invertito (convenzione DirectX)
+    float AlphaTexture;   // layer in DataTextures (canale rosso), < 0 = alpha dell'albedo
+    float AlphaCutoff;    // > 0 = mascherato: il raggio passa dove l'alpha e' sotto la soglia
 };
 
 // Emettitore per la Next Event Estimation. Deve combaciare con GPULight (Primitives.h).

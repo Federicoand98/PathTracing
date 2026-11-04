@@ -89,7 +89,9 @@ namespace PathTracer {
         float FirstTriangle = 0;
         float NumTriangles = 0;
         float MaterialIndex = 0;
-        float Padding = 0;
+        // BuildTriangleBuffers ordina i triangoli della mesh: prima gli opachi, poi quelli con un
+        // materiale mascherato. Il BLAS ne fa due geometrie (ADR 0008).
+        float NumOpaque = 0;
     };
 
     struct Sphere {

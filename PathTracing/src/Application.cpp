@@ -1071,7 +1071,7 @@ namespace PathTracer {
 
 		// Normal map (ADR 0007): solo le mesh hanno le UV e i triangoli da cui si ricava la tangente
 		ImGui::SeparatorText("Normal map");
-		const int normalCount = static_cast<int>(m_World.NormalTexturePaths.size());
+		const int normalCount = static_cast<int>(m_World.DataTexturePaths.size());
 		if (normalCount > 0) {
 			if (ImGui::DragFloat("Normal map layer", &material.NormalTexture, 1.0f, -1.0f, (float)(normalCount - 1)))
 				m_Renderer.ResetPathTracingCounter();
@@ -1089,6 +1089,14 @@ namespace PathTracer {
 		else {
 			material.NormalTexture = -1.0f;
 			ImGui::TextDisabled("(no normal maps loaded in this scene)");
+		}
+
+		// Alpha mask (ADR 0008): i loader decidono quali materiali sono mascherati, perche' i loro
+		// triangoli stanno in una geometria a parte del BLAS. Qui si cambia solo la soglia.
+		if (material.AlphaCutoff > 0.0f) {
+			ImGui::SeparatorText("Alpha mask");
+			if (ImGui::SliderFloat("Alpha cutoff", &material.AlphaCutoff, 0.01f, 1.0f))
+				m_Renderer.ResetPathTracingCounter();
 		}
 
 		ImGui::SeparatorText("Procedural noise");

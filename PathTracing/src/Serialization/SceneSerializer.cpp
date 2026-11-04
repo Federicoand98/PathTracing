@@ -69,6 +69,8 @@ namespace PathTracer {
 			{ "normalTexture", m.NormalTexture },
 			{ "normalStrength", m.NormalStrength },
 			{ "normalFlipY", m.NormalFlipY },
+			{ "alphaTexture", m.AlphaTexture },
+			{ "alphaCutoff", m.AlphaCutoff },
 		};
 	}
 
@@ -102,6 +104,8 @@ namespace PathTracer {
 		m.NormalTexture = f("normalTexture", m.NormalTexture);
 		m.NormalStrength = f("normalStrength", m.NormalStrength);
 		m.NormalFlipY = f("normalFlipY", m.NormalFlipY);
+		m.AlphaTexture = f("alphaTexture", m.AlphaTexture);
+		m.AlphaCutoff = f("alphaCutoff", m.AlphaCutoff);
 		return m;
 	}
 
@@ -153,7 +157,7 @@ namespace PathTracer {
 		}
 
 		root["textures"] = m_World.TexturePaths;
-		root["normalTextures"] = m_World.NormalTexturePaths;
+		root["dataTextures"] = m_World.DataTexturePaths;
 
 		std::ofstream file(path);
 		if (!file) {
@@ -230,7 +234,7 @@ namespace PathTracer {
 							  (float)bj.value("material", 0));
 
 		m_World.TexturePaths = root.value("textures", std::vector<std::string>{});
-		m_World.NormalTexturePaths = root.value("normalTextures", std::vector<std::string>{});
+		m_World.DataTexturePaths = root.value("dataTextures", std::vector<std::string>{});
 
 		// AddMesh rifa' i buffer dei triangoli a ogni chiamata: su tante mesh pesanti il load
 		// puo' impiegare qualche secondo. Va bene, e' un'operazione one-shot.
