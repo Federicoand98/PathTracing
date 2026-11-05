@@ -104,7 +104,7 @@ namespace PathTracer {
 			return false;
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		m_Window = glfwCreateWindow(width, height, "PathTracer", nullptr, nullptr);
+		m_Window = glfwCreateWindow(width, height, "Lucerna", nullptr, nullptr);
 
 		if (m_Window == nullptr)
 			return false;

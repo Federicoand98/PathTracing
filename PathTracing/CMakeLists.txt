@@ -7,7 +7,7 @@ if (POLICY CMP0141)
 endif()
 
 
-project ("PathTracing")
+project ("Lucerna")
 
 # Senza un build type esplicito CMake non passa NESSUN flag di ottimizzazione (-O0): tutto
 # il lato CPU (parsing OBJ, costruzione BVH/SBVH) gira non ottimizzato e molto lento. Default
@@ -87,5 +87,5 @@ add_dependencies(${PROJECT_NAME} Shaders)
 # set(CMAKE_EXE_LINKER_FLAGS "-static")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
-  set_property(TARGET PathTracing PROPERTY CXX_STANDARD 20)
+  set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
 endif()
