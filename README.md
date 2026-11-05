@@ -79,13 +79,13 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-Lucerna is a GPU path tracer written in C++ and Vulkan 1.3. It traces rays in hardware through `VK_KHR_ray_query`, from a single compute shader. The name is Latin for oil lamp. Up to version 2.0 the project was called PathTracing.
+Lucerna is a GPU path tracer written in C++ and Vulkan 1.3. It traces rays in hardware through `VK_KHR_ray_query`, from a single compute shader. The name is Latin for oil lamp. Up to version 0.2.0 the project was called PathTracing.
 
 ![Sponza courtyard lit by the sun][sponza-courtyard]
 
 ![The application][product-screenshot]
 
-Up to version 1.3 the renderer ran on OpenGL 4.3 compute shaders, with a BVH built and traversed in software. Version 2.0 moved it to Vulkan: the driver now builds the acceleration structures, and on the Sponza test scene a frame went from 52.6 ms to 1.2 ms at 1280×720. The OpenGL version is kept under the `v1.3-opengl` tag.
+Up to version 0.1.3 the renderer ran on OpenGL 4.3 compute shaders, with a BVH built and traversed in software. Version 0.2.0 moved it to Vulkan: the driver now builds the acceleration structures, and on the Sponza test scene a frame went from 52.6 ms to 1.2 ms at 1280×720. The OpenGL version is kept under the `v0.1.3` tag and the `opengl` branch.
 
 Lucerna currently has:
 - Hardware ray tracing with `VK_KHR_ray_query`: one BLAS per mesh, a procedural BLAS for spheres and quads, and a TLAS rebuilt when the scene changes
@@ -228,7 +228,7 @@ Project Link: [https://github.com/Federicoand98/Lucerna](https://github.com/Fede
 Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
 
 * [Vulkan ray query](https://docs.vulkan.org/spec/latest/chapters/raytraversal.html)
-* [OpenGL Compute Shaders](https://learnopengl.com/Guest-Articles/2022/Compute-Shaders/Introduction), used up to version 1.3
+* [OpenGL Compute Shaders](https://learnopengl.com/Guest-Articles/2022/Compute-Shaders/Introduction), used up to version 0.1.3
 * [RayTracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html)
 * [BSDF](https://blog.demofox.org/2020/06/14/casual-shadertoy-path-tracing-3-fresnel-rough-refraction-absorption-orbit-camera/)
 
