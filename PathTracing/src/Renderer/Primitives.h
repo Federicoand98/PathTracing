@@ -120,7 +120,7 @@ namespace PathTracer {
         glm::vec4 U{ 0.0f };         // quad: vettore-spigolo U (fisico) ; sfera: inutilizzato
         glm::vec4 V{ 0.0f };         // quad: vettore-spigolo V (fisico) ; sfera: inutilizzato
         glm::vec4 Normal{ 0.0f };    // quad: normale.xyz ; sfera: inutilizzato
-        glm::ivec4 Meta{ 0 };        // x = tipo (0 sfera, 1 quad, 2 Sole), y = objType, z = objIndex
+        glm::ivec4 Meta{ 0 };        // x = tipo (0 sfera, 1 quad, 2 Sole, 3 punto, 4 spot), y = objType, z = objIndex
     };
 
     static_assert(sizeof(GPULight) == 96, "GPULight deve essere 96 byte per combaciare con lo std430");
@@ -151,6 +151,18 @@ namespace PathTracer {
             const float s = std::sin(glm::radians(AngularRadius));
             return Color * (Irradiance / (3.14159265f * s * s));
         }
+    };
+
+    // Luce puntiforme o spot (ADR 0009): un Emitter delta, senza geometria. Non la colpisce
+    // nessun raggio, quindi illumina solo tramite la NEE, con peso MIS 1.
+    struct PunctualLight {
+        bool Spot = false;
+        glm::vec3 Position{ 0.0f };
+        glm::vec3 Direction{ 0.0f, -1.0f, 0.0f }; // dove punta lo spot; ignorata dalla luce punto
+        glm::vec3 Color{ 1.0f };
+        float Intensity = 10.0f;     // intensita' radiante (W/sr): a distanza d arriva Intensity / d^2
+        float InnerAngle = 30.0f;    // gradi dall'asse: dentro, luce piena
+        float OuterAngle = 45.0f;    // gradi dall'asse: fuori, buio; in mezzo la sfumatura glTF
     };
 
     struct Box {

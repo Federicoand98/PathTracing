@@ -6,8 +6,10 @@ const float SUN_DISTANCE = 100000.0;
 
 // Campiona un emettitore (scelto uniformemente) e restituisce direzione, distanza, radianza
 // e pdf in solid angle (gia' comprensiva di 1/numLights). false = campione non valido.
-bool SampleLight(vec3 p, out vec3 wi, out float dist, out vec3 Lrad, out float pdf) {
-    wi = vec3(0.0, 1.0, 0.0); dist = 0.0; Lrad = vec3(0.0); pdf = 0.0;
+// delta = luce punto o spot: nessun raggio BSDF la puo' colpire, quindi peso MIS 1. Per loro
+// Lrad e' gia' l'irradianza sul punto (I / d^2) e pdf la sola probabilita' di sceglierla.
+bool SampleLight(vec3 p, out vec3 wi, out float dist, out vec3 Lrad, out float pdf, out bool delta) {
+    wi = vec3(0.0, 1.0, 0.0); dist = 0.0; Lrad = vec3(0.0); pdf = 0.0; delta = false;
     if(numLights == 0)
         return false;
 
@@ -15,6 +17,29 @@ bool SampleLight(vec3 p, out vec3 wi, out float dist, out vec3 Lrad, out float p
     Light L = Lights[li];
     Lrad = L.Emission.rgb;
     float pickPdf = 1.0 / float(numLights);
+
+    if(L.Meta.x >= 3) {
+        // ---- luce punto o spot (ADR 0009): una sola direzione possibile ----
+        vec3 w = L.P.xyz - p;
+        float d2 = dot(w, w);
+        if(d2 < 1e-8)
+            return false;
+        dist = sqrt(d2);
+        wi = w / dist;
+        float falloff = 1.0;
+        if(L.Meta.x == 4) {
+            // sfumatura del cono come nella specifica glTF: lineare in cos, poi al quadrato
+            float cd = dot(L.U.xyz, -wi);
+            float t = clamp((cd - L.U.w) / max(L.V.x - L.U.w, 1e-3), 0.0, 1.0);
+            falloff = t * t;
+            if(falloff <= 0.0)
+                return false;
+        }
+        Lrad *= falloff / d2;
+        pdf = pickPdf;
+        delta = true;
+        return true;
+    }
 
     if(L.Meta.x == 2) {
         // ---- Sole: cono uniforme attorno alla sua direzione, uguale da ogni punto ----

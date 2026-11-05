@@ -53,6 +53,7 @@ def export_gltf():
         export_normals=True,
         export_texcoords=True,
         export_materials='EXPORT',
+        export_lights=True,       # KHR_lights_punctual: Blender di default non le esporta (ADR 0009)
         use_selection=False,
     )
     print("[PT Live-Link] esportato:", out_path)

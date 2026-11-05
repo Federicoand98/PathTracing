@@ -75,6 +75,7 @@ namespace PathTracer {
 		MeshPaths.clear();
 		Boxes.clear();
 		Sun = SunParams{}; // spento: ogni scena accende il suo
+		PunctualLights.clear();
 	}
 
 	void World::PrepareMaterials() {
@@ -982,6 +983,25 @@ namespace PathTracer {
 				L.Meta = glm::ivec4(2, -1, -1, 0);
 				lights.push_back(L);
 			}
+		}
+
+		// Luci punto e spot: Emission.rgb = intensita', P = posizione, U = direzione dello spot
+		// con cos(OuterAngle) in w, V.x = cos(InnerAngle). Nessun oggetto le rappresenta.
+		for (const PunctualLight& p : PunctualLights) {
+			const glm::vec3 intensity = p.Color * p.Intensity;
+			if (glm::dot(intensity, glm::vec3(0.2126f, 0.7152f, 0.0722f)) <= 1e-6f)
+				continue;
+			GPULight L;
+			L.Emission = glm::vec4(intensity, 0.0f);
+			L.P = glm::vec4(p.Position, 0.0f);
+			if (p.Spot) {
+				const float outer = glm::radians(glm::clamp(p.OuterAngle, 0.1f, 90.0f));
+				const float inner = glm::radians(glm::clamp(p.InnerAngle, 0.0f, glm::degrees(outer)));
+				L.U = glm::vec4(glm::normalize(p.Direction), std::cos(outer));
+				L.V = glm::vec4(std::cos(inner), 0.0f, 0.0f, 0.0f);
+			}
+			L.Meta = glm::ivec4(p.Spot ? 4 : 3, -1, -1, 0);
+			lights.push_back(L);
 		}
 
 		return lights;

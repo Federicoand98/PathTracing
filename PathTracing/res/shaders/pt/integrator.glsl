@@ -104,8 +104,8 @@ vec3 PerPixel(vec2 ndc) {
         // (2) NEE: campiona una luce e aggiungi il contributo diretto (solo superfici esterne;
         //     dentro un mezzo la rifrazione all'uscita renderebbe il sample errato).
         if(numLights > 0 && !hit.Inside) {
-            vec3 wi; float dist; vec3 Lrad; float pdfLight;
-            if(SampleLight(hit.HitPosition, wi, dist, Lrad, pdfLight) && pdfLight > 1e-8) {
+            vec3 wi; float dist; vec3 Lrad; float pdfLight; bool deltaLight;
+            if(SampleLight(hit.HitPosition, wi, dist, Lrad, pdfLight, deltaLight) && pdfLight > 1e-8) {
                 // Col normal map la luce deve stare sopra anche la superficie vera, non solo
                 // sopra la normale di shading: altrimenti illuminerebbe da sotto (ADR 0007).
                 if(dot(N, wi) > 0.0 && (material.NormalTexture < 0.0 || dot(hit.GeoNormal, wi) > 0.0)) {
@@ -114,7 +114,8 @@ vec3 PerPixel(vec2 ndc) {
                     if(any(greaterThan(f, vec3(0.0)))) {
                         vec3 sorigin = hit.HitPosition + hit.GeoNormal * 0.001;
                         if(!Occluded(sorigin, wi, dist - 0.002)) {
-                            float w = pdfLight / (pdfLight + pdfBsdfDir);
+                            // una luce delta la trova solo la NEE: niente da bilanciare
+                            float w = deltaLight ? 1.0 : pdfLight / (pdfLight + pdfBsdfDir);
                             light += throughput * f * dot(N, wi) * Lrad / pdfLight * w;
                         }
                     }

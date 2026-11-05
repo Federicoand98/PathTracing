@@ -98,6 +98,66 @@ namespace PathTracer {
 
 	} // namespace
 
+	// KHR_lights_punctual (ADR 0009). glTF da' le intensita' in unita' fotometriche, che
+	// l'esportatore di Blender ricava moltiplicando i suoi watt per 683 lm/W: dividendo per 683
+	// la luce torna nelle unita' radiometriche di Blender, le stesse del Sole (irradianza).
+	// Il range si ignora: e' un'ottimizzazione da motore real-time, non fisica.
+	bool World::ImportLights(const cgltf_data* data) {
+		constexpr float LUMENS_PER_WATT = 683.0f;
+		bool any = false;
+
+		for (size_t n = 0; n < data->nodes_count; n++) {
+			const cgltf_node& node = data->nodes[n];
+			if (!node.light)
+				continue;
+			const cgltf_light& gl = *node.light;
+
+			float world[16];
+			cgltf_node_transform_world(&node, world);
+			const glm::mat4 m = glm::make_mat4(world);
+			// una luce glTF punta lungo il -Z del suo nodo
+			const glm::vec3 forward = glm::normalize(-glm::vec3(m[2]));
+			const glm::vec3 color = glm::make_vec3(gl.color);
+
+			if (gl.type == cgltf_light_type_directional) {
+				if (Sun.Enabled) {
+					std::cout << "glTF: piu' di una luce direzionale, ignorata: "
+						<< (gl.name ? gl.name : "") << std::endl;
+					continue;
+				}
+				// Direction() del Sole punta verso la luce: il contrario di dove va la luce
+				const glm::vec3 toSun = -forward;
+				Sun.Enabled = true;
+				Sun.Elevation = glm::degrees(std::asin(glm::clamp(toSun.y, -1.0f, 1.0f)));
+				Sun.Azimuth = glm::degrees(std::atan2(toSun.x, toSun.z));
+				if (Sun.Azimuth < 0.0f)
+					Sun.Azimuth += 360.0f;
+				Sun.Color = color;
+				Sun.Irradiance = gl.intensity / LUMENS_PER_WATT;
+				any = true;
+			}
+			else if (gl.type == cgltf_light_type_point || gl.type == cgltf_light_type_spot) {
+				PunctualLight p;
+				p.Spot = gl.type == cgltf_light_type_spot;
+				p.Position = glm::vec3(m[3]);
+				p.Direction = forward;
+				p.Color = color;
+				p.Intensity = gl.intensity / LUMENS_PER_WATT;
+				if (p.Spot) {
+					p.InnerAngle = glm::degrees(gl.spot_inner_cone_angle);
+					p.OuterAngle = glm::degrees(gl.spot_outer_cone_angle);
+				}
+				PunctualLights.push_back(p);
+				any = true;
+			}
+		}
+
+		if (any)
+			std::cout << "glTF: " << PunctualLights.size() << " luci punto/spot"
+				<< (Sun.Enabled ? ", Sole dalla luce direzionale" : "") << std::endl;
+		return any;
+	}
+
 	bool World::LoadGltf(const std::string& path) {
 		cgltf_options options = {};
 		cgltf_data* data = nullptr;
@@ -116,11 +176,10 @@ namespace PathTracer {
 		// da qui in poi si rimpiazza la scena: prima di toccare il World, tutto e' andato a buon fine
 		DestroyScene();
 
-		// In questo engine i raggi che mancano la geometria ritornano BackgroundColor come
-		// radianza (con Environment Mapping ON; vedi PathTracing.comp): e' la sola luce di una
-		// scena glTF, che a questo stadio non importa lampade. Cielo azzurro = illuminazione base.
-		// Senza, la scena resta NERA (sfondo e oggetti). Non importiamo ancora le luci glTF.
-		BackgroundColor = glm::vec3(0.6f, 0.7f, 0.9f);
+		// I raggi che mancano la geometria ritornano BackgroundColor come radianza. Senza luci
+		// nel file e' la sola illuminazione, quindi un cielo azzurro; con le luci si usa il grigio
+		// scuro del World di default di Blender, che altrimenti sovrasterebbe le lampade.
+		BackgroundColor = ImportLights(data) ? glm::vec3(0.05f) : glm::vec3(0.6f, 0.7f, 0.9f);
 
 		const std::string gltfDir = std::filesystem::path(path).parent_path().string();
 

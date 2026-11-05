@@ -10,6 +10,8 @@
 #include "Renderer/Primitives.h"
 #include "Graphics/Model.h"
 
+struct cgltf_data; // GltfLoader.cpp: World.h non dipende da cgltf
+
 namespace PathTracer {
 
 
@@ -39,6 +41,7 @@ namespace PathTracer {
 		// geometria + materiali del file. Ritorna false se il parsing fallisce (scena invariata).
 		// Definita in GltfLoader.cpp per non appesantire World.cpp con la dipendenza cgltf.
 		bool LoadGltf(const std::string& path);
+		bool ImportLights(const cgltf_data* data); // KHR_lights_punctual: true se ha trovato luci
 
 		// Creazione a runtime. Sono tutte APPEND: gli indici gia' in giro (selezione,
 		// MaterialIndex degli oggetti, Box::index) restano validi.
@@ -67,6 +70,7 @@ namespace PathTracer {
 	public:
 		glm::vec3 BackgroundColor;
 		SunParams Sun;                    // al massimo un Sole per scena (ADR 0006)
+		std::vector<PunctualLight> PunctualLights; // luci punto e spot (ADR 0009)
         std::vector<Test> Tests;
 		std::vector<Sphere> Spheres;
 		std::vector<Quad> Quads;

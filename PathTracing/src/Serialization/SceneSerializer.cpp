@@ -119,6 +119,13 @@ namespace PathTracer {
 		root["sun"] = { { "enabled", sun.Enabled }, { "elevation", sun.Elevation }, { "azimuth", sun.Azimuth },
 		                { "angularRadius", sun.AngularRadius }, { "color", ToJson(sun.Color) }, { "irradiance", sun.Irradiance } };
 
+		json lights = json::array();
+		for (const PunctualLight& p : m_World.PunctualLights)
+			lights.push_back({ { "type", p.Spot ? "spot" : "point" }, { "position", ToJson(p.Position) },
+			                   { "direction", ToJson(p.Direction) }, { "color", ToJson(p.Color) },
+			                   { "intensity", p.Intensity }, { "innerAngle", p.InnerAngle }, { "outerAngle", p.OuterAngle } });
+		root["punctualLights"] = lights;
+
 		for (const Material& m : m_World.Materials)
 			root["materials"].push_back(MaterialToJson(m));
 
@@ -203,6 +210,18 @@ namespace PathTracer {
 			sun.AngularRadius = sj.value("angularRadius", sun.AngularRadius);
 			sun.Color = ReadVec3(sj.value("color", json()), sun.Color);
 			sun.Irradiance = sj.value("irradiance", sun.Irradiance);
+		}
+
+		for (const json& lj : root.value("punctualLights", json::array())) {
+			PunctualLight p;
+			p.Spot = lj.value("type", std::string("point")) == "spot";
+			p.Position = ReadVec3(lj.value("position", json()), p.Position);
+			p.Direction = ReadVec3(lj.value("direction", json()), p.Direction);
+			p.Color = ReadVec3(lj.value("color", json()), p.Color);
+			p.Intensity = lj.value("intensity", p.Intensity);
+			p.InnerAngle = lj.value("innerAngle", p.InnerAngle);
+			p.OuterAngle = lj.value("outerAngle", p.OuterAngle);
+			m_World.PunctualLights.push_back(p);
 		}
 
 		for (const json& mj : root.value("materials", json::array()))
