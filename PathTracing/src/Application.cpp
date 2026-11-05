@@ -539,7 +539,7 @@ namespace PathTracer {
 
 		const size_t standaloneQuads = std::count(quadOwnedByBox.begin(), quadOwnedByBox.end(), false);
 		const bool empty = m_World.Spheres.empty() && m_World.Boxes.empty()
-						&& standaloneQuads == 0 && m_World.Meshes.empty();
+						&& standaloneQuads == 0 && m_World.Meshes.empty() && m_World.PunctualLights.empty();
 
 		ImGui::BeginChild("OutlinerList", ImVec2(0.0f, 190.0f), true);
 
@@ -576,6 +576,12 @@ namespace PathTracer {
 			ImGui::TreePop();
 		}
 
+		if (!m_World.PunctualLights.empty() && ImGui::TreeNodeEx("lights", ImGuiTreeNodeFlags_DefaultOpen, "Lights (%zu)", m_World.PunctualLights.size())) {
+			for (size_t i = 0; i < m_World.PunctualLights.size(); i++)
+				SelectableObjectRow(m_World.PunctualLights[i].Spot ? "Spot light" : "Point light", SelectionType::Light, (int)i, -1.0f);
+			ImGui::TreePop();
+		}
+
 		ImGui::EndChild();
 	}
 
@@ -591,8 +597,10 @@ namespace PathTracer {
 
 		const bool clicked = ImGui::Selectable(row, selected);
 
-		ImGui::SameLine(ImGui::GetContentRegionAvail().x - 30.0f);
-		ImGui::TextDisabled("m%d", static_cast<int>(materialIndex));
+		if (materialIndex >= 0.0f) { // le luci non hanno materiale
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x - 30.0f);
+			ImGui::TextDisabled("m%d", static_cast<int>(materialIndex));
+		}
 
 		if (clicked) {
 			m_Selection = { type, index };
@@ -692,6 +700,33 @@ namespace PathTracer {
 				m_World.SetMeshTransform(m_Selection.Index, glm::mat4(1.0f));
 				m_Renderer.ResetPathTracingCounter();
 			}
+			break;
+		}
+		case SelectionType::Light: {
+			PunctualLight& light = m_World.PunctualLights.at(m_Selection.Index);
+			bool changed = false;
+			int type = light.Spot ? 1 : 0;
+			if (ImGui::Combo("Type", &type, "Point\0Spot\0\0")) {
+				light.Spot = type == 1;
+				changed = true;
+			}
+			changed |= ImGui::DragFloat3("Position", glm::value_ptr(light.Position), 0.05f);
+			changed |= ImGui::ColorEdit3("Color", glm::value_ptr(light.Color));
+			changed |= ImGui::DragFloat("Intensity", &light.Intensity, 0.1f, 0.0f, 1e6f, "%.2f W/sr", ImGuiSliderFlags_Logarithmic);
+			ImGui::TextDisabled("power %.1f W, as a Blender lamp", light.Intensity * 4.0f * 3.14159265f);
+			if (light.Spot) {
+				if (ImGui::DragFloat3("Direction", glm::value_ptr(light.Direction), 0.01f)) {
+					if (glm::length(light.Direction) < 1e-4f)
+						light.Direction = { 0.0f, -1.0f, 0.0f };
+					light.Direction = glm::normalize(light.Direction);
+					changed = true;
+				}
+				changed |= ImGui::SliderFloat("Outer angle", &light.OuterAngle, 0.5f, 90.0f, "%.1f deg");
+				changed |= ImGui::SliderFloat("Inner angle", &light.InnerAngle, 0.0f, light.OuterAngle, "%.1f deg");
+				light.InnerAngle = glm::min(light.InnerAngle, light.OuterAngle);
+			}
+			if (changed)
+				m_Renderer.ResetPathTracingCounter();
 			break;
 		}
 		default:
@@ -815,6 +850,22 @@ namespace PathTracer {
 			m_Renderer.ResetPathTracingCounter();
 		}
 
+		// luci punto e spot (ADR 0009): lo spot nasce rivolto in basso
+		for (int spot = 0; spot < 2; spot++) {
+			if (ImGui::Button(spot ? "+ Spot light" : "+ Point light")) {
+				PunctualLight light;
+				light.Spot = spot == 1;
+				light.Position = spawn;
+				m_World.PunctualLights.push_back(light);
+
+				m_Selection = { SelectionType::Light, (int)m_World.PunctualLights.size() - 1 };
+				m_GizmoOperation = ImGuizmo::TRANSLATE;
+				m_Renderer.ResetPathTracingCounter();
+			}
+			if (spot == 0)
+				ImGui::SameLine();
+		}
+
 		// elenco dei .obj disponibili, letto una volta sola
 		if (m_ModelFiles.empty() && std::filesystem::exists("models")) {
 			for (const auto& entry : std::filesystem::directory_iterator("models"))
@@ -867,6 +918,7 @@ namespace PathTracer {
 		case SelectionType::Quad:   return static_cast<int>(m_World.Quads.size());
 		case SelectionType::Box:    return static_cast<int>(m_World.Boxes.size());
 		case SelectionType::Mesh:   return static_cast<int>(m_World.Meshes.size());
+		case SelectionType::Light:  return static_cast<int>(m_World.PunctualLights.size());
 		default:                    return 0;
 		}
 	}
@@ -890,6 +942,10 @@ namespace PathTracer {
 		case SelectionType::Quad:   removed = m_World.RemoveQuad(sel.Index);   break;
 		case SelectionType::Box:    removed = m_World.RemoveBox(sel.Index);    break;
 		case SelectionType::Mesh:   removed = m_World.RemoveMesh(sel.Index);   break;
+		case SelectionType::Light:
+			m_World.PunctualLights.erase(m_World.PunctualLights.begin() + sel.Index);
+			removed = true;
+			break;
 		default: break;
 		}
 
@@ -1457,6 +1513,8 @@ namespace PathTracer {
 			const MeshInfo& m = m_World.Meshes.at(m_Selection.Index);
 			return 0.5f * (glm::vec3(m.BoundsMin) + glm::vec3(m.BoundsMax));
 		}
+		case SelectionType::Light:
+			return m_World.PunctualLights.at(m_Selection.Index).Position;
 		default:
 			return glm::vec3(0.0f);
 		}
@@ -1501,6 +1559,13 @@ namespace PathTracer {
 			outMax = glm::vec3(m.BoundsMax);
 			break;
 		}
+		case SelectionType::Light: {
+			// una luce non ha estensione: un piccolo cubo attorno alla posizione per vederla
+			const glm::vec3 p = m_World.PunctualLights.at(m_Selection.Index).Position;
+			outMin = p - glm::vec3(0.1f);
+			outMax = p + glm::vec3(0.1f);
+			break;
+		}
 		default:
 			break;
 		}
@@ -1523,6 +1588,9 @@ namespace PathTracer {
 		case SelectionType::Sphere: name = "Sphere"; break;
 		case SelectionType::Quad:   name = "Quad";   break;
 		case SelectionType::Box:    name = "Box";    break;
+		case SelectionType::Light:
+			name = m_World.PunctualLights.at(m_Selection.Index).Spot ? "Spot light" : "Point light";
+			break;
 		case SelectionType::Mesh:
 			name = "Mesh";
 			if (m_Selection.Index < (int)m_World.MeshNames.size())
@@ -1590,6 +1658,15 @@ namespace PathTracer {
 		ImVec2 pivot;
 		if (WorldToScreen(viewProjection, GetSelectionPivot(), m_ViewportPos, m_ViewportSize, pivot))
 			drawList->AddCircleFilled(pivot, 4.0f, accent);
+
+		// uno spot non si vede: una linea mostra dove punta
+		if (m_Selection.Type == SelectionType::Light) {
+			const PunctualLight& light = m_World.PunctualLights.at(m_Selection.Index);
+			ImVec2 tip;
+			if (light.Spot && WorldToScreen(viewProjection, light.Position + light.Direction * 0.75f, m_ViewportPos, m_ViewportSize, tip)
+			    && WorldToScreen(viewProjection, light.Position, m_ViewportPos, m_ViewportSize, pivot))
+				drawList->AddLine(pivot, tip, accent, 2.0f);
+		}
 	}
 
 	// 'delta' e' una trasformazione affine world-space: per un punto p, p' = delta * p.
@@ -1651,6 +1728,15 @@ namespace PathTracer {
 			m_World.SetMeshTransform(m_Selection.Index, delta * mesh.Transform);
 			break;
 		}
+		case SelectionType::Light: {
+			// la scala non ha senso su una luce delta: contano posizione e direzione
+			PunctualLight& light = m_World.PunctualLights.at(m_Selection.Index);
+			light.Position = glm::vec3(delta * glm::vec4(light.Position, 1.0f));
+			const glm::vec3 dir = linear * light.Direction;
+			if (glm::length(dir) > 1e-6f)
+				light.Direction = glm::normalize(dir);
+			break;
+		}
 		default:
 			break;
 		}
@@ -1670,6 +1756,7 @@ namespace PathTracer {
 		case SelectionType::Quad:   count = m_World.Quads.size();   break;
 		case SelectionType::Box:    count = m_World.Boxes.size();   break;
 		case SelectionType::Mesh:   count = m_World.Meshes.size();  break;
+		case SelectionType::Light:  count = m_World.PunctualLights.size(); break;
 		default: break;
 		}
 

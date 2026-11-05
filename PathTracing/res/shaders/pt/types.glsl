@@ -91,7 +91,7 @@ struct Light {
     vec4 U;         // quad: spigolo U ; sfera: inutilizzato
     vec4 V;         // quad: spigolo V ; sfera: inutilizzato
     vec4 Normal;    // quad: normale ; sfera: inutilizzato
-    ivec4 Meta;     // x = tipo (0 sfera, 1 quad), y = objType, z = objIndex
+    ivec4 Meta;     // x = tipo (0 sfera, 1 quad, 2 Sole, 3 punto, 4 spot), y = objType, z = objIndex
 };
 
 // Parametri del BSDF derivati dal materiale (nessun RNG): condivisi tra il sampling (BSDF)

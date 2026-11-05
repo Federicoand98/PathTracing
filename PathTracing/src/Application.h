@@ -34,7 +34,8 @@ namespace PathTracer {
 		Sphere = 0,
 		Quad = 1,
 		Mesh = 2,
-		Box = 3
+		Box = 3,
+		Light = 4   // luce punto o spot: nessun raggio la colpisce, si seleziona dall'outliner
 	};
 
 	struct Selection {
@@ -42,8 +43,9 @@ namespace PathTracer {
 		int Index = -1;
 
 		bool IsValid() const { return Type != SelectionType::None && Index >= 0; }
-		// una sfera non ha orientamento, un box e' axis-aligned: niente rotazione
-		bool SupportsRotation() const { return Type == SelectionType::Quad || Type == SelectionType::Mesh; }
+		// una sfera non ha orientamento, un box e' axis-aligned: niente rotazione.
+		// La rotazione di una luce orienta lo spot.
+		bool SupportsRotation() const { return Type == SelectionType::Quad || Type == SelectionType::Mesh || Type == SelectionType::Light; }
 	};
 
 	class Application {
