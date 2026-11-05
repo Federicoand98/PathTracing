@@ -106,7 +106,7 @@ namespace PathTracer {
 
 	bool VulkanContext::CreateInstance(bool validation) {
 		VkApplicationInfo appInfo{ VK_STRUCTURE_TYPE_APPLICATION_INFO };
-		appInfo.pApplicationName = "PathTracer";
+		appInfo.pApplicationName = "Lucerna";
 		appInfo.apiVersion = VK_API_VERSION_1_3;
 
 		uint32_t glfwCount = 0;
