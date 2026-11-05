@@ -10,7 +10,7 @@ ini=$(mktemp); cp "$res/imgui.ini" "$ini"   # l'app riscrive il layout a ogni av
 
 for s in $scenes; do
     (cd "$res" && PT_NOVSYNC=1 PT_VIEWPORT=${PT_VIEWPORT:-1280x720} PT_SCENE=$s PT_SHOT="$out/s$s.png" \
-        PT_HDR="$out/s$s.hdr" PT_SHOT_FRAME=${FRAMES:-600} PT_LOG_FPS=1 timeout 240 ./PathTracing > "$out/s$s.log" 2>&1)
+        PT_HDR="$out/s$s.hdr" PT_SHOT_FRAME=${FRAMES:-600} PT_LOG_FPS=1 timeout 240 ./Lucerna > "$out/s$s.log" 2>&1)
     rc=$?
     ms=$(grep PTFPS "$out/s$s.log" | awk '{print $4}' | sort -n | awk '{a[NR]=$1} END{print a[int((NR+1)/2)]}')
     # sotto 5 FPS il compositor sta rallentando la finestra coperta: tempi non validi.
