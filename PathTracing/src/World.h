@@ -70,6 +70,7 @@ namespace PathTracer {
 	public:
 		glm::vec3 BackgroundColor;
 		SunParams Sun;                    // al massimo un Sole per scena (ADR 0006)
+		bool EnvironmentMapping = false;  // true = cubemap, false = BackgroundColor
 		std::vector<PunctualLight> PunctualLights; // luci punto e spot (ADR 0009)
         std::vector<Test> Tests;
 		std::vector<Sphere> Spheres;

@@ -138,11 +138,11 @@ namespace PathTracer {
 		// L'immagine ridotta viene poi upscalata dal sampler del tonemap sull'intero viewport.
 		// Il picking forza la piena risoluzione: pickPixel e' in coordinate viewport e su una
 		// griglia ridotta non corrisponderebbe a nessun texel.
-		bool reduce = m_Interacting && RenderScale < 1.0f && !m_PickRequested;
+		bool reduce = m_Interacting && Settings.RenderScale < 1.0f && !m_PickRequested;
 		uint32_t rw = m_Width, rh = m_Height;
 		if (reduce) {
-			rw = std::max(8u, static_cast<uint32_t>(m_Width * RenderScale));
-			rh = std::max(8u, static_cast<uint32_t>(m_Height * RenderScale));
+			rw = std::max(8u, static_cast<uint32_t>(m_Width * Settings.RenderScale));
+			rh = std::max(8u, static_cast<uint32_t>(m_Height * Settings.RenderScale));
 		}
 		if (rw != m_RenderW || rh != m_RenderH) {
 			m_RenderW = rw;
@@ -160,7 +160,7 @@ namespace PathTracer {
 		// Senza riproiezione si torna al comportamento classico: la camera che si muove invalida
 		// l'accumulo e si riparte da capo. E' esattamente cio' che la riproiezione evita, quindi
 		// il toggle serve solo come termine di paragone.
-		if (!Reproject && m_Interacting)
+		if (!Settings.Reproject && m_Interacting)
 			ResetPathTracingCounter();
 
 		// La storia non e' valida al primo frame dopo un reset (cambio scena/materiale/risoluzione):
@@ -176,7 +176,7 @@ namespace PathTracer {
 		glm::mat4 viewProjection = camera.GetProjection() * camera.GetView();
 		bool aovNeedsUpdate = (viewProjection != m_PrevViewProjection) || m_PTCounter <= 1 || m_sceneReset;
 
-		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(m_SamplesPerPixel), static_cast<uint32_t>(m_RayDepth), m_sceneReset, EnvironmentMapping, FireflyClamp, Aperture, FocusDistance, AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, HistoryCap, NEE, pickPixel, *m_World, *m_Camera };
+		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(Settings.SamplesPerPixel), static_cast<uint32_t>(Settings.RayDepth), m_sceneReset, m_World->EnvironmentMapping, Settings.FireflyClamp, m_Camera->Aperture, m_Camera->FocusDistance, View.AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, Settings.HistoryCap, Settings.NEE, pickPixel, *m_World, *m_Camera };
 
 		// Le scritture del frame scorso diventano visibili a questo, e il tonemap non deve
 		// sovrascrivere il display mentre ImGui lo sta ancora leggendo.
@@ -217,19 +217,19 @@ namespace PathTracer {
 		// sono i piu' indietro e crescono di 1 al frame. In movimento non si salta mai.
 		m_FramesSinceMove = m_Interacting ? 0 : m_FramesSinceMove + 1;
 		float minFade = 1.0f;
-		if (DenoiseAutoFade && m_FramesSinceMove > 1)
+		if (Settings.DenoiseAutoFade && m_FramesSinceMove > 1)
 			minFade = std::clamp(1.0f / std::sqrt(static_cast<float>(m_FramesSinceMove)), 0.0f, 1.0f);
 
 		const GpuImage* source = &m_RenderedImage;
-		m_DenoiseWritten = Denoise && AOVView == 0 && DenoiseStrength * minFade > 0.01f;
+		m_DenoiseWritten = Settings.Denoise && View.AOVView == 0 && Settings.DenoiseStrength * minFade > 0.01f;
 		if (m_DenoiseWritten) {
 			vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, m_Timestamps, 2);
 			source = &m_Denoiser->Run(cmd, m_Irradiance[cur], m_RenderedImage, m_AlbedoAOV, m_NormalDepth[cur],
-			                          DenoiseStrength, DenoiseAutoFade, DenoiseCPhi, DenoiseNPhi, DenoisePPhi, DenoiseAPhi);
+			                          Settings.DenoiseStrength, Settings.DenoiseAutoFade, Settings.DenoiseCPhi, Settings.DenoiseNPhi, Settings.DenoisePPhi, Settings.DenoiseAPhi);
 			vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, m_Timestamps, 3);
 		}
 
-		const TonemapParams tonemap = { Exposure, PostProcessing ? 1 : 0, AOVView };
+		const TonemapParams tonemap = { Settings.Exposure, Settings.Tonemap ? 1 : 0, View.AOVView };
 		m_Tonemap->Bind(cmd);
 		m_Tonemap->Sampler(0, *source, m_DisplaySampler, VK_IMAGE_LAYOUT_GENERAL).Image(1, m_Display).Commit(cmd);
 		m_Tonemap->PushConstants(cmd, &tonemap, sizeof(tonemap));
@@ -258,7 +258,7 @@ namespace PathTracer {
 	}
 
 	void Renderer::UpdateAccumulationCounter() {
-		if (PathTracing)
+		if (View.PathTracing)
 			m_PTCounter++;
 		else
 			m_PTCounter = 1;

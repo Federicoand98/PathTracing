@@ -71,19 +71,19 @@ namespace PathTracer {
 		}
 
 		if (const char* a = getenv("PT_AOV"))
-			m_Renderer.AOVView = atoi(a);
+			m_Renderer.View.AOVView = atoi(a);
 
 		if (const char* n = getenv("PT_NEE"))
-			m_Renderer.NEE = (atoi(n) != 0);
+			m_Renderer.Settings.NEE = (atoi(n) != 0);
 		// Test/CI headless: PT_DEPTH=<n> forza la profondita' dei rimbalzi (2 = solo diretta).
 		if (const char* d = getenv("PT_DEPTH"))
-			m_Renderer.m_RayDepth = atoi(d);
+			m_Renderer.Settings.RayDepth = atoi(d);
 		// Test/CI headless: PT_REPROJ=0 spegne la riproiezione temporale (misura del suo costo).
 		if (const char* r = getenv("PT_REPROJ"))
-			m_Renderer.Reproject = (atoi(r) != 0);
+			m_Renderer.Settings.Reproject = (atoi(r) != 0);
 		// Test/CI headless: PT_DENOISE=1 accende il denoiser (misura del suo costo).
 		if (const char* dn = getenv("PT_DENOISE"))
-			m_Renderer.Denoise = (atoi(dn) != 0);
+			m_Renderer.Settings.Denoise = (atoi(dn) != 0);
 	}
 
 	Application::~Application() {
@@ -111,7 +111,8 @@ namespace PathTracer {
 
 		// Test/CI headless: PT_NOVSYNC=1. Con la vsync il driver abbassa i clock per riempire il
 		// frame, quindi i tempi GPU non misurano il costo reale delle passate.
-		m_Vsync = getenv("PT_NOVSYNC") == nullptr;
+		m_Preferences = Preferences::Load();
+		m_Vsync = m_Preferences.Vsync && getenv("PT_NOVSYNC") == nullptr;
 		if (!m_Vulkan.Initialize(m_Window, m_Vsync))
 			return false;
 
@@ -471,10 +472,10 @@ namespace PathTracer {
 			ImGui::TextDisabled("watch: %s", m_GltfPath.c_str());
 		}
 
-		if (ImGui::Checkbox("Environment Mapping", &m_Renderer.EnvironmentMapping))
+		if (ImGui::Checkbox("Environment Mapping", &m_World.EnvironmentMapping))
 			m_Renderer.ResetPathTracingCounter();
 
-		if (!m_Renderer.EnvironmentMapping)
+		if (!m_World.EnvironmentMapping)
 			if (ImGui::ColorEdit3("Background", glm::value_ptr(m_World.BackgroundColor)))
 				m_Renderer.ResetPathTracingCounter();
 
@@ -502,13 +503,13 @@ namespace PathTracer {
 		const std::string scenePath = std::string("scenes/") + m_SceneFilename + ".json";
 		if (ImGui::Button("Save")) {
 			std::filesystem::create_directories("scenes");
-			SceneSerializer(m_World).Serialize(scenePath);
+			SceneSerializer(m_World, &m_Renderer.Settings).Serialize(scenePath);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Load")) {
 			// Deserialize riscrive i vettori del world ma non i buffer GPU: il re-upload
 			// lo fa ResetPathTracingCounter(true), esattamente come un cambio scena.
-			if (SceneSerializer(m_World).Deserialize(scenePath)) {
+			if (SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(scenePath)) {
 				m_Selection = {};
 				m_Renderer.ResetPathTracingCounter(true);
 			}
@@ -1335,10 +1336,22 @@ namespace PathTracer {
 		ImGui::Spacing();
 		ImGui::PushItemWidth(200.0f);
 
+		// Preset (ADR 0010): punti di partenza. Le impostazioni si salvano con la scena.
+		ImGui::SeparatorText("Preset");
+		const std::pair<const char*, RenderSettings (*)()> presets[] = {
+			{ "Draft", &RenderSettings::Draft }, { "Preview", &RenderSettings::Preview }, { "Final", &RenderSettings::Final } };
+		for (size_t i = 0; i < std::size(presets); i++) {
+			if (i > 0) ImGui::SameLine();
+			if (ImGui::Button(presets[i].first)) {
+				m_Renderer.Settings = presets[i].second();
+				m_Renderer.ResetPathTracingCounter();
+			}
+		}
+
 		ImGui::SeparatorText("Path tracing");
-		ImGui::Checkbox("Enable Path Tracing", &m_Renderer.PathTracing);
-		if (ImGui::SliderInt("Samples per pixel", &m_Renderer.m_SamplesPerPixel, 1, 16)) m_Renderer.ResetPathTracingCounter();
-		if (ImGui::SliderInt("Ray depth", &m_Renderer.m_RayDepth, 1, 50)) m_Renderer.ResetPathTracingCounter();
+		ImGui::Checkbox("Enable Path Tracing", &m_Renderer.View.PathTracing);
+		if (ImGui::SliderInt("Samples per pixel", &m_Renderer.Settings.SamplesPerPixel, 1, 16)) m_Renderer.ResetPathTracingCounter();
+		if (ImGui::SliderInt("Ray depth", &m_Renderer.Settings.RayDepth, 1, 50)) m_Renderer.ResetPathTracingCounter();
 		if (ImGui::Button("Reset Accumulation")) m_Renderer.ResetPathTracingCounter();
 
 		// Render scale: risoluzione ridotta SOLO mentre la camera si muove (piu' fluido),
@@ -1347,27 +1360,30 @@ namespace PathTracer {
 			const char* labels[] = { "1.0 (full)", "0.75", "0.5", "0.25" };
 			const float values[] = { 1.0f, 0.75f, 0.5f, 0.25f };
 			int idx = 0;
-			for (int i = 0; i < 4; i++) if (m_Renderer.RenderScale == values[i]) idx = i;
+			for (int i = 0; i < 4; i++) if (m_Renderer.Settings.RenderScale == values[i]) idx = i;
 			if (ImGui::Combo("Render scale (while moving)", &idx, labels, 4))
-				m_Renderer.RenderScale = values[idx];
+				m_Renderer.Settings.RenderScale = values[idx];
 		}
 
 		ImGui::SeparatorText("Output");
-		if (ImGui::Checkbox("Vsync", &m_Vsync))
+		if (ImGui::Checkbox("Vsync", &m_Vsync)) {
 			m_Vulkan.SetVsync(m_Vsync);
+			m_Preferences.Vsync = m_Vsync;
+			m_Preferences.Save();
+		}
 
 		// Esposizione e tonemap agiscono DOPO l'accumulo (fragment di post): cambiarli non
 		// invalida i campioni gia' accumulati, quindi niente ResetPathTracingCounter.
-		ImGui::Checkbox("ACES tonemap", &m_Renderer.PostProcessing);
-		ImGui::DragFloat("Exposure", &m_Renderer.Exposure, 0.01f, 0.0f, 10.0f);
+		ImGui::Checkbox("ACES tonemap", &m_Renderer.Settings.Tonemap);
+		ImGui::DragFloat("Exposure", &m_Renderer.Settings.Exposure, 0.01f, 0.0f, 10.0f);
 
 		// Il firefly clamp invece vive nel path tracer e cambia i campioni: va resettato.
 		// Etichetta come luminanza massima; 0 = off. Sotto ~2 inizia a mangiare i riflessi.
-		if (ImGui::DragFloat("Firefly clamp", &m_Renderer.FireflyClamp, 0.1f, 0.0f, 50.0f, "%.1f")) {
-			if (m_Renderer.FireflyClamp < 0.0f) m_Renderer.FireflyClamp = 0.0f;
+		if (ImGui::DragFloat("Firefly clamp", &m_Renderer.Settings.FireflyClamp, 0.1f, 0.0f, 50.0f, "%.1f")) {
+			if (m_Renderer.Settings.FireflyClamp < 0.0f) m_Renderer.Settings.FireflyClamp = 0.0f;
 			m_Renderer.ResetPathTracingCounter();
 		}
-		if (m_Renderer.FireflyClamp <= 0.0f)
+		if (m_Renderer.Settings.FireflyClamp <= 0.0f)
 			ImGui::TextDisabled("firefly clamp off");
 
 		ImGui::SeparatorText("Camera");
@@ -1384,15 +1400,15 @@ namespace PathTracer {
 		ImGui::SeparatorText("Depth of field");
 		// Apertura e fuoco cambiano i raggi PRIMARI: vanno resettati (a differenza
 		// di esposizione/tonemap, che agiscono dopo l'accumulo).
-		if (ImGui::SliderFloat("Aperture", &m_Renderer.Aperture, 0.0f, 0.5f, "%.3f")) {
-			if (m_Renderer.Aperture < 0.0f) m_Renderer.Aperture = 0.0f;
+		if (ImGui::SliderFloat("Aperture", &m_Camera.Aperture, 0.0f, 0.5f, "%.3f")) {
+			if (m_Camera.Aperture < 0.0f) m_Camera.Aperture = 0.0f;
 			m_Renderer.ResetPathTracingCounter();
 		}
 
-		const bool dofOff = m_Renderer.Aperture <= 0.0f;
+		const bool dofOff = m_Camera.Aperture <= 0.0f;
 		ImGui::BeginDisabled(dofOff);
-		if (ImGui::DragFloat("Focus distance", &m_Renderer.FocusDistance, 0.05f, 0.01f, 1000.0f, "%.2f")) {
-			if (m_Renderer.FocusDistance < 0.01f) m_Renderer.FocusDistance = 0.01f;
+		if (ImGui::DragFloat("Focus distance", &m_Camera.FocusDistance, 0.05f, 0.01f, 1000.0f, "%.2f")) {
+			if (m_Camera.FocusDistance < 0.01f) m_Camera.FocusDistance = 0.01f;
 			m_Renderer.ResetPathTracingCounter();
 		}
 
@@ -1427,19 +1443,19 @@ namespace PathTracer {
 		// normale; gli altri mostrano l'AOV crudo (senza esposizione/ACES).
 		// reset dell'accumulo al cambio vista: le viste AOV scrivono in imgOutput (condiviso
 		// con l'accumulatore del colore), quindi tornando a Beauty il colore va ripartito da capo.
-		if (ImGui::Combo("View", &m_Renderer.AOVView, "Beauty\0Albedo\0Normal\0Depth\0History\0\0"))
+		if (ImGui::Combo("View", &m_Renderer.View.AOVView, "Beauty\0Albedo\0Normal\0Depth\0History\0\0"))
 			m_Renderer.ResetPathTracingCounter();
-		if (m_Renderer.AOVView == 4)
+		if (m_Renderer.View.AOVView == 4)
 			ImGui::TextDisabled("green = mature history, red = restarted (disocclusion)");
-		else if (m_Renderer.AOVView != 0)
+		else if (m_Renderer.View.AOVView != 0)
 			ImGui::TextDisabled("AOV debug view: no tonemap");
 
 		// Riproiezione temporale (ADR 0002)
 		ImGui::Spacing();
-		if (ImGui::Checkbox("Temporal reprojection", &m_Renderer.Reproject))
+		if (ImGui::Checkbox("Temporal reprojection", &m_Renderer.Settings.Reproject))
 			m_Renderer.ResetPathTracingCounter();
-		if (m_Renderer.Reproject) {
-			ImGui::SliderInt("History cap", &m_Renderer.HistoryCap, 1, 128);
+		if (m_Renderer.Settings.Reproject) {
+			ImGui::SliderInt("History cap", &m_Renderer.Settings.HistoryCap, 1, 128);
 			ImGui::TextDisabled("cap solo in movimento; da fermo N cresce libero");
 		} else {
 			ImGui::TextDisabled("off: moving the camera resets accumulation");
@@ -1449,26 +1465,26 @@ namespace PathTracer {
 		// Next Event Estimation: cambia l'integratore -> reset dell'accumulo per non
 		// mischiare campioni con e senza NEE.
 		ImGui::Spacing();
-		if (ImGui::Checkbox("Next Event Estimation", &m_Renderer.NEE))
+		if (ImGui::Checkbox("Next Event Estimation", &m_Renderer.Settings.NEE))
 			m_Renderer.ResetPathTracingCounter();
-		ImGui::TextDisabled(m_Renderer.NEE
+		ImGui::TextDisabled(m_Renderer.Settings.NEE
 			? "samples lights directly (needs an emitter: emissive geometry or the sun)"
 			: "off: lights are found only by random bounces (more noise)");
 
 		ImGui::Spacing();
-		ImGui::Checkbox("Denoise (a-trous)", &m_Renderer.Denoise);
-		if (m_Renderer.Denoise) {
-			if (m_Renderer.AOVView != 0) {
+		ImGui::Checkbox("Denoise (a-trous)", &m_Renderer.Settings.Denoise);
+		if (m_Renderer.Settings.Denoise) {
+			if (m_Renderer.View.AOVView != 0) {
 				ImGui::TextDisabled("active in Beauty view only");
 			} else {
-				ImGui::SliderFloat("Strength", &m_Renderer.DenoiseStrength, 0.0f, 1.0f, "%.2f");
-				ImGui::Checkbox("Fade with accumulation", &m_Renderer.DenoiseAutoFade);
-				if (m_Renderer.DenoiseAutoFade)
+				ImGui::SliderFloat("Strength", &m_Renderer.Settings.DenoiseStrength, 0.0f, 1.0f, "%.2f");
+				ImGui::Checkbox("Fade with accumulation", &m_Renderer.Settings.DenoiseAutoFade);
+				if (m_Renderer.Settings.DenoiseAutoFade)
 					ImGui::TextDisabled("fades out as the image converges (~1/sqrt N)");
-				ImGui::SliderFloat("Sigma luminance", &m_Renderer.DenoiseCPhi, 0.05f, 10.0f, "%.2f");
-				ImGui::SliderFloat("Sigma normal", &m_Renderer.DenoiseNPhi, 1.0f, 128.0f, "%.0f");
-				ImGui::SliderFloat("Sigma depth", &m_Renderer.DenoisePPhi, 0.05f, 10.0f, "%.2f");
-				ImGui::SliderFloat("Sigma albedo", &m_Renderer.DenoiseAPhi, 0.02f, 1.0f, "%.2f");
+				ImGui::SliderFloat("Sigma luminance", &m_Renderer.Settings.DenoiseCPhi, 0.05f, 10.0f, "%.2f");
+				ImGui::SliderFloat("Sigma normal", &m_Renderer.Settings.DenoiseNPhi, 1.0f, 128.0f, "%.0f");
+				ImGui::SliderFloat("Sigma depth", &m_Renderer.Settings.DenoisePPhi, 0.05f, 10.0f, "%.2f");
+				ImGui::SliderFloat("Sigma albedo", &m_Renderer.Settings.DenoiseAPhi, 0.02f, 1.0f, "%.2f");
 				ImGui::TextDisabled("view filter: does not touch accumulation");
 			}
 		}
@@ -1847,7 +1863,7 @@ namespace PathTracer {
 				m_PickForFocus = false;
 				// distanza < 0 = il raggio ha mancato tutto (sfondo): non spostare il fuoco
 				if (pickedDistance > 0.0f) {
-					m_Renderer.FocusDistance = pickedDistance;
+					m_Camera.FocusDistance = pickedDistance;
 					m_Renderer.ResetPathTracingCounter(); // il fuoco cambia i raggi primari
 				}
 			}
