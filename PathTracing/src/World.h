@@ -42,6 +42,7 @@ namespace PathTracer {
 		// Definita in GltfLoader.cpp per non appesantire World.cpp con la dipendenza cgltf.
 		bool LoadGltf(const std::string& path);
 		bool ImportLights(const cgltf_data* data); // KHR_lights_punctual: true se ha trovato luci
+		void ImportCamera(const cgltf_data* data); // la prima camera prospettica, se c'e'
 
 		// Creazione a runtime. Sono tutte APPEND: gli indici gia' in giro (selezione,
 		// MaterialIndex degli oggetti, Box::index) restano validi.
@@ -71,6 +72,7 @@ namespace PathTracer {
 		glm::vec3 BackgroundColor;
 		SunParams Sun;                    // al massimo un Sole per scena (ADR 0006)
 		bool EnvironmentMapping = false;  // true = cubemap, false = BackgroundColor
+		SceneCamera Camera;               // l'inquadratura: la impostano le scene e i file (ADR 0011)
 		std::vector<PunctualLight> PunctualLights; // luci punto e spot (ADR 0009)
         std::vector<Test> Tests;
 		std::vector<Sphere> Spheres;

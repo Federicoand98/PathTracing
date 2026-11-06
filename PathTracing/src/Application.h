@@ -169,6 +169,8 @@ namespace PathTracer {
 		std::filesystem::file_time_type m_GltfMtime{};  // ultimo timestamp visto
 		bool m_IsRunning;
 		Preferences m_Preferences;
+		SceneCamera m_LastShot; // l'inquadratura del frame scorso: se cambia da fuori, la vista la segue
+		void SyncCameras(bool viewMoved);
 		bool m_Vsync = true; // effettivo: PT_NOVSYNC lo spegne per la sessione senza toccare le preferenze
 		float m_Timer = 0.0f;
 		float m_DeltaTime = 0.0f;

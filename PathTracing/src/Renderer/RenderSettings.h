@@ -77,6 +77,9 @@ namespace PathTracer {
 	struct ViewSettings {
 		int AOVView = 0;             // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth, 4 = storia
 		bool PathTracing = true;     // false = niente accumulazione: ogni frame riparte da un campione
+		// true = la vista guarda attraverso la camera della scena e navigando la sposta;
+		// false = vista libera, l'inquadratura resta dov'e' (ADR 0011)
+		bool LockViewToCamera = true;
 	};
 }
 

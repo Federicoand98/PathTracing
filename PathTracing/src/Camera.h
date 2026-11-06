@@ -55,10 +55,8 @@ namespace PathTracer {
 		void RecalculateView();
 		void RecalculateRayDirections();
 	public:
+		// Copiato ogni frame dalla SceneCamera: la vista usa l'obiettivo dell'inquadratura (ADR 0011)
 		float m_VerticalFOV = 45.0f;
-		// Obiettivo thin-lens: fa parte dell'inquadratura, non di come la si calcola (ADR 0010)
-		float Aperture = 0.0f;       // raggio della lente; 0 = pinhole, niente profondita' di campo
-		float FocusDistance = 5.0f;  // distanza del piano di fuoco
 	private:
 		glm::mat4 m_Projection{ 1.0f };
 		glm::mat4 m_View{ 1.0f };

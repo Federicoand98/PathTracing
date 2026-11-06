@@ -76,6 +76,7 @@ namespace PathTracer {
 		Boxes.clear();
 		Sun = SunParams{}; // spento: ogni scena accende il suo
 		PunctualLights.clear();
+		Camera = SceneCamera{}; // ogni scena imposta la sua inquadratura
 	}
 
 	void World::PrepareMaterials() {
@@ -752,6 +753,10 @@ namespace PathTracer {
 		Sun.Enabled = true;
 		Sun.Elevation = 75.0f;
 		Sun.Azimuth = 100.0f;
+		// L'inquadratura nel cortile al sole: quella di default della vecchia app (-11, -0.2, 0)
+		// stava sotto il portico, al buio.
+		Camera.Position = { -9.0f, 1.5f, 0.8f };
+		Camera.Direction = glm::normalize(glm::vec3(1.0f, 0.12f, -0.1f));
 
 		Model sponza;
 		sponza.LoadObj("models/Sponza/sponza.obj");

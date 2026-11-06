@@ -47,6 +47,7 @@ namespace PathTracer {
 		root["version"] = 1;
 		root["background"] = ToJson(m_World.BackgroundColor);
 		root["environmentMapping"] = m_World.EnvironmentMapping;
+		root["camera"] = m_World.Camera;
 		root["sun"] = m_World.Sun;
 		root["punctualLights"] = m_World.PunctualLights;
 		root["materials"] = m_World.Materials;
@@ -129,6 +130,7 @@ namespace PathTracer {
 		// spento, come dopo DestroyScene, e una salvata prima di RenderSettings non tocca la
 		// qualita' corrente.
 		root.value("sun", json()).get_to(m_World.Sun);
+		root.value("camera", json()).get_to(m_World.Camera);
 		root.value("punctualLights", json::array()).get_to(m_World.PunctualLights);
 		root.value("materials", json::array()).get_to(m_World.Materials);
 		if (m_Render)

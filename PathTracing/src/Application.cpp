@@ -58,16 +58,17 @@ namespace PathTracer {
 
 		// Test/CI headless: PT_GLTF=<file> apre una scena glTF al posto di quella di default.
 		if (const char* g = getenv("PT_GLTF")) {
-			if (LoadGltfScene(g))
-				m_Camera.SetView({ 3.0f, 2.5f, 6.0f }, glm::normalize(glm::vec3(-3.0f, -2.5f, -6.0f)));
+			LoadGltfScene(g);
 		}
 
 		// Test/CI headless: PT_NEE=0 forza la NEE spenta (A/B col light sampling).
 		// PT_CAM=x,y,z,dx,dy,dz: posizione e direzione della camera, per catture ripetibili
 		if (const char* c = getenv("PT_CAM")) {
 			glm::vec3 pos, dir;
-			if (sscanf(c, "%f,%f,%f,%f,%f,%f", &pos.x, &pos.y, &pos.z, &dir.x, &dir.y, &dir.z) == 6)
-				m_Camera.SetView(pos, glm::normalize(dir));
+			if (sscanf(c, "%f,%f,%f,%f,%f,%f", &pos.x, &pos.y, &pos.z, &dir.x, &dir.y, &dir.z) == 6) {
+				m_World.Camera.Position = pos; // e' l'inquadratura: la vista la segue in SyncCameras
+				m_World.Camera.Direction = glm::normalize(dir);
+			}
 		}
 
 		if (const char* a = getenv("PT_AOV"))
@@ -184,6 +185,7 @@ namespace PathTracer {
 			// SetInteracting dice al renderer che la storia va cappata (ghosting) e che puo'
 			// abbassare la risoluzione (render scale).
 			bool cameraMoved = m_Camera.OnUpdate(m_DeltaTime);
+			SyncCameras(cameraMoved);
 			m_Renderer.SetInteracting(cameraMoved);
 
 			// Live-link glTF: ricarica la scena se il file e' stato ri-esportato da Blender.
@@ -433,13 +435,7 @@ namespace PathTracer {
 
 			m_World.DestroyScene();
 			m_Renderer.ResetPathTracingCounter(true);
-			m_World.LoadScene();
-
-			// Sponza e' enorme e centrata sull'origine: lo spawn di default (0,0,6) cade
-			// fuori dall'edificio. La posiziono dentro il corridoio, a un'estremita' della
-			// navata lunga (asse X), all'altezza occhi del piano terra, guardando lungo +X.
-			if (static_cast<SceneType>(m_World.CurrentScene) == SceneType::SPONZA)
-				m_Camera.SetView({ -11.0f, -0.2f, 0.0f }, { 1.0f, 0.0f, 0.0f });
+			m_World.LoadScene(); // la scena imposta anche la sua inquadratura
 		}
 
 		// Import glTF (interop Blender, ADR 0003): rimpiazza la scena col contenuto del file.
@@ -448,8 +444,7 @@ namespace PathTracer {
 		auto loadGltfFromUI = [&](const std::string& p) {
 			if (p.empty()) return;
 			std::snprintf(gltfPath, sizeof(gltfPath), "%s", p.c_str());
-			if (LoadGltfScene(p))
-				m_Camera.SetView({ 0.0f, 0.0f, 6.0f }, { 0.0f, 0.0f, -1.0f });
+			LoadGltfScene(p); // la camera del file, se c'e', diventa l'inquadratura
 		};
 
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 90.0f);
@@ -1332,6 +1327,24 @@ namespace PathTracer {
 
 	// --------------------------------------------------------------- UI: tab Render
 
+	// Le due camere (ADR 0011). La vista agganciata scrive nell'inquadratura quando si naviga;
+	// in entrambe le modalita', se l'inquadratura cambia da fuori (un load, "Align", PT_CAM) la
+	// vista la raggiunge. L'obiettivo e' sempre quello dell'inquadratura.
+	void Application::SyncCameras(bool viewMoved) {
+		SceneCamera& shot = m_World.Camera;
+		if (m_Renderer.View.LockViewToCamera && viewMoved) {
+			shot.Position = m_Camera.GetPosition();
+			shot.Direction = m_Camera.GetDirection();
+		}
+		if (!shot.SamePose(m_LastShot))
+			m_Camera.SetView(shot.Position, shot.Direction);
+		if (m_Camera.m_VerticalFOV != shot.VerticalFOV) {
+			m_Camera.m_VerticalFOV = shot.VerticalFOV;
+			m_Camera.RecalculateProjection();
+		}
+		m_LastShot = shot;
+	}
+
 	void Application::DrawRenderTab() {
 		ImGui::Spacing();
 		ImGui::PushItemWidth(200.0f);
@@ -1386,13 +1399,26 @@ namespace PathTracer {
 		if (m_Renderer.Settings.FireflyClamp <= 0.0f)
 			ImGui::TextDisabled("firefly clamp off");
 
+		// La camera della scena e' l'inquadratura; la vista la segue o naviga libera (ADR 0011)
 		ImGui::SeparatorText("Camera");
-		if (ImGui::SliderFloat("Vertical FOV", &m_Camera.m_VerticalFOV, 30.0f, 140.0f)) {
-			m_Camera.RecalculateProjection();
+		if (ImGui::Checkbox("Lock view to camera", &m_Renderer.View.LockViewToCamera) && m_Renderer.View.LockViewToCamera) {
+			m_Camera.SetView(m_World.Camera.Position, m_World.Camera.Direction); // torna all'inquadratura
 			m_Renderer.ResetPathTracingCounter();
 		}
-		if (ImGui::Button("Reset Camera Position")) {
-			m_Camera.ResetPosition();
+		ImGui::BeginDisabled(m_Renderer.View.LockViewToCamera);
+		if (ImGui::Button("Align camera to view")) {
+			m_World.Camera.Position = m_Camera.GetPosition();
+			m_World.Camera.Direction = m_Camera.GetDirection();
+		}
+		ImGui::EndDisabled();
+		ImGui::TextDisabled(m_Renderer.View.LockViewToCamera ? "navigating moves the scene camera"
+		                                                      : "free view: the scene camera stays put");
+		if (ImGui::SliderFloat("Vertical FOV", &m_World.Camera.VerticalFOV, 30.0f, 140.0f))
+			m_Renderer.ResetPathTracingCounter();
+		if (ImGui::Button("Reset camera")) {
+			const SceneCamera defaults;
+			m_World.Camera.Position = defaults.Position;
+			m_World.Camera.Direction = defaults.Direction;
 			m_Renderer.ResetPathTracingCounter();
 		}
 		ImGui::TextDisabled("right mouse + WASD to navigate");
@@ -1400,15 +1426,15 @@ namespace PathTracer {
 		ImGui::SeparatorText("Depth of field");
 		// Apertura e fuoco cambiano i raggi PRIMARI: vanno resettati (a differenza
 		// di esposizione/tonemap, che agiscono dopo l'accumulo).
-		if (ImGui::SliderFloat("Aperture", &m_Camera.Aperture, 0.0f, 0.5f, "%.3f")) {
-			if (m_Camera.Aperture < 0.0f) m_Camera.Aperture = 0.0f;
+		if (ImGui::SliderFloat("Aperture", &m_World.Camera.Aperture, 0.0f, 0.5f, "%.3f")) {
+			if (m_World.Camera.Aperture < 0.0f) m_World.Camera.Aperture = 0.0f;
 			m_Renderer.ResetPathTracingCounter();
 		}
 
-		const bool dofOff = m_Camera.Aperture <= 0.0f;
+		const bool dofOff = m_World.Camera.Aperture <= 0.0f;
 		ImGui::BeginDisabled(dofOff);
-		if (ImGui::DragFloat("Focus distance", &m_Camera.FocusDistance, 0.05f, 0.01f, 1000.0f, "%.2f")) {
-			if (m_Camera.FocusDistance < 0.01f) m_Camera.FocusDistance = 0.01f;
+		if (ImGui::DragFloat("Focus distance", &m_World.Camera.FocusDistance, 0.05f, 0.01f, 1000.0f, "%.2f")) {
+			if (m_World.Camera.FocusDistance < 0.01f) m_World.Camera.FocusDistance = 0.01f;
 			m_Renderer.ResetPathTracingCounter();
 		}
 
@@ -1863,7 +1889,7 @@ namespace PathTracer {
 				m_PickForFocus = false;
 				// distanza < 0 = il raggio ha mancato tutto (sfondo): non spostare il fuoco
 				if (pickedDistance > 0.0f) {
-					m_Camera.FocusDistance = pickedDistance;
+					m_World.Camera.FocusDistance = pickedDistance;
 					m_Renderer.ResetPathTracingCounter(); // il fuoco cambia i raggi primari
 				}
 			}

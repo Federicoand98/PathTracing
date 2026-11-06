@@ -176,7 +176,7 @@ namespace PathTracer {
 		glm::mat4 viewProjection = camera.GetProjection() * camera.GetView();
 		bool aovNeedsUpdate = (viewProjection != m_PrevViewProjection) || m_PTCounter <= 1 || m_sceneReset;
 
-		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(Settings.SamplesPerPixel), static_cast<uint32_t>(Settings.RayDepth), m_sceneReset, m_World->EnvironmentMapping, Settings.FireflyClamp, m_Camera->Aperture, m_Camera->FocusDistance, View.AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, Settings.HistoryCap, Settings.NEE, pickPixel, *m_World, *m_Camera };
+		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(Settings.SamplesPerPixel), static_cast<uint32_t>(Settings.RayDepth), m_sceneReset, m_World->EnvironmentMapping, Settings.FireflyClamp, m_World->Camera.Aperture, m_World->Camera.FocusDistance, View.AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, Settings.HistoryCap, Settings.NEE, pickPixel, *m_World, *m_Camera };
 
 		// Le scritture del frame scorso diventano visibili a questo, e il tonemap non deve
 		// sovrascrivere il display mentre ImGui lo sta ancora leggendo.
