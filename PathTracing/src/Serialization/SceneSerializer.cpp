@@ -225,7 +225,7 @@ namespace Lucerna {
 
 			const int idx = m_World.AddMesh(meshPath, glm::vec3(0.0f), mj.value("material", 0));
 			if (idx >= 0) {
-				m_World.SetMeshTransform(idx, ReadMat4(mj.value("transform", json()), glm::mat4(1.0f)));
+				m_World.Meshes.at(idx).Transform = ReadMat4(mj.value("transform", json()), glm::mat4(1.0f));
 				RestoreIdentity(m_World.Meshes, m_World.Meshes[idx], mj);
 			}
 		}

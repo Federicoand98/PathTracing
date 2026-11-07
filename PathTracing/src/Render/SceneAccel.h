@@ -4,7 +4,8 @@
 #define SCENEACCEL_H
 
 #include "Vulkan/VulkanContext.h"
-#include "Legacy/World.h"
+#include "Render/GpuTypes.h"
+#include "Scene/Primitives.h"
 
 namespace Lucerna {
 
@@ -24,8 +25,9 @@ namespace Lucerna {
 		SceneAccel();
 		~SceneAccel();
 
-		void BuildMeshes(const World& world, const GpuBuffer& positions);
-		void BuildTopLevel(const World& world);
+		void BuildMeshes(const std::vector<MeshInfo>& meshes, const GpuBuffer& positions);
+		// primitives = le AABB di sfere e quad, in quest'ordine: l'indice di primitiva dello shader
+		void BuildTopLevel(const std::vector<MeshInfo>& meshes, const std::vector<AABB>& primitives);
 
 		const VkAccelerationStructureKHR& TopLevel() const { return m_Tlas; }
 

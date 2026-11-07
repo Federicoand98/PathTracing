@@ -8,7 +8,7 @@ namespace Lucerna {
 	struct RenderSettings;
 
 	// Serializza/deserializza una scena su file JSON. Vive fuori da World e ne tocca solo
-	// i membri pubblici + le API di costruzione (CreateBox, AddMesh, SetMeshTransform):
+	// i membri pubblici + le API di costruzione (CreateBox, AddMesh):
 	// il modello dati non sa nulla della persistenza (pattern alla Cherno/Hazel).
 	//
 	// Nota: NON ri-carica i buffer GPU. Dopo un Deserialize riuscito il chiamante deve

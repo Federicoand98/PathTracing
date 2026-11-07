@@ -56,7 +56,7 @@ namespace Lucerna {
 			break;
 		}
 
-		BuildTriangleBuffers();
+		GeometryVersion++;
 	}
 
 	void World::DestroyScene() {
@@ -65,9 +65,6 @@ namespace Lucerna {
 		Materials.clear();
 		Triangles.clear();
 		GeometryVersion++;
-		TriPositions.clear();
-		TriNormals.clear();
-		TriUVs.clear();
 		TexturePaths.clear();
 		DataTexturePaths.clear();
 		Meshes.clear();
@@ -775,7 +772,7 @@ namespace Lucerna {
 		if (meshIndex >= 0) {
 			glm::mat4 t = glm::translate(glm::mat4(1.0f), glm::vec3(0.6f, 0.0f, 0.4f));
 			t = glm::scale(t, glm::vec3(0.01f));
-			SetMeshTransform(meshIndex, t);
+			Meshes.at(meshIndex).Transform = t;
 		}
 	}
 
@@ -859,9 +856,9 @@ namespace Lucerna {
 		// rimappare gli indici locali dei triangoli. -1 = OBJ senza MTL (comportamento legacy).
 		const int matBase = RegisterMtlMaterials(model);
 
-		MeshInfo mesh;
-		mesh.FirstTriangle = static_cast<float>(Triangles.size());
-		mesh.NumTriangles = static_cast<float>(triangles.size());
+		Mesh mesh;
+		mesh.FirstTriangle = static_cast<int>(Triangles.size());
+		mesh.NumTriangles = static_cast<int>(triangles.size());
 		mesh.MaterialIndex = static_cast<float>(material); // usato dai triangoli senza usemtl (-1)
 
 		glm::vec4 localMin(1e30f);
@@ -887,7 +884,7 @@ namespace Lucerna {
 
 		Meshes.Add(mesh, model.GetName());
 		MeshPaths.push_back(model.GetPath());
-		SetMeshTransform(static_cast<int>(Meshes.size()) - 1, glm::translate(glm::mat4(1.0f), Position));
+		Meshes.at(static_cast<int>(Meshes.size()) - 1).Transform = glm::translate(glm::mat4(1.0f), Position);
 
 		std::cout << "Model uploaded: " << triangles.size() << " triangles (material "
 			<< material << ")" << std::endl;
@@ -905,7 +902,7 @@ namespace Lucerna {
 		}
 
 		UploadModel(model, position, material);
-		BuildTriangleBuffers();
+		GeometryVersion++;
 
 		return static_cast<int>(Meshes.size()) - 1;
 	}
@@ -917,97 +914,6 @@ namespace Lucerna {
 				return static_cast<int>(b);
 		}
 		return -1;
-	}
-
-	std::vector<GPULight> World::CollectLights() const {
-		std::vector<GPULight> lights;
-
-		auto radianceOf = [&](int matIndex, glm::vec3& outRadiance) -> bool {
-			if (matIndex < 0 || matIndex >= static_cast<int>(Materials.size()))
-				return false;
-			const Material& m = Materials[matIndex];
-			glm::vec3 rad = glm::vec3(m.EmissiveColor) * m.EmissiveStrenght;
-			// luminanza Rec.709: scarta gli emissivi neri o a strength nulla
-			float lum = glm::dot(rad, glm::vec3(0.2126f, 0.7152f, 0.0722f));
-			if (lum <= 1e-4f)
-				return false;
-			outRadiance = rad;
-			return true;
-		};
-
-		// Sfere emissive: campionate via cono (solid angle). Meta = (tipo=0, objType=0, indice).
-		for (size_t i = 0; i < Spheres.size(); i++) {
-			glm::vec3 rad;
-			if (!radianceOf(static_cast<int>(Spheres[i].MaterialIndex), rad))
-				continue;
-			float r = Spheres[i].Position.w;
-			GPULight L;
-			L.Emission = glm::vec4(rad, 4.0f * 3.14159265f * r * r); // area (non usata dal cono)
-			L.P = glm::vec4(glm::vec3(Spheres[i].Position), r);
-			L.Meta = glm::ivec4(0, 0, static_cast<int>(i), 0);
-			lights.push_back(L);
-		}
-
-		// Quad emissivi: campionati per area. Nel formato dello shader gli spigoli FISICI sono
-		// E1 = U*(Width/k), E2 = V*(Height/k) con k = |U x V|, e area = Width*Height/k. Cosi'
-		// il campionamento nello shader e' q = LLC + s*E1 + t*E2 con s,t in [0,1].
-		for (size_t i = 0; i < Quads.size(); i++) {
-			glm::vec3 rad;
-			if (!radianceOf(static_cast<int>(Quads[i].MaterialIndex), rad))
-				continue;
-			glm::vec3 u = glm::vec3(Quads[i].U);
-			glm::vec3 v = glm::vec3(Quads[i].V);
-			glm::vec3 cr = glm::cross(u, v);
-			float k = glm::length(cr);
-			if (k < 1e-8f)
-				continue; // quad degenere
-			glm::vec3 n = cr / k;
-			glm::vec3 e1 = u * (Quads[i].Width / k);
-			glm::vec3 e2 = v * (Quads[i].Height / k);
-			float area = (Quads[i].Width * Quads[i].Height) / k;
-			GPULight L;
-			L.Emission = glm::vec4(rad, area);
-			L.P = glm::vec4(glm::vec3(Quads[i].PositionLLC), 0.0f);
-			L.U = glm::vec4(e1, 0.0f);
-			L.V = glm::vec4(e2, 0.0f);
-			L.Normal = glm::vec4(n, 0.0f);
-			L.Meta = glm::ivec4(1, 1, static_cast<int>(i), 0);
-			lights.push_back(L);
-		}
-
-		// Il Sole: P = direzione verso la luce + cos(raggio angolare), Emission.a = angolo solido
-		// del disco. Meta.y = -1: nessun oggetto in scena lo rappresenta.
-		if (Sun.Enabled) {
-			const glm::vec3 rad = Sun.Radiance();
-			if (glm::dot(rad, glm::vec3(0.2126f, 0.7152f, 0.0722f)) > 1e-4f) {
-				GPULight L;
-				L.Emission = glm::vec4(rad, Sun.SolidAngle());
-				L.P = glm::vec4(Sun.Direction(), Sun.CosMax());
-				L.Meta = glm::ivec4(2, -1, -1, 0);
-				lights.push_back(L);
-			}
-		}
-
-		// Luci punto e spot: Emission.rgb = intensita', P = posizione, U = direzione dello spot
-		// con cos(OuterAngle) in w, V.x = cos(InnerAngle). Nessun oggetto le rappresenta.
-		for (const PunctualLight& p : PunctualLights) {
-			const glm::vec3 intensity = p.Color * p.Intensity;
-			if (glm::dot(intensity, glm::vec3(0.2126f, 0.7152f, 0.0722f)) <= 1e-6f)
-				continue;
-			GPULight L;
-			L.Emission = glm::vec4(intensity, 0.0f);
-			L.P = glm::vec4(p.Position, 0.0f);
-			if (p.Spot) {
-				const float outer = glm::radians(glm::clamp(p.OuterAngle, 0.1f, 90.0f));
-				const float inner = glm::radians(glm::clamp(p.InnerAngle, 0.0f, glm::degrees(outer)));
-				L.U = glm::vec4(glm::normalize(p.Direction), std::cos(outer));
-				L.V = glm::vec4(std::cos(inner), 0.0f, 0.0f, 0.0f);
-			}
-			L.Meta = glm::ivec4(p.Spot ? 4 : 3, -1, -1, 0);
-			lights.push_back(L);
-		}
-
-		return lights;
 	}
 
 	// Nessuno tiene indici verso le sfere, a parte la selezione: qui basta la erase.
@@ -1058,10 +964,10 @@ namespace Lucerna {
 		return true;
 	}
 
-	// I triangoli di tutte le mesh vivono concatenati in Triangles, e ogni MeshInfo ci
+	// I triangoli di tutte le mesh vivono concatenati in Triangles, e ogni Mesh ci
 	// punta con FirstTriangle. Togliendone una si apre un buco: vanno rimossi i suoi
 	// triangoli e va sottratto il conteggio a tutte le mesh che stavano dopo, altrimenti
-	// le rimanenti indicherebbero triangoli altrui. Poi BuildTriangleBuffers() rifa' il resto.
+	// le rimanenti indicherebbero triangoli altrui. Il RenderScene rifa' i buffer GPU.
 	bool World::RemoveMesh(int meshIndex) {
 		if (meshIndex < 0 || meshIndex >= static_cast<int>(Meshes.size()))
 			return false;
@@ -1076,115 +982,12 @@ namespace Lucerna {
 			MeshPaths.erase(MeshPaths.begin() + meshIndex);
 
 		for (int i = meshIndex; i < static_cast<int>(Meshes.size()); i++)
-			Meshes[i].FirstTriangle -= static_cast<float>(count);
+			Meshes[i].FirstTriangle -= count;
 
-		BuildTriangleBuffers();
+		GeometryVersion++;
 
 		std::cout << "Mesh " << meshIndex << " removed (" << count << " triangles)" << std::endl;
 		return true;
-	}
-
-	// Aggiorna la trasformazione di una mesh: ricalcola l'inversa e l'AABB world.
-	// Nessun triangolo viene toccato, nessun BLAS ricostruito.
-	void World::SetMeshTransform(int meshIndex, const glm::mat4& transform) {
-		MeshInfo& mesh = Meshes.at(meshIndex);
-		mesh.Transform = transform;
-		mesh.InvTransform = glm::inverse(transform);
-
-		// AABB world = box che racchiude gli 8 angoli locali trasformati
-		glm::vec3 worldMin(1e30f), worldMax(-1e30f);
-		for (int corner = 0; corner < 8; corner++) {
-			glm::vec4 p(
-				(corner & 1) ? mesh.LocalMax.x : mesh.LocalMin.x,
-				(corner & 2) ? mesh.LocalMax.y : mesh.LocalMin.y,
-				(corner & 4) ? mesh.LocalMax.z : mesh.LocalMin.z,
-				1.0f);
-
-			glm::vec3 w = glm::vec3(transform * p);
-			worldMin = glm::min(worldMin, w);
-			worldMax = glm::max(worldMax, w);
-		}
-
-		mesh.BoundsMin = glm::vec4(worldMin, 0.0f);
-		mesh.BoundsMax = glm::vec4(worldMax, 0.0f);
-	}
-
-	// Separa posizioni, normali e UV nei buffer che finiranno sulla GPU (local space). BLAS e TLAS
-	// li costruisce il driver a partire da qui: vedi Vulkan/SceneAccel.
-	void World::BuildTriangleBuffers() {
-		GeometryVersion++;
-
-		// Dentro ogni mesh i triangoli mascherati vanno in coda: diventano la seconda geometria
-		// del BLAS, l'unica senza il flag opaco (ADR 0008). L'ordine dentro una mesh non conta
-		// per nessun altro, e la partizione stabile e' idempotente.
-		for (MeshInfo& mesh : Meshes) {
-			auto first = Triangles.begin() + static_cast<ptrdiff_t>(mesh.FirstTriangle);
-			auto last = first + static_cast<ptrdiff_t>(mesh.NumTriangles);
-			auto opaqueEnd = std::stable_partition(first, last, [&](const Triangle& t) {
-				const int mi = t.MaterialIndex >= 0.0f ? static_cast<int>(t.MaterialIndex) : static_cast<int>(mesh.MaterialIndex);
-				return mi < 0 || mi >= static_cast<int>(Materials.size()) || Materials[mi].AlphaCutoff <= 0.0f;
-			});
-			mesh.NumOpaque = static_cast<float>(opaqueEnd - first);
-		}
-
-		TriPositions.clear();
-		TriNormals.clear();
-		TriUVs.clear();
-
-		TriPositions.reserve(Triangles.size());
-		TriNormals.reserve(Triangles.size());
-		TriUVs.reserve(Triangles.size());
-		for (const Triangle& t : Triangles) {
-			TriPositions.push_back({ t.A, t.B, t.C });
-			TriNormals.push_back({ t.NormalA, t.NormalB, t.NormalC });
-			// A.z porta il materiale per-triangolo (-1 = eredita dalla mesh); B/C restano liberi
-			TriUVs.push_back({ glm::vec4(t.UVA, t.MaterialIndex, 0.0f), glm::vec4(t.UVB, 0.0f, 0.0f), glm::vec4(t.UVC, 0.0f, 0.0f) });
-		}
-	}
-
-	std::vector<AABB> World::PrimitiveBounds() const {
-		const int nSpheres = static_cast<int>(Spheres.size());
-		const int nQuads = static_cast<int>(Quads.size());
-
-		std::vector<AABB> boxes;
-		boxes.reserve(nSpheres + nQuads);
-
-		for (int i = 0; i < nSpheres; i++) {
-			const glm::vec3 c = glm::vec3(Spheres[i].Position);
-			const float r = Spheres[i].Position.w;
-			AABB b;
-			b.expand(c - glm::vec3(r));
-			b.expand(c + glm::vec3(r));
-			boxes.push_back(b);
-		}
-
-		for (int i = 0; i < nQuads; i++) {
-			// Il quad si estende per Width/|UxV| lungo U e Height/|UxV| lungo V (vedi la
-			// parametrizzazione in HitQuad): gli spigoli fisici sono quelli, non U*Width.
-			const glm::vec3 u = glm::vec3(Quads[i].U);
-			const glm::vec3 v = glm::vec3(Quads[i].V);
-			const glm::vec3 llc = glm::vec3(Quads[i].PositionLLC);
-			const float k = glm::length(glm::cross(u, v));
-			AABB b;
-			if (k < 1e-8f) {
-				b.expand(llc); // quad degenere: AABB puntiforme, verra' comunque gonfiata sotto
-			} else {
-				const glm::vec3 e1 = u * (Quads[i].Width / k);
-				const glm::vec3 e2 = v * (Quads[i].Height / k);
-				b.expand(llc);
-				b.expand(llc + e1);
-				b.expand(llc + e2);
-				b.expand(llc + e1 + e2);
-			}
-			// Un quad e' PIATTO: su un asse la AABB ha spessore zero. Un gonfiaggio minimo evita
-			// i casi degeneri dello slab test con raggi paralleli a quell'asse.
-			const glm::vec3 pad(1e-4f);
-			b.min -= pad;
-			b.max += pad;
-			boxes.push_back(b);
-		}
-
-		return boxes;
 	}
 
 	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex) {

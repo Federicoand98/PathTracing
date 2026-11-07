@@ -47,28 +47,6 @@ namespace Lucerna {
         float MaterialIndex = -1.0f;
     };
 
-    // Sulla GPU posizioni e normali stanno in due buffer distinti: le posizioni sono anche
-    // l'ingresso dei BLAS, che non devono vedere nient'altro.
-    struct TrianglePosition {
-        glm::vec4 A;
-        glm::vec4 B;
-        glm::vec4 C;
-    };
-
-    struct TriangleNormal {
-        glm::vec4 NormalA;
-        glm::vec4 NormalB;
-        glm::vec4 NormalC;
-    };
-
-    // Anch'esso "freddo": letto una sola volta sull'hit finale.
-    // La uv sta in .xy; i vec4 evitano sorprese di stride con lo std430.
-    struct TriangleUV {
-        glm::vec4 A{ 0.0f };
-        glm::vec4 B{ 0.0f };
-        glm::vec4 C{ 0.0f };
-    };
-
     struct Face {
         int vertex_ins[3];
         int uv_ins[3];
@@ -76,23 +54,28 @@ namespace Lucerna {
         int material = -1; // indice LOCALE nel MTL del modello, -1 = nessun usemtl
     };
 
-    // Istanza di mesh in una struttura a due livelli: i triangoli restano in LOCAL SPACE e
-    // hanno un proprio BLAS. Trasformare la mesh significa aggiornare Transform, non
-    // ri-bakare i triangoli ne' ricostruire il BLAS: e' il
-    // raggio a essere portato nello spazio locale della mesh.
-    struct MeshInfo {
+    // Una mesh della scena: i suoi triangoli (in LOCAL SPACE, in World::Triangles a partire da
+    // FirstTriangle) e dove sta. Trasformarla cambia solo Transform: i triangoli e il BLAS restano.
+    // La versione GPU, con inversa, AABB world e la divisione opachi/mascherati, la deriva il
+    // RenderScene (issue #24).
+    struct Mesh {
         glm::mat4 Transform{ 1.0f };
-        glm::mat4 InvTransform{ 1.0f };
-        glm::vec4 BoundsMin{ 0.0f };  // AABB in world space (per il reject rapido)
-        glm::vec4 BoundsMax{ 0.0f };
-        glm::vec4 LocalMin{ 0.0f };   // AABB in local space (per ricalcolare quella world)
+        glm::vec4 LocalMin{ 0.0f };   // AABB in local space
         glm::vec4 LocalMax{ 0.0f };
-        float FirstTriangle = 0;
-        float NumTriangles = 0;
-        float MaterialIndex = 0;
-        // BuildTriangleBuffers ordina i triangoli della mesh: prima gli opachi, poi quelli con un
-        // materiale mascherato. Il BLAS ne fa due geometrie (ADR 0008).
-        float NumOpaque = 0;
+        int FirstTriangle = 0;
+        int NumTriangles = 0;
+        float MaterialIndex = 0;      // float come per sfere e quad: lo modifica lo stesso MaterialCombo
+
+        // AABB world: il box che racchiude gli 8 angoli locali trasformati
+        AABB WorldBounds() const {
+            AABB box;
+            for (int corner = 0; corner < 8; corner++)
+                box.expand(glm::vec3(Transform * glm::vec4(
+                    (corner & 1) ? LocalMax.x : LocalMin.x,
+                    (corner & 2) ? LocalMax.y : LocalMin.y,
+                    (corner & 4) ? LocalMax.z : LocalMin.z, 1.0f)));
+            return box;
+        }
     };
 
     struct Sphere {
@@ -110,21 +93,6 @@ namespace Lucerna {
         float Height = 1.0f;
         float padding = 0.0f;
     };
-
-    // Emettitore per la Next Event Estimation (light sampling + MIS). Costruito da
-    // World::CollectLights() a partire dalle sfere/quad con materiale emissivo, caricato
-    // in un SSBO (binding 11). Layout std430: solo vec4/ivec4 -> stride 96, niente padding.
-    // Deve combaciare bit-per-bit con lo struct Light in PathTracing.comp.
-    struct GPULight {
-        glm::vec4 Emission{ 0.0f };  // rgb = radianza (EmissiveColor*Strength), a = area
-        glm::vec4 P{ 0.0f };         // sfera: centro.xyz + raggio(w) ; quad: LLC.xyz
-        glm::vec4 U{ 0.0f };         // quad: vettore-spigolo U (fisico) ; sfera: inutilizzato
-        glm::vec4 V{ 0.0f };         // quad: vettore-spigolo V (fisico) ; sfera: inutilizzato
-        glm::vec4 Normal{ 0.0f };    // quad: normale.xyz ; sfera: inutilizzato
-        glm::ivec4 Meta{ 0 };        // x = tipo (0 sfera, 1 quad, 2 Sole, 3 punto, 4 spot), y = objType, z = objIndex
-    };
-
-    static_assert(sizeof(GPULight) == 96, "GPULight deve essere 96 byte per combaciare con lo std430");
 
     // Il Sole: l'Emitter senza geometria (ADR 0006). Angoli in gradi. Elevazione 0 = orizzonte,
     // 90 = zenit; azimut attorno all'asse y, 0 = verso +z, 90 = verso +x.

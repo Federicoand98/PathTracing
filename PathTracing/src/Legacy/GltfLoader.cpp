@@ -1,6 +1,6 @@
 // Import di scene glTF 2.0 (interop Blender, ADR 0003). Definisce World::LoadGltf a parte per
 // tenere la dipendenza cgltf fuori da World.cpp. Il mapping rispecchia il percorso OBJ:
-// una MeshInfo per primitive (triangoli in LOCAL space, transform del nodo appiattita, un BLAS
+// una Mesh per primitive (triangoli in LOCAL space, transform del nodo appiattita, un BLAS
 // per mesh), e pbrMetallicRoughness -> Material come MaterialFromMtl fa con l'MTL.
 
 #include "Legacy/World.h"
@@ -225,7 +225,7 @@ namespace Lucerna {
 		size_t triTotal = 0;
 
 		// Nodi: si visita l'intera gerarchia. cgltf_node_transform_world appiattisce la catena
-		// di transform dalla radice. Ogni primitive di ogni mesh referenziata diventa una MeshInfo.
+		// di transform dalla radice. Ogni primitive di ogni mesh referenziata diventa una Mesh.
 		for (size_t n = 0; n < data->nodes_count; n++) {
 			const cgltf_node& node = data->nodes[n];
 			if (!node.mesh)
@@ -275,8 +275,8 @@ namespace Lucerna {
 				const int meshMat = prim.material && matIndex.count(prim.material)
 					? matIndex[prim.material] : -1;
 
-				MeshInfo mesh;
-				mesh.FirstTriangle = static_cast<float>(Triangles.size());
+				Mesh mesh;
+				mesh.FirstTriangle = static_cast<int>(Triangles.size());
 				mesh.MaterialIndex = static_cast<float>(meshMat); // una primitive = un materiale
 
 				glm::vec4 localMin(1e30f), localMax(-1e30f);
@@ -313,13 +313,13 @@ namespace Lucerna {
 				if (triCount == 0)
 					continue;
 
-				mesh.NumTriangles = static_cast<float>(triCount);
+				mesh.NumTriangles = static_cast<int>(triCount);
 				mesh.LocalMin = localMin;
 				mesh.LocalMax = localMax;
 
 				Meshes.Add(mesh, node.mesh->name ? node.mesh->name : (node.name ? node.name : ""));
 				MeshPaths.push_back(path);
-				SetMeshTransform(static_cast<int>(Meshes.size()) - 1, transform);
+				Meshes.at(static_cast<int>(Meshes.size()) - 1).Transform = transform;
 				triTotal += triCount;
 			}
 		}
@@ -330,7 +330,7 @@ namespace Lucerna {
 			<< triTotal << " triangoli, " << Materials.size() << " materiali, "
 			<< TexturePaths.size() << " texture" << std::endl;
 
-		BuildTriangleBuffers();
+		GeometryVersion++;
 		return true;
 	}
 

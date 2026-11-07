@@ -693,21 +693,21 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Mesh: {
-			MeshInfo& mesh = m_World.Meshes.at(SelectedIndex());
+			Mesh& mesh = m_World.Meshes.at(SelectedIndex());
 			ImGui::Text("Triangles: %d", static_cast<int>(mesh.NumTriangles));
 
 			glm::vec3 position = glm::vec3(mesh.Transform[3]); // la traslazione e' l'ultima colonna
 			if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f)) {
 				glm::mat4 transform = mesh.Transform;
 				transform[3] = glm::vec4(position, 1.0f);
-				m_World.SetMeshTransform(SelectedIndex(), transform);
+				m_World.Meshes.at(SelectedIndex()).Transform = transform;
 				m_Renderer.ResetPathTracingCounter();
 			}
 
 			if (MaterialCombo("Material", mesh.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
 
 			if (ImGui::Button("Reset transform")) {
-				m_World.SetMeshTransform(SelectedIndex(), glm::mat4(1.0f));
+				m_World.Meshes.at(SelectedIndex()).Transform = glm::mat4(1.0f);
 				m_Renderer.ResetPathTracingCounter();
 			}
 			break;
@@ -1584,8 +1584,8 @@ namespace Lucerna {
 			return 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
 		}
 		case SelectionType::Mesh: {
-			const MeshInfo& m = m_World.Meshes.at(SelectedIndex());
-			return 0.5f * (glm::vec3(m.BoundsMin) + glm::vec3(m.BoundsMax));
+			const AABB bounds = m_World.Meshes.at(SelectedIndex()).WorldBounds();
+			return 0.5f * (bounds.min + bounds.max);
 		}
 		case SelectionType::Light:
 			return m_World.PunctualLights.at(SelectedIndex()).Position;
@@ -1628,9 +1628,9 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Mesh: {
-			const MeshInfo& m = m_World.Meshes.at(SelectedIndex());
-			outMin = glm::vec3(m.BoundsMin); // gia' in world space
-			outMax = glm::vec3(m.BoundsMax);
+			const AABB bounds = m_World.Meshes.at(SelectedIndex()).WorldBounds();
+			outMin = bounds.min;
+			outMax = bounds.max;
 			break;
 		}
 		case SelectionType::Light: {
@@ -1807,8 +1807,8 @@ namespace Lucerna {
 		}
 		case SelectionType::Mesh: {
 			// nessuna ricostruzione dei BLAS: cambia solo la trasformazione dell'istanza
-			const MeshInfo& mesh = m_World.Meshes.at(SelectedIndex());
-			m_World.SetMeshTransform(SelectedIndex(), delta * mesh.Transform);
+			const Mesh& mesh = m_World.Meshes.at(SelectedIndex());
+			m_World.Meshes.at(SelectedIndex()).Transform = delta * mesh.Transform;
 			break;
 		}
 		case SelectionType::Light: {

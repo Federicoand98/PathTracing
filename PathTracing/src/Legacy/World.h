@@ -36,7 +36,6 @@ namespace Lucerna {
 
 		void LoadScene();
 		void DestroyScene();
-		void SetMeshTransform(int meshIndex, const glm::mat4& transform);
 
 		// Importa una scena glTF (interop Blender, ADR 0003): rimpiazza la scena corrente con
 		// geometria + materiali del file. Ritorna false se il parsing fallisce (scena invariata).
@@ -61,14 +60,6 @@ namespace Lucerna {
 		// -1 se il quad e' autonomo, altrimenti l'indice del box che lo possiede
 		int QuadOwnerBox(int quadIndex) const;
 
-		// Raccoglie gli emettitori (sfere/quad con materiale emissivo) per la Next Event
-		// Estimation. Ricostruito a ogni upload della scena, cosi' resta in sync con
-		// geometria e materiali (anche dopo un edit dell'emissione dalla UI). I triangoli
-		// emissivi delle mesh sono esclusi (nessuna scena li usa; li campionerebbe il BSDF).
-		std::vector<GPULight> CollectLights() const;
-
-		// AABB world di tutte le primitive analitiche: prima le sfere, poi i quad.
-		std::vector<AABB> PrimitiveBounds() const;
 	public:
 		glm::vec3 BackgroundColor;
 		SunParams Sun;                    // al massimo un Sole per scena (ADR 0006)
@@ -81,15 +72,15 @@ namespace Lucerna {
 		ObjectList<Quad> Quads{ "Quad" };        // anche le 6 facce di ogni box, nascoste nell'outliner
 		ObjectList<Box> Boxes{ "Box" };
 		ObjectList<Material> Materials{ "Material" };
-		ObjectList<MeshInfo> Meshes{ "Mesh" };
+		ObjectList<Mesh> Meshes{ "Mesh" };
 		std::vector<std::string> MeshPaths;       // solo CPU, path OBJ per la serializzazione
-		std::vector<Triangle> Triangles;          // authoring CPU, sorgente dei buffer GPU
-		std::vector<TrianglePosition> TriPositions; // caricati sulla GPU, ingresso dei BLAS
-		std::vector<TriangleNormal> TriNormals;    // caricate sulla GPU
-		std::vector<TriangleUV> TriUVs;            // caricate sulla GPU
+		// I triangoli di tutte le mesh, in local space e nell'ordine di caricamento: ogni Mesh ne
+		// possiede un intervallo. I buffer GPU li deriva il RenderScene (issue #24).
+		std::vector<Triangle> Triangles;
 		std::vector<std::string> TexturePaths;     // un layer del sampler2DArray ciascuna
 		std::vector<std::string> DataTexturePaths; // normal map e alpha mask MTL, in un array UNORM a parte
-		// Cresce a ogni modifica di triangoli e BLAS: evita di ricaricarli sulla GPU a ogni reset.
+		// Cresce a ogni modifica dei triangoli o dell'elenco delle mesh: il RenderScene ricarica
+		// triangoli e BLAS solo quando cambia. Lo sostituira' il change tracking (#25).
 		int GeometryVersion = 0;
 		int CurrentScene = 6;
 	private:
@@ -111,8 +102,6 @@ namespace Lucerna {
 		int RegisterTexture(const std::string& path);      // dedup in TexturePaths, ritorna il layer
 		int RegisterDataTexture(const std::string& path); // idem in DataTexturePaths
 		Material MaterialFromMtl(const MtlMaterial& mtl);  // MtlMaterial -> Material dell'engine
-
-		void BuildTriangleBuffers();
 
 		void CreateCornellBox();
 	};

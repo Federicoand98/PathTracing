@@ -60,6 +60,7 @@ namespace Lucerna {
 	private:
 		RenderView m_View;
 		const World* m_World = nullptr;
+		std::unique_ptr<RenderScene> m_Scene;  // la scena per la GPU, ricostruita dal World a ogni reset
 		std::unique_ptr<PathTracer> m_PathTracer;
 		std::unique_ptr<Denoiser> m_Denoiser;
 		std::unique_ptr<ComputePipeline> m_Tonemap;

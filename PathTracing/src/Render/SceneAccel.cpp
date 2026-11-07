@@ -86,11 +86,11 @@ namespace Lucerna {
 		return Fn().GetAddress(VulkanContext::Get().Device(), &addressInfo);
 	}
 
-	void SceneAccel::BuildMeshes(const World& world, const GpuBuffer& positions) {
+	void SceneAccel::BuildMeshes(const std::vector<MeshInfo>& meshes, const GpuBuffer& positions) {
 		VulkanContext& vk = VulkanContext::Get();
 		DestroyMeshes();
 
-		const size_t meshCount = world.Meshes.size();
+		const size_t meshCount = meshes.size();
 		m_MeshBlas.assign(meshCount, VK_NULL_HANDLE);
 
 		// Fino a due geometrie per mesh, in quest'ordine: i triangoli opachi e quelli con un
@@ -105,7 +105,7 @@ namespace Lucerna {
 		std::vector<uint32_t> built;
 
 		for (size_t i = 0; i < meshCount; i++) {
-			const MeshInfo& mesh = world.Meshes[i];
+			const MeshInfo& mesh = meshes[i];
 			const uint32_t triangles = static_cast<uint32_t>(mesh.NumTriangles);
 			if (triangles == 0)
 				continue;
@@ -182,7 +182,7 @@ namespace Lucerna {
 		});
 	}
 
-	void SceneAccel::BuildTopLevel(const World& world) {
+	void SceneAccel::BuildTopLevel(const std::vector<MeshInfo>& meshes, const std::vector<AABB>& bounds) {
 		VulkanContext& vk = VulkanContext::Get();
 
 		// ---- BLAS procedurale: sfere e quad si muovono dalla UI, quindi si rifa' a ogni reset ----
@@ -191,7 +191,6 @@ namespace Lucerna {
 			m_ProceduralBlas = VK_NULL_HANDLE;
 		}
 
-		const std::vector<AABB> bounds = world.PrimitiveBounds();
 		if (!bounds.empty()) {
 			std::vector<VkAabbPositionsKHR> aabbs(bounds.size());
 			for (size_t i = 0; i < bounds.size(); i++)
@@ -252,8 +251,8 @@ namespace Lucerna {
 
 		for (size_t i = 0; i < m_MeshBlas.size(); i++)
 			if (m_MeshBlas[i] != VK_NULL_HANDLE)
-				addInstance(m_MeshBlas[i], world.Meshes[i].Transform, static_cast<uint32_t>(i),
-				            world.Meshes[i].NumOpaque < world.Meshes[i].NumTriangles);
+				addInstance(m_MeshBlas[i], meshes[i].Transform, static_cast<uint32_t>(i),
+				            meshes[i].NumOpaque < meshes[i].NumTriangles);
 		if (m_ProceduralBlas != VK_NULL_HANDLE)
 			addInstance(m_ProceduralBlas, glm::mat4(1.0f), 0, false);
 

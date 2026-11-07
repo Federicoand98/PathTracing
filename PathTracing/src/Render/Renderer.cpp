@@ -85,7 +85,8 @@ namespace Lucerna {
 		VulkanContext& vk = VulkanContext::Get();
 		m_World = &world;
 
-		m_PathTracer = std::make_unique<PathTracer>(world);
+		m_Scene = std::make_unique<RenderScene>();
+		m_PathTracer = std::make_unique<PathTracer>();
 		m_Denoiser = std::make_unique<Denoiser>();
 		m_Denoiser->Resize(m_Width, m_Height); // OnResize ha gia' fissato m_Width/m_Height
 		m_Tonemap = std::make_unique<ComputePipeline>("shaders/spv/Tonemap.spv",
@@ -171,7 +172,10 @@ namespace Lucerna {
 		glm::mat4 viewProjection = view.Projection * view.View;
 		bool aovNeedsUpdate = (viewProjection != m_PrevViewProjection) || m_PTCounter <= 1 || m_sceneReset;
 
-		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(Settings.SamplesPerPixel), static_cast<uint32_t>(Settings.RayDepth), m_sceneReset, m_World->EnvironmentMapping, Settings.FireflyClamp, m_World->Camera.Aperture, m_World->Camera.FocusDistance, View.AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, Settings.HistoryCap, Settings.NEE, pickPixel, *m_World, m_View };
+		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(Settings.SamplesPerPixel), static_cast<uint32_t>(Settings.RayDepth), Settings.FireflyClamp, m_World->Camera.Aperture, m_World->Camera.FocusDistance, View.AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, Settings.HistoryCap, Settings.NEE, pickPixel, *m_Scene, m_View };
+
+		// Un reset (m_PTCounter torna a 1) vuol dire che la scena e' cambiata: si ricostruisce.
+		m_Scene->Sync(world, m_sceneReset || m_PTCounter == 1);
 
 		// Le scritture del frame scorso diventano visibili a questo, e il tonemap non deve
 		// sovrascrivere il display mentre ImGui lo sta ancora leggendo.
@@ -328,6 +332,7 @@ namespace Lucerna {
 	void Renderer::Release() {
 		VulkanContext& vk = VulkanContext::Get();
 		m_PathTracer.reset();
+		m_Scene.reset();
 		m_Denoiser.reset();
 		m_Tonemap.reset();
 		for (GpuImage* image : { &m_RenderedImage, &m_AlbedoAOV, &m_NormalDepth[0], &m_NormalDepth[1], &m_Irradiance[0], &m_Irradiance[1], &m_Display })

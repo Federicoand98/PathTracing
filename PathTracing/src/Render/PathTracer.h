@@ -2,9 +2,7 @@
 
 #include "ptpch.h"
 #include "Vulkan/ComputePipeline.h"
-#include "Render/SceneAccel.h"
-#include "Vulkan/TextureArray.h"
-#include "Legacy/World.h"
+#include "Render/RenderScene.h"
 #include "Render/RenderView.h"
 
 namespace Lucerna {
@@ -43,8 +41,6 @@ namespace Lucerna {
 		uint32_t NumFrames;
 		uint32_t SamplesPerPixel;
 		uint32_t RayDepth;
-		bool ResetScene;
-		bool EnvironmentMapping;
 		float FireflyClamp;    // luminanza massima per campione, <= 0 = off
 		float ApertureRadius;  // raggio lente thin-lens, <= 0 = pinhole (niente DOF)
 		float FocusDistance;   // distanza del piano di fuoco
@@ -58,7 +54,7 @@ namespace Lucerna {
 		int HistoryCap;
 		bool EnableNEE;        // false = azzera numLights lato shader (NEE spenta)
 		glm::ivec2 PickPixel;  // (-1,-1) = nessuna richiesta di picking
-		const class World& World;
+		const RenderScene& Scene;   // cosa si guarda: l'unica scena che il path tracer legge
 		const RenderView& Camera;   // da dove si guarda
 	};
 
@@ -74,7 +70,7 @@ namespace Lucerna {
 
 	class PathTracer {
 	public:
-		explicit PathTracer(const class World& world);
+		PathTracer();
 		~PathTracer();
 
 		// Carica cio' che serve al frame e registra il dispatch sul command buffer.
@@ -83,27 +79,8 @@ namespace Lucerna {
 		void ReadPickResult(int& objectType, int& objectIndex, float& distance) const;
 
 	private:
-		void UploadScene(const class World& world);
-		void Upload(GpuBuffer& buffer, const void* data, size_t bytes);
-		void LoadEnvironment();
-
-	private:
 		std::unique_ptr<ComputePipeline> m_Pipeline;
-		std::unique_ptr<SceneAccel> m_Accel;
-
-		GpuBuffer m_Spheres, m_Materials, m_Quads, m_TriPositions, m_TriNormals, m_TriUVs;
-		GpuBuffer m_Meshes, m_Lights;
 		GpuBuffer m_Pick;   // host-visible: la CPU legge il risultato
 		GpuBuffer m_Frame;  // host-visible: parametri del frame
-
-		TextureArray m_AlbedoTextures;
-		TextureArray m_DataTextures;
-		std::vector<std::string> m_LoadedTexturePaths;
-		std::vector<std::string> m_LoadedDataTexturePaths;
-		GpuImage m_Environment;
-		VkSampler m_EnvironmentSampler = VK_NULL_HANDLE;
-
-		int m_NumLights = 0;
-		int m_GeometryVersion = -1;  // versione di triangoli e BLAS gia' sulla GPU
 	};
 }
