@@ -9,7 +9,7 @@
 
 struct GLFWwindow;
 
-namespace PathTracer {
+namespace Lucerna {
 
 	struct GpuBuffer {
 		VkBuffer Buffer = VK_NULL_HANDLE;

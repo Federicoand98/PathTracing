@@ -1,8 +1,8 @@
-#include "SceneSerializer.h"
+#include "Serialization/SceneSerializer.h"
 
-#include "World.h"
-#include "Json.h"
-#include "../Renderer/RenderSettings.h"
+#include "Legacy/World.h"
+#include "Core/Json.h"
+#include "Render/RenderSettings.h"
 
 #include <nlohmann/json.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -11,7 +11,7 @@
 
 using json = nlohmann::json;
 
-namespace PathTracer {
+namespace Lucerna {
 
 	// ---- glm <-> json ------------------------------------------------------
 

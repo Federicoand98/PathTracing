@@ -1,10 +1,10 @@
-#include "VulkanContext.h"
+#include "Vulkan/VulkanContext.h"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <cstring>
 
-namespace PathTracer {
+namespace Lucerna {
 
 	VulkanContext* VulkanContext::s_Instance = nullptr;
 

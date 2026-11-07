@@ -1,5 +1,5 @@
 ﻿
-#include "Application.h"
+#include "Editor/Application.h"
 
 namespace {
 	std::filesystem::path GetExecutableDirectory(char* executablePathArg) {
@@ -20,7 +20,7 @@ namespace {
 int main(int, char** argv) {
 	std::filesystem::current_path(GetExecutableDirectory(argv[0]));
 
-	PathTracer::Application application;
+	Lucerna::Application application;
 
 	bool success = application.Initialize(1600, 900);
 
