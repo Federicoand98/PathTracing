@@ -87,10 +87,11 @@ namespace Lucerna {
 		void DeleteSelection();
 		bool CanDeleteSelection() const;
 		int SelectionCollectionSize(SelectionType type) const;
-		bool SelectableObjectRow(const char* label, SelectionType type, int index, float materialIndex);
-		bool MaterialCombo(const char* label, float& materialIndex);
+		bool SelectableObjectRow(const char* label, SelectionType type, int index, int materialIndex); // -1 = nessun materiale
+		bool MaterialCombo(const char* label, ObjectId& material);
+		bool TextureCombo(const char* label, ObjectId& texture, TextureKind kind);
 
-		int EnsureMaterialExists();          // garantisce almeno un materiale, ne ritorna l'indice
+		ObjectId EnsureMaterialExists();     // garantisce almeno un materiale, ne ritorna l'id
 		glm::vec3 SpawnPosition() const;     // davanti alla camera
 		void OpenMaterialEditor(int index);
 
@@ -145,7 +146,7 @@ namespace Lucerna {
 		char m_SceneFilename[128] = "scene";
 
 		// creazione oggetti
-		float m_NewObjectMaterial = 0.0f;
+		ObjectId m_NewObjectMaterial;
 		std::vector<std::string> m_ModelFiles;
 		int m_SelectedModelFile = 0;
 		std::vector<std::string> m_TextureFiles;

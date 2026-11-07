@@ -96,6 +96,91 @@ namespace Lucerna {
 			return m;
 		}
 
+		// I triangoli di una primitive, in local space, e la loro AABB. false = non e' una
+		// primitive di triangoli con posizioni, o non ne ha nessuno.
+		bool ReadPrimitive(const cgltf_primitive& prim, MeshAsset& out) {
+			if (prim.type != cgltf_primitive_type_triangles)
+				return false;
+
+			// accessor delle attributi
+			const cgltf_accessor* posA = nullptr;
+			const cgltf_accessor* nrmA = nullptr;
+			const cgltf_accessor* uvA = nullptr;
+			for (size_t a = 0; a < prim.attributes_count; a++) {
+				const cgltf_attribute& attr = prim.attributes[a];
+				if (attr.type == cgltf_attribute_type_position) posA = attr.data;
+				else if (attr.type == cgltf_attribute_type_normal) nrmA = attr.data;
+				else if (attr.type == cgltf_attribute_type_texcoord && attr.index == 0) uvA = attr.data;
+			}
+			if (!posA)
+				return false;
+
+			const size_t vertCount = posA->count;
+			std::vector<glm::vec3> pos(vertCount), nrm(vertCount);
+			std::vector<glm::vec2> uv(vertCount, glm::vec2(0.0f));
+			for (size_t v = 0; v < vertCount; v++) {
+				cgltf_accessor_read_float(posA, v, glm::value_ptr(pos[v]), 3);
+				if (nrmA) cgltf_accessor_read_float(nrmA, v, glm::value_ptr(nrm[v]), 3);
+				if (uvA)  cgltf_accessor_read_float(uvA, v, glm::value_ptr(uv[v]), 2);
+				// glTF ha l'origine delle UV in alto a sinistra, ma TextureArray capovolge le
+				// immagini per la convenzione OBJ (origine in basso): senza questo le texture
+				// glTF escono specchiate in verticale, e i normal map col verde invertito
+				uv[v].y = 1.0f - uv[v].y;
+			}
+
+			// indici: se assenti, la primitive e' non indicizzata (0,1,2,3,...)
+			const size_t idxCount = prim.indices ? prim.indices->count : vertCount;
+			auto idxAt = [&](size_t i) -> cgltf_size {
+				return prim.indices ? cgltf_accessor_read_index(prim.indices, i) : i;
+			};
+
+			out.Triangles.clear();
+			out.LocalMin = glm::vec4(1e30f);
+			out.LocalMax = glm::vec4(-1e30f);
+			for (size_t i = 0; i + 3 <= idxCount; i += 3) {
+				const cgltf_size i0 = idxAt(i), i1 = idxAt(i + 1), i2 = idxAt(i + 2);
+
+				Triangle tri;
+				tri.A = glm::vec4(pos[i0], 1.0f);
+				tri.B = glm::vec4(pos[i1], 1.0f);
+				tri.C = glm::vec4(pos[i2], 1.0f);
+
+				if (nrmA) {
+					tri.NormalA = glm::vec4(nrm[i0], 0.0f);
+					tri.NormalB = glm::vec4(nrm[i1], 0.0f);
+					tri.NormalC = glm::vec4(nrm[i2], 0.0f);
+				} else {
+					// normale di faccia se il glTF non ne porta (raro, ma legale)
+					glm::vec3 fn = glm::normalize(glm::cross(pos[i1] - pos[i0], pos[i2] - pos[i0]));
+					tri.NormalA = tri.NormalB = tri.NormalC = glm::vec4(fn, 0.0f);
+				}
+
+				tri.UVA = uv[i0]; tri.UVB = uv[i1]; tri.UVC = uv[i2];
+				tri.MaterialSlot = -1.0f; // una primitive = un materiale: quello dell'istanza
+
+				out.LocalMin = glm::min(out.LocalMin, glm::min(tri.A, glm::min(tri.B, tri.C)));
+				out.LocalMax = glm::max(out.LocalMax, glm::max(tri.A, glm::max(tri.B, tri.C)));
+				out.Triangles.push_back(tri);
+			}
+			return !out.Triangles.empty();
+		}
+
+		cgltf_data* ParseGltf(const std::string& path) {
+			cgltf_options options{};
+			cgltf_data* data = nullptr;
+			if (cgltf_parse_file(&options, path.c_str(), &data) != cgltf_result_success) {
+				std::cerr << "LoadGltf: parse fallito: " << path << std::endl;
+				return nullptr;
+			}
+			// carica i buffer binari (.bin / data URI) referenziati dagli accessor
+			if (cgltf_load_buffers(&options, data, path.c_str()) != cgltf_result_success) {
+				std::cerr << "LoadGltf: load buffers fallito: " << path << std::endl;
+				cgltf_free(data);
+				return nullptr;
+			}
+			return data;
+		}
+
 	} // namespace
 
 	// KHR_lights_punctual (ADR 0009). glTF da' le intensita' in unita' fotometriche, che
@@ -178,19 +263,9 @@ namespace Lucerna {
 	}
 
 	bool World::LoadGltf(const std::string& path) {
-		cgltf_options options = {};
-		cgltf_data* data = nullptr;
-
-		if (cgltf_parse_file(&options, path.c_str(), &data) != cgltf_result_success) {
-			std::cerr << "LoadGltf: parse fallito: " << path << std::endl;
+		cgltf_data* data = ParseGltf(path);
+		if (data == nullptr)
 			return false;
-		}
-		// carica i buffer binari (.bin / data URI) referenziati dagli accessor
-		if (cgltf_load_buffers(&options, data, path.c_str()) != cgltf_result_success) {
-			std::cerr << "LoadGltf: load buffers fallito: " << path << std::endl;
-			cgltf_free(data);
-			return false;
-		}
 
 		// da qui in poi si rimpiazza la scena: prima di toccare il World, tutto e' andato a buon fine.
 		// Un glTF senza camera tiene l'inquadratura corrente (ADR 0011): DestroyScene la azzererebbe.
@@ -206,26 +281,26 @@ namespace Lucerna {
 
 		const std::string gltfDir = std::filesystem::path(path).parent_path().string();
 
-		// Materiali: appesi in blocco, con una mappa puntatore->indice globale per i primitive.
-		std::unordered_map<const cgltf_material*, int> matIndex;
+		// Materiali: uno per materiale glTF, con una mappa puntatore -> id per le primitive.
+		std::unordered_map<const cgltf_material*, ObjectId> materialIds;
 		for (size_t i = 0; i < data->materials_count; i++) {
 			const cgltf_material& gm = data->materials[i];
-			matIndex[&gm] = static_cast<int>(m_Materials.size());
 			std::string baseTex, normalTex;
 			Material m = MaterialFromGltf(gm, gltfDir, baseTex, normalTex);
 			if (!normalTex.empty())
-				m.NormalTexture = static_cast<float>(RegisterDataTexture(normalTex));
+				m.NormalTexture = m_Assets.RegisterTexture(normalTex, TextureKind::Data);
 			if (!baseTex.empty()) {
-				m.AlbedoTexture = static_cast<float>(RegisterTexture(baseTex));
+				m.AlbedoTexture = m_Assets.RegisterTexture(baseTex, TextureKind::Color);
 				m.Color = glm::vec4(1.0f); // la texture porta il colore, non tingerla due volte
 			}
-			m_Materials.Add(m, gm.name ? gm.name : "");
+			materialIds[&gm] = m_Assets.Materials.Add(m, gm.name ? gm.name : "").Id;
 		}
 
 		size_t triTotal = 0;
 
-		// Nodi: si visita l'intera gerarchia. cgltf_node_transform_world appiattisce la catena
-		// di transform dalla radice. Ogni primitive di ogni mesh referenziata diventa una Mesh.
+		// Nodi: si visita l'intera gerarchia. cgltf_node_transform_world appiattisce la catena di
+		// transform dalla radice. Ogni primitive diventa un asset, caricato una volta sola anche se
+		// piu' nodi citano la stessa mesh (issue #26), e ogni nodo ne fa un'istanza.
 		for (size_t n = 0; n < data->nodes_count; n++) {
 			const cgltf_node& node = data->nodes[n];
 			if (!node.mesh)
@@ -233,105 +308,80 @@ namespace Lucerna {
 
 			float world[16];
 			cgltf_node_transform_world(&node, world);
-			glm::mat4 transform = glm::make_mat4(world);
+			const glm::mat4 transform = glm::make_mat4(world);
+			const int meshIndex = static_cast<int>(node.mesh - data->meshes);
+			const std::string name = node.mesh->name ? node.mesh->name : (node.name ? node.name : "");
 
 			for (size_t p = 0; p < node.mesh->primitives_count; p++) {
 				const cgltf_primitive& prim = node.mesh->primitives[p];
-				if (prim.type != cgltf_primitive_type_triangles)
-					continue;
+				const MeshSource source{ path, meshIndex, static_cast<int>(p) };
 
-				// accessor delle attributi
-				const cgltf_accessor* posA = nullptr;
-				const cgltf_accessor* nrmA = nullptr;
-				const cgltf_accessor* uvA = nullptr;
-				for (size_t a = 0; a < prim.attributes_count; a++) {
-					const cgltf_attribute& attr = prim.attributes[a];
-					if (attr.type == cgltf_attribute_type_position) posA = attr.data;
-					else if (attr.type == cgltf_attribute_type_normal) nrmA = attr.data;
-					else if (attr.type == cgltf_attribute_type_texcoord && attr.index == 0) uvA = attr.data;
-				}
-				if (!posA)
-					continue;
-
-				const size_t vertCount = posA->count;
-				std::vector<glm::vec3> pos(vertCount), nrm(vertCount);
-				std::vector<glm::vec2> uv(vertCount, glm::vec2(0.0f));
-				for (size_t v = 0; v < vertCount; v++) {
-					cgltf_accessor_read_float(posA, v, glm::value_ptr(pos[v]), 3);
-					if (nrmA) cgltf_accessor_read_float(nrmA, v, glm::value_ptr(nrm[v]), 3);
-					if (uvA)  cgltf_accessor_read_float(uvA, v, glm::value_ptr(uv[v]), 2);
-					// glTF ha l'origine delle UV in alto a sinistra, ma TextureArray capovolge le
-					// immagini per la convenzione OBJ (origine in basso): senza questo le texture
-					// glTF escono specchiate in verticale, e i normal map col verde invertito
-					uv[v].y = 1.0f - uv[v].y;
+				ObjectId asset;
+				if (const auto* existing = m_Assets.FindMesh(source)) {
+					asset = existing->Id;
+				} else {
+					MeshAsset geometry;
+					geometry.Source = source;
+					if (!ReadPrimitive(prim, geometry))
+						continue;
+					triTotal += geometry.Triangles.size();
+					asset = m_Assets.Meshes.Add(geometry, name).Id;
 				}
 
-				// indici: se assenti, la primitive e' non indicizzata (0,1,2,3,...)
-				const size_t idxCount = prim.indices ? prim.indices->count : vertCount;
-				auto idxAt = [&](size_t i) -> cgltf_size {
-					return prim.indices ? cgltf_accessor_read_index(prim.indices, i) : i;
-				};
-
-				const int meshMat = prim.material && matIndex.count(prim.material)
-					? matIndex[prim.material] : -1;
-
-				Mesh mesh;
-				mesh.FirstTriangle = static_cast<int>(m_Triangles.size());
-				mesh.MaterialIndex = static_cast<float>(meshMat); // una primitive = un materiale
-
-				glm::vec4 localMin(1e30f), localMax(-1e30f);
-				size_t triCount = 0;
-
-				for (size_t i = 0; i + 3 <= idxCount; i += 3) {
-					const cgltf_size i0 = idxAt(i), i1 = idxAt(i + 1), i2 = idxAt(i + 2);
-
-					Triangle tri;
-					tri.A = glm::vec4(pos[i0], 1.0f);
-					tri.B = glm::vec4(pos[i1], 1.0f);
-					tri.C = glm::vec4(pos[i2], 1.0f);
-
-					if (nrmA) {
-						tri.NormalA = glm::vec4(nrm[i0], 0.0f);
-						tri.NormalB = glm::vec4(nrm[i1], 0.0f);
-						tri.NormalC = glm::vec4(nrm[i2], 0.0f);
-					} else {
-						// normale di faccia se il glTF non ne porta (raro, ma legale)
-						glm::vec3 fn = glm::normalize(glm::cross(pos[i1] - pos[i0], pos[i2] - pos[i0]));
-						tri.NormalA = tri.NormalB = tri.NormalC = glm::vec4(fn, 0.0f);
-					}
-
-					tri.UVA = uv[i0]; tri.UVB = uv[i1]; tri.UVC = uv[i2];
-					tri.MaterialIndex = -1.0f; // eredita il materiale della mesh
-
-					localMin = glm::min(localMin, glm::min(tri.A, glm::min(tri.B, tri.C)));
-					localMax = glm::max(localMax, glm::max(tri.A, glm::max(tri.B, tri.C)));
-
-					m_Triangles.push_back(tri);
-					triCount++;
-				}
-
-				if (triCount == 0)
-					continue;
-
-				mesh.NumTriangles = static_cast<int>(triCount);
-				mesh.LocalMin = localMin;
-				mesh.LocalMax = localMax;
-
-				m_Meshes.Add(mesh, node.mesh->name ? node.mesh->name : (node.name ? node.name : ""));
-				m_MeshPaths.push_back(path);
-				m_Meshes.at(static_cast<int>(m_Meshes.size()) - 1).Transform = transform;
-				triTotal += triCount;
+				const auto material = prim.material ? materialIds.find(prim.material) : materialIds.end();
+				AddInstance(asset, transform, material != materialIds.end() ? material->second : ObjectId{});
 			}
 		}
 
 		cgltf_free(data);
 
-		std::cout << "glTF caricato: " << path << " -> " << m_Meshes.size() << " mesh, "
-			<< triTotal << " triangoli, " << m_Materials.size() << " materiali, "
-			<< m_TexturePaths.size() << " texture" << std::endl;
+		std::cout << "glTF caricato: " << path << " -> " << m_Meshes.size() << " istanze di "
+			<< m_Assets.Meshes.size() << " mesh, " << triTotal << " triangoli, "
+			<< m_Assets.Materials.size() << " materiali, " << m_Assets.Textures.size() << " texture" << std::endl;
 
 		m_Changes = AllChanged;
 		return true;
+	}
+
+	// La geometria degli asset letti da un file di scena, che ne ha solo la sorgente: un OBJ si
+	// rilegge intero, un glTF si analizza una volta sola per tutte le sue primitive.
+	bool World::LoadMissingGeometry() {
+		bool ok = true;
+		std::unordered_map<std::string, cgltf_data*> gltfFiles;
+		for (auto& asset : m_Assets.Meshes) {
+			if (!asset.Triangles.empty())
+				continue;
+			const MeshSource& source = asset.Source;
+			bool loaded = false;
+			if (source.Mesh < 0) {
+				Model model;
+				model.LoadObj(source.File.c_str());
+				for (const Triangle* t : model.GetTriangles()) {
+					asset.Triangles.push_back(*t);
+				}
+				asset.LocalMin = model.GetBoundsMin();
+				asset.LocalMax = model.GetBoundsMax();
+				loaded = !asset.Triangles.empty();
+			} else {
+				auto file = gltfFiles.find(source.File);
+				if (file == gltfFiles.end())
+					file = gltfFiles.emplace(source.File, ParseGltf(source.File)).first;
+				const cgltf_data* data = file->second;
+				if (data && source.Mesh < static_cast<int>(data->meshes_count)
+				    && source.Primitive < static_cast<int>(data->meshes[source.Mesh].primitives_count))
+					loaded = ReadPrimitive(data->meshes[source.Mesh].primitives[source.Primitive], asset);
+			}
+			if (!loaded) {
+				std::cerr << "Geometria non trovata: " << source.File << " (mesh " << source.Mesh
+				          << ", primitive " << source.Primitive << ")" << std::endl;
+				ok = false;
+			}
+		}
+		for (auto& [path, data] : gltfFiles)
+			if (data)
+				cgltf_free(data);
+		m_Changes |= GeometryChanged | MeshesChanged;
+		return ok;
 	}
 
 }

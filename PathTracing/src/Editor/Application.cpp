@@ -60,6 +60,9 @@ namespace Lucerna {
 		if (const char* g = getenv("PT_GLTF")) {
 			LoadGltfScene(g);
 		}
+		// PT_SCENE_FILE=<file.json> apre una scena salvata (formato 2)
+		if (const char* f = getenv("PT_SCENE_FILE"))
+			SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(f);
 
 		// Test/CI headless: PT_NEE=0 forza la NEE spenta (A/B col light sampling).
 		// PT_CAM=x,y,z,dx,dy,dz: posizione e direzione della camera, per catture ripetibili
@@ -541,13 +544,13 @@ namespace Lucerna {
 
 		if (!m_World.Spheres().empty() && ImGui::TreeNodeEx("spheres", ImGuiTreeNodeFlags_DefaultOpen, "Spheres (%zu)", m_World.Spheres().size())) {
 			for (size_t i = 0; i < m_World.Spheres().size(); i++)
-				SelectableObjectRow(m_World.Spheres()[i].Name.c_str(), SelectionType::Sphere, (int)i, m_World.Spheres()[i].MaterialIndex);
+				SelectableObjectRow(m_World.Spheres()[i].Name.c_str(), SelectionType::Sphere, (int)i, m_World.Materials().IndexOf(m_World.Spheres()[i].Material));
 			ImGui::TreePop();
 		}
 
 		if (!m_World.Boxes().empty() && ImGui::TreeNodeEx("boxes", ImGuiTreeNodeFlags_DefaultOpen, "Boxes (%zu)", m_World.Boxes().size())) {
 			for (size_t i = 0; i < m_World.Boxes().size(); i++)
-				SelectableObjectRow(m_World.Boxes()[i].Name.c_str(), SelectionType::Box, (int)i, m_World.Boxes()[i].MaterialIndex);
+				SelectableObjectRow(m_World.Boxes()[i].Name.c_str(), SelectionType::Box, (int)i, m_World.Materials().IndexOf(m_World.Boxes()[i].Material));
 			ImGui::TreePop();
 		}
 
@@ -556,21 +559,21 @@ namespace Lucerna {
 				if (quadOwnedByBox[i])
 					continue; // faccia di un box
 
-				SelectableObjectRow(m_World.Quads()[i].Name.c_str(), SelectionType::Quad, (int)i, m_World.Quads()[i].MaterialIndex);
+				SelectableObjectRow(m_World.Quads()[i].Name.c_str(), SelectionType::Quad, (int)i, m_World.Materials().IndexOf(m_World.Quads()[i].Material));
 			}
 			ImGui::TreePop();
 		}
 
 		if (!m_World.Meshes().empty() && ImGui::TreeNodeEx("meshes", ImGuiTreeNodeFlags_DefaultOpen, "Meshes (%zu)", m_World.Meshes().size())) {
 			for (size_t i = 0; i < m_World.Meshes().size(); i++) {
-				SelectableObjectRow(m_World.Meshes()[i].Name.c_str(), SelectionType::Mesh, (int)i, m_World.Meshes()[i].MaterialIndex);
+				SelectableObjectRow(m_World.Meshes()[i].Name.c_str(), SelectionType::Mesh, (int)i, m_World.Materials().IndexOf(m_World.Meshes()[i].Material));
 			}
 			ImGui::TreePop();
 		}
 
 		if (!m_World.PunctualLights().empty() && ImGui::TreeNodeEx("lights", ImGuiTreeNodeFlags_DefaultOpen, "Lights (%zu)", m_World.PunctualLights().size())) {
 			for (size_t i = 0; i < m_World.PunctualLights().size(); i++)
-				SelectableObjectRow(m_World.PunctualLights()[i].Name.c_str(), SelectionType::Light, (int)i, -1.0f);
+				SelectableObjectRow(m_World.PunctualLights()[i].Name.c_str(), SelectionType::Light, (int)i, -1);
 			ImGui::TreePop();
 		}
 
@@ -579,7 +582,7 @@ namespace Lucerna {
 
 	// Una riga dell'outliner: cliccarla equivale a cliccare l'oggetto nella viewport,
 	// cosi' selezione, gizmo e contorno restano un'unica nozione.
-	bool Application::SelectableObjectRow(const char* label, SelectionType type, int index, float materialIndex) {
+	bool Application::SelectableObjectRow(const char* label, SelectionType type, int index, int materialIndex) {
 		ImGui::PushID(static_cast<int>(type) * 100000 + index);
 
 		const bool selected = (m_Selection.Type == type && SelectedIndex() == index);
@@ -589,9 +592,9 @@ namespace Lucerna {
 
 		const bool clicked = ImGui::Selectable(row, selected);
 
-		if (materialIndex >= 0.0f) { // le luci non hanno materiale
+		if (materialIndex >= 0) { // le luci non hanno materiale
 			ImGui::SameLine(ImGui::GetContentRegionAvail().x - 30.0f);
-			ImGui::TextDisabled("m%d", static_cast<int>(materialIndex));
+			ImGui::TextDisabled("m%d", materialIndex);
 		}
 
 		if (clicked) {
@@ -650,7 +653,7 @@ namespace Lucerna {
 			Sphere sphere = m_World.Spheres().at(SelectedIndex());
 			bool changed = ImGui::DragFloat3("Center", glm::value_ptr(sphere.Position), 0.1f);
 			changed |= ImGui::DragFloat("Radius", &sphere.Position.w, 0.05f, 0.001f, 1000.0f);
-			changed |= MaterialCombo("Material", sphere.MaterialIndex);
+			changed |= MaterialCombo("Material", sphere.Material);
 			if (changed)
 				m_World.Set(m_Selection.Id, sphere);
 			break;
@@ -662,7 +665,7 @@ namespace Lucerna {
 			changed |= ImGui::DragFloat3("V axis", glm::value_ptr(quad.V), 0.05f);
 			changed |= ImGui::DragFloat("Width", &quad.Width, 0.1f, 0.001f, 1000.0f);
 			changed |= ImGui::DragFloat("Height", &quad.Height, 0.1f, 0.001f, 1000.0f);
-			changed |= MaterialCombo("Material", quad.MaterialIndex);
+			changed |= MaterialCombo("Material", quad.Material);
 			if (changed)
 				m_World.Set(m_Selection.Id, quad);
 			ImGui::TextDisabled("pivot = lower-left corner");
@@ -674,7 +677,7 @@ namespace Lucerna {
 			bool changed = false;
 			changed |= ImGui::DragFloat3("Min", glm::value_ptr(box.Min), 0.1f);
 			changed |= ImGui::DragFloat3("Max", glm::value_ptr(box.Max), 0.1f);
-			changed |= MaterialCombo("Material", box.MaterialIndex);
+			changed |= MaterialCombo("Material", box.Material);
 
 			if (changed)
 				m_World.Set(m_Selection.Id, box); // riscrive anche i suoi 6 quad
@@ -683,13 +686,17 @@ namespace Lucerna {
 		}
 		case SelectionType::Mesh: {
 			Mesh mesh = m_World.Meshes().at(SelectedIndex());
-			ImGui::Text("Triangles: %d", static_cast<int>(mesh.NumTriangles));
+			const MeshAsset* asset = m_World.AssetOf(mesh);
+			ImGui::Text("Triangles: %d", asset ? static_cast<int>(asset->Triangles.size()) : 0);
+			// le istanze dello stesso asset dividono triangoli e BLAS (issue #26)
+			const int assetIndex = m_World.Assets().Meshes.IndexOf(mesh.Asset);
+			ImGui::TextDisabled("mesh asset: %s", assetIndex >= 0 ? m_World.Assets().Meshes[assetIndex].Name.c_str() : "missing");
 
 			glm::vec3 position = glm::vec3(mesh.Transform[3]); // la traslazione e' l'ultima colonna
 			bool changed = ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
 			if (changed)
 				mesh.Transform[3] = glm::vec4(position, 1.0f);
-			changed |= MaterialCombo("Material", mesh.MaterialIndex);
+			changed |= MaterialCombo("Material", mesh.Material);
 			if (ImGui::Button("Reset transform")) {
 				mesh.Transform = glm::mat4(1.0f);
 				changed = true;
@@ -742,14 +749,14 @@ namespace Lucerna {
 
 	// Un DragFloat sull'indice del materiale non dice niente su cosa si sta scegliendo:
 	// qui ogni voce mostra la pastiglia col colore del materiale.
-	bool Application::MaterialCombo(const char* label, float& materialIndex) {
+	bool Application::MaterialCombo(const char* label, ObjectId& material) {
 		if (m_World.Materials().empty())
 			return false;
 
 		const int count = static_cast<int>(m_World.Materials().size());
-		const int current = std::clamp(static_cast<int>(materialIndex), 0, count - 1);
+		const int current = m_World.Materials().IndexOf(material);
 
-		const std::string preview = m_World.Materials()[current].Name;
+		const std::string preview = current >= 0 ? m_World.Materials()[current].Name : "(none)";
 		bool changed = false;
 
 		if (ImGui::BeginCombo(label, preview.c_str())) {
@@ -763,7 +770,7 @@ namespace Lucerna {
 
 				const std::string& item = m_World.Materials()[i].Name;
 				if (ImGui::Selectable(item.c_str(), i == current)) {
-					materialIndex = static_cast<float>(i);
+					material = m_World.Materials()[i].Id;
 					changed = true;
 				}
 
@@ -776,10 +783,35 @@ namespace Lucerna {
 		// ritrovare l'indice giusto e riaprire l'albero.
 		ImGui::SameLine();
 		ImGui::PushID(label);
-		if (ImGui::SmallButton("Edit"))
-			OpenMaterialEditor(std::clamp(static_cast<int>(materialIndex), 0, count - 1));
+		if (ImGui::SmallButton("Edit") && current >= 0)
+			OpenMaterialEditor(current);
 		ImGui::PopID();
 
+		return changed;
+	}
+
+	// Le texture di un tipo, piu' "None". Un materiale cita la texture per id (issue #26).
+	bool Application::TextureCombo(const char* label, ObjectId& texture, TextureKind kind) {
+		const int current = m_World.Textures().IndexOf(texture);
+		bool changed = false;
+		if (ImGui::BeginCombo(label, current >= 0 ? m_World.Textures()[current].Name.c_str() : "None")) {
+			if (ImGui::Selectable("None", current < 0)) {
+				texture = {};
+				changed = true;
+			}
+			for (int i = 0; i < static_cast<int>(m_World.Textures().size()); i++) {
+				const auto& t = m_World.Textures()[i];
+				if (t.Kind != kind)
+					continue;
+				ImGui::PushID(i);
+				if (ImGui::Selectable(t.Name.c_str(), i == current)) {
+					texture = t.Id;
+					changed = true;
+				}
+				ImGui::PopID();
+			}
+			ImGui::EndCombo();
+		}
 		return changed;
 	}
 
@@ -789,36 +821,37 @@ namespace Lucerna {
 		return m_Camera.GetPosition() + m_Camera.GetDirection() * 4.0f;
 	}
 
-	// Un oggetto con un MaterialIndex senza corrispondenza indicizzerebbe fuori dal
-	// buffer dei materiali nello shader.
-	int Application::EnsureMaterialExists() {
+	// Il materiale scelto per i nuovi oggetti, se esiste ancora; altrimenti il primo, creandolo
+	// se la scena non ne ha.
+	ObjectId Application::EnsureMaterialExists() {
 		if (m_World.Materials().empty())
 			m_World.AddMaterial(CreateDefaultPrincipled());
-
-		return std::clamp(static_cast<int>(m_NewObjectMaterial), 0, (int)m_World.Materials().size() - 1);
+		if (m_World.Materials().IndexOf(m_NewObjectMaterial) < 0)
+			m_NewObjectMaterial = m_World.Materials()[0].Id;
+		return m_NewObjectMaterial;
 	}
 
 	void Application::DrawAddObjectMenu() {
 		const glm::vec3 spawn = SpawnPosition();
 
 		if (ImGui::Button("+ Sphere")) {
-			const int material = EnsureMaterialExists();
+			const ObjectId material = EnsureMaterialExists();
 
 			Sphere sphere;
 			sphere.Position = glm::vec4(spawn, 0.5f); // la w e' il raggio
-			sphere.MaterialIndex = static_cast<float>(material);
+			sphere.Material = material;
 			m_Selection = Select(SelectionType::Sphere, m_World.AddSphere(sphere));
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
 		}
 
 		ImGui::SameLine();
 		if (ImGui::Button("+ Box")) {
-			const int material = EnsureMaterialExists();
+			const ObjectId material = EnsureMaterialExists();
 
 			// CreateBox appende i suoi 6 quad in coda, quindi i Box::index gia' esistenti
 			// restano validi e in ordine crescente, come si aspetta il loop dei Cubes
 			// nello shader (che li scorre in parallelo ai quad).
-			m_World.CreateBox(spawn - glm::vec3(0.5f), spawn + glm::vec3(0.5f), (float)material);
+			m_World.CreateBox(spawn - glm::vec3(0.5f), spawn + glm::vec3(0.5f), material);
 
 			m_Selection = Select(SelectionType::Box, (int)m_World.Boxes().size() - 1);
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
@@ -826,7 +859,7 @@ namespace Lucerna {
 
 		ImGui::SameLine();
 		if (ImGui::Button("+ Quad")) {
-			const int material = EnsureMaterialExists();
+			const ObjectId material = EnsureMaterialExists();
 
 			Quad quad;
 			quad.PositionLLC = glm::vec4(spawn - glm::vec3(0.5f, 0.5f, 0.0f), 0.0f);
@@ -834,7 +867,7 @@ namespace Lucerna {
 			quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			quad.Width = 1.0f;
 			quad.Height = 1.0f;
-			quad.MaterialIndex = static_cast<float>(material);
+			quad.Material = material;
 			m_Selection = Select(SelectionType::Quad, m_World.AddQuad(quad));
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
 		}
@@ -876,7 +909,7 @@ namespace Lucerna {
 			ImGui::SameLine();
 
 			if (ImGui::Button("+ Mesh")) {
-				const int material = EnsureMaterialExists();
+				const ObjectId material = EnsureMaterialExists();
 				const std::string path = "models/" + m_ModelFiles[m_SelectedModelFile];
 
 				// ricostruisce TUTTI i BLAS: sui modelli grossi puo' bloccare per qualche secondo
@@ -961,8 +994,8 @@ namespace Lucerna {
 
 			switch (m_Selection.Type) {
 			case SelectionType::Mesh:
-				ImGui::TextDisabled("%d triangles - BLASes will be rebuilt",
-					static_cast<int>(m_World.Meshes()[SelectedIndex()].NumTriangles));
+				ImGui::TextDisabled("instance of %d triangles - the mesh asset stays loaded",
+					m_World.AssetOf(m_World.Meshes()[SelectedIndex()]) ? static_cast<int>(m_World.AssetOf(m_World.Meshes()[SelectedIndex()])->Triangles.size()) : 0);
 				break;
 			case SelectionType::Box:
 				ImGui::TextDisabled("also removes its 6 faces");
@@ -1089,30 +1122,19 @@ namespace Lucerna {
 		// non viene mai letta. Invece di mostrarli come se si combinassero, la disabilito e lo
 		// dico, cosi' l'esclusione non e' piu' silenziosa.
 		const bool checkerWins = checkerMode != 0;
-		const int layerCount = static_cast<int>(m_World.TexturePaths().size());
 		ImGui::BeginDisabled(checkerWins);
-		if (layerCount > 0) {
-			// -1 = nessuna texture; gli altri valori indicizzano i layer di TexturePaths.
-			// Con min == max ImGui disattiva il clamping, quindi senza texture
-			// il drag va nascosto del tutto invece che lasciato libero di sforare.
-			if (ImGui::DragFloat("Albedo texture layer", &material.AlbedoTexture, 1.0f, -1.0f, (float)(layerCount - 1)))
-				edited = true;
-		}
-		else {
-			material.AlbedoTexture = -1.0f;
-			ImGui::TextDisabled("(no textures loaded in this scene)");
-		}
+		if (TextureCombo("Albedo texture", material.AlbedoTexture, TextureKind::Color))
+			edited = true;
 		ImGui::EndDisabled();
 		if (checkerWins)
 			ImGui::TextDisabled("checker on: it takes precedence, the texture is ignored");
 
 		// Normal map (ADR 0007): solo le mesh hanno le UV e i triangoli da cui si ricava la tangente
 		ImGui::SeparatorText("Normal map");
-		const int normalCount = static_cast<int>(m_World.DataTexturePaths().size());
-		if (normalCount > 0) {
-			if (ImGui::DragFloat("Normal map layer", &material.NormalTexture, 1.0f, -1.0f, (float)(normalCount - 1)))
+		{
+			if (TextureCombo("Normal map", material.NormalTexture, TextureKind::Data))
 				edited = true;
-			if (material.NormalTexture >= 0.0f) {
+			if (!material.NormalTexture.IsNil()) {
 				if (ImGui::SliderFloat("Normal strength", &material.NormalStrength, 0.0f, 2.0f))
 					edited = true;
 				bool flipY = material.NormalFlipY > 0.5f;
@@ -1122,10 +1144,6 @@ namespace Lucerna {
 				}
 				ImGui::TextDisabled("applies to meshes only");
 			}
-		}
-		else {
-			material.NormalTexture = -1.0f;
-			ImGui::TextDisabled("(no normal maps loaded in this scene)");
 		}
 
 		// Alpha mask (ADR 0008): i loader decidono quali materiali sono mascherati, perche' i loro
@@ -1205,17 +1223,30 @@ namespace Lucerna {
 		ImGui::End();
 	}
 
-	// I materiali indicizzano le texture per LAYER (Material::AlbedoTexture). Rimuoverne una
-	// farebbe scalare i layer successivi e ogni materiale punterebbe all'immagine sbagliata,
-	// in silenzio. Quindi qui si puo' solo aggiungere in coda, come per gli oggetti.
+	// Le texture sono asset (issue #26): i materiali le citano per id, e il layer lo sceglie il
+	// RenderScene. Una texture che nessun materiale usa si puo' togliere, e libera il suo layer.
 	void Application::DrawTextureManager() {
 		ImGui::SeparatorText("Textures");
 
-		if (m_World.TexturePaths().empty())
+		if (m_World.Textures().empty())
 			ImGui::TextDisabled("no textures loaded");
 
-		for (size_t i = 0; i < m_World.TexturePaths().size(); i++)
-			ImGui::BulletText("layer %d  -  %s", (int)i, m_World.TexturePaths()[i].c_str());
+		ObjectId remove;
+		for (const auto& texture : m_World.Textures()) {
+			ImGui::PushID(texture.Name.c_str());
+			const bool used = m_World.Assets().IsTextureUsed(texture.Id);
+			ImGui::BeginDisabled(used);
+			if (ImGui::SmallButton("x"))
+				remove = texture.Id;
+			ImGui::EndDisabled();
+			if (used && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+				ImGui::SetTooltip("used by a material");
+			ImGui::SameLine();
+			ImGui::Text("%s  (%s)", texture.Name.c_str(), texture.Kind == TextureKind::Color ? "color" : "data");
+			ImGui::PopID();
+		}
+		if (!remove.IsNil())
+			m_World.RemoveTexture(remove);
 
 		// elenco dei file disponibili, letto una volta sola. EnvironmentMap e' un'altra cosa:
 		// finisce nella cubemap, non nel sampler2DArray degli albedo.
@@ -1252,22 +1283,14 @@ namespace Lucerna {
 		ImGui::PopItemWidth();
 		ImGui::SameLine();
 
+		// Una stessa immagine puo' servire come colore e come dato: sono due asset (sRGB e UNORM)
 		const std::string& selected = m_TextureFiles[m_SelectedTextureFile];
-		const bool alreadyLoaded = std::find(m_World.TexturePaths().begin(), m_World.TexturePaths().end(),
-			selected) != m_World.TexturePaths().end();
-
-		ImGui::BeginDisabled(alreadyLoaded);
-		if (ImGui::Button("+ Texture")) {
-			m_World.AddTexture(selected); // il RenderScene ricarica l'array al frame dopo
-		}
-		ImGui::EndDisabled();
-
-		if (alreadyLoaded) {
-			ImGui::SameLine();
-			ImGui::TextDisabled("already loaded");
-		}
-
-		ImGui::TextDisabled("append only: layers are indexed by materials");
+		if (ImGui::Button("+ Color"))
+			m_World.AddTexture(selected, TextureKind::Color); // gia' caricata = nessun doppione
+		ImGui::SameLine();
+		if (ImGui::Button("+ Data"))
+			m_World.AddTexture(selected, TextureKind::Data);
+		ImGui::TextDisabled("color = albedo (sRGB), data = normal map or alpha mask");
 	}
 
 	void Application::DrawMaterialsTab() {
@@ -1544,7 +1567,7 @@ namespace Lucerna {
 			return 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
 		}
 		case SelectionType::Mesh: {
-			const AABB bounds = m_World.Meshes().at(SelectedIndex()).WorldBounds();
+			const AABB bounds = m_World.WorldBounds(m_World.Meshes().at(SelectedIndex()));
 			return 0.5f * (bounds.min + bounds.max);
 		}
 		case SelectionType::Light:
@@ -1588,7 +1611,7 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Mesh: {
-			const AABB bounds = m_World.Meshes().at(SelectedIndex()).WorldBounds();
+			const AABB bounds = m_World.WorldBounds(m_World.Meshes().at(SelectedIndex()));
 			outMin = bounds.min;
 			outMax = bounds.max;
 			break;

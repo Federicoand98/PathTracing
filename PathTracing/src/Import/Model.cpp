@@ -227,7 +227,7 @@ namespace Lucerna {
 
 			// indice LOCALE nel MTL del modello; World lo rimappa al globale. -1 resta -1
 			// (nessun usemtl) e a valle diventa il fallback al materiale della mesh.
-			triangle->MaterialIndex = (float)face->material;
+			triangle->MaterialSlot = (float)face->material;
 
 			m_Triangles.push_back(triangle);
 		}

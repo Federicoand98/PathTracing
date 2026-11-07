@@ -15,7 +15,7 @@ namespace Lucerna {
 
 	World::~World() {
 		m_Spheres.clear();
-		m_Materials.clear();
+		m_Assets.Materials.clear();
 	}
 
 	void World::LoadScene() {
@@ -62,13 +62,9 @@ namespace Lucerna {
 	void World::DestroyScene() {
 		m_Spheres.clear();
 		m_Quads.clear();
-		m_Materials.clear();
-		m_Triangles.clear();
+		m_Assets.Clear();
 		m_Changes = AllChanged;
-		m_TexturePaths.clear();
-		m_DataTexturePaths.clear();
 		m_Meshes.clear();
-		m_MeshPaths.clear();
 		m_Boxes.clear();
 		m_Sun = SunParams{}; // spento: ogni scena accende il suo
 		m_PunctualLights.clear();
@@ -101,13 +97,13 @@ namespace Lucerna {
 		glassMaterial.SpecularColor = glassMaterial.Color;
 		glassMaterial.RefractionRatio = 1.7f;
 
-		m_Materials.Add(redMaterial);
-		m_Materials.Add(blueMaterial);
-		m_Materials.Add(metal);
-		m_Materials.Add(lightMaterial);
-		m_Materials.Add(whiteMaterial);
-		m_Materials.Add(greenMaterial);
-		m_Materials.Add(glassMaterial);
+		m_Assets.Materials.Add(redMaterial);
+		m_Assets.Materials.Add(blueMaterial);
+		m_Assets.Materials.Add(metal);
+		m_Assets.Materials.Add(lightMaterial);
+		m_Assets.Materials.Add(whiteMaterial);
+		m_Assets.Materials.Add(greenMaterial);
+		m_Assets.Materials.Add(glassMaterial);
 	}
 
 	void World::PrepareSimpleScene() {
@@ -115,19 +111,19 @@ namespace Lucerna {
 		{
 			Sphere s;
 			s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
-			s.MaterialIndex = 2;
+			s.Material = MaterialAt(2);
 			// Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
-			s.MaterialIndex = 3;
+			s.Material = MaterialAt(3);
 			// Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 0.0f, -101.0f, 0.0f, 100.0f };
-			s.MaterialIndex = 0;
+			s.Material = MaterialAt(0);
 			m_Spheres.Add(s);
 		}
 
@@ -135,7 +131,7 @@ namespace Lucerna {
 		// Una scacchiera sulle UV non andrebbe: la camera sta quasi sul polo della sfera,
 		// dove la mappatura equirettangolare degenera in spicchi convergenti.
 		{
-			Material& ground = m_Materials.at(0); // in questa scena il materiale 0 e' solo suo
+			Material& ground = m_Assets.Materials.at(0); // in questa scena il materiale 0 e' solo suo
 			ground.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 			ground.SpecularColor = ground.Color;
 			ground.Roughness = 1.0f;
@@ -144,22 +140,19 @@ namespace Lucerna {
 			ground.CheckerScale = 0.5f;        // celle da 2 unita'
 		}
 
-		//CreateBox({ 0,0,0 }, { 3,1,1 }, 1);
+		//CreateBox({ 0,0,0 }, { 3,1,1 }, MaterialAt(1));
 
 		Model m;
 		m.LoadObj("models/guitar.obj");
 
-		// layer 0 del sampler2DArray
-		m_TexturePaths.push_back("textures/Albedo/uv_grid.png");
-
 		// l'albedo moltiplica material.Color: se il materiale e' colorato la texture
 		// ne esce tinta, quindi lo si porta a bianco
-		Material& guitarMaterial = m_Materials.at(5);
+		Material& guitarMaterial = m_Assets.Materials.at(5);
 		guitarMaterial.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 		guitarMaterial.SpecularColor = guitarMaterial.Color;
-		guitarMaterial.AlbedoTexture = 0.0f;
+		guitarMaterial.AlbedoTexture = m_Assets.RegisterTexture("textures/Albedo/uv_grid.png", TextureKind::Color);
 
-		UploadModel(m, { 0.0, 0.0, 0.0 }, 5);
+		UploadModel(m, { 0.0, 0.0, 0.0 }, MaterialAt(5));
 	}
 
 	void World::PrepareCornellBox() {
@@ -167,19 +160,19 @@ namespace Lucerna {
 		{
 			Sphere s;
 			s.Position = { -0.9f, -1.2f, 1.5f, 0.8f };
-			s.MaterialIndex = 2;
+			s.Material = MaterialAt(2);
 			m_Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 0.0f, -1.6f, 2.3f, 0.4f };
-			s.MaterialIndex = 2;
+			s.Material = MaterialAt(2);
 			m_Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 0.9f, -1.0f, 1.1f, 1.0f };
-			s.MaterialIndex = 2;
+			s.Material = MaterialAt(2);
 			m_Spheres.Add(s);
 		}
 
@@ -195,18 +188,18 @@ namespace Lucerna {
 		king.LoadObj("models/king.obj");
 		knight.LoadObj("models/knight.obj");
 
-		UploadModel(queen, { 0.7, -2.1, 2.0 }, 2);
-		UploadModel(king, { -1.2, -2.0, 1.6 }, 5);
-		UploadModel(knight, { 0.9, -2.0, 3.0 }, 1);
+		UploadModel(queen, { 0.7, -2.1, 2.0 }, MaterialAt(2));
+		UploadModel(king, { -1.2, -2.0, 1.6 }, MaterialAt(5));
+		UploadModel(knight, { 0.9, -2.0, 3.0 }, MaterialAt(1));
 	}
 
 	void World::PrepareRandomSpheres() {
 		m_BackgroundColor = { 0.54f, 0.73f, 0.95f };
 
-		Sphere base = { {0.0f, -1001.0f, 0.0f, 1000.0f}, 3.0f };
-		Sphere sphere1 = { {0.0f, 0.0f, 0.0f, 1.0f}, 0.0f };
-		Sphere sphere2 = { {-3.0f, 0.0f, 0.0f, 1.0f}, 2.0f };
-		Sphere sphere3 = { {3.0f, 0.0f, 0.0f, 1.0f}, 1.0f };
+		Sphere base = { {0.0f, -1001.0f, 0.0f, 1000.0f} };
+		Sphere sphere1 = { {0.0f, 0.0f, 0.0f, 1.0f} };
+		Sphere sphere2 = { {-3.0f, 0.0f, 0.0f, 1.0f} };
+		Sphere sphere3 = { {3.0f, 0.0f, 0.0f, 1.0f} };
 
 		Material dielectric, metal, diffuse, baseMat;
 		dielectric = CreateDefaultDielectric();
@@ -216,18 +209,22 @@ namespace Lucerna {
 		baseMat.Roughness = 0.8f;
 		baseMat.SpecularColor = baseMat.Color;
 
-		// layer 0 del sampler2DArray. L'albedo moltiplica material.Color: un materiale
-		// colorato tingerebbe la texture, quindi il colore va portato a bianco.
-		m_TexturePaths.push_back("textures/earthmap.jpg");
+		// L'albedo moltiplica material.Color: un materiale colorato tingerebbe la texture,
+		// quindi il colore va portato a bianco.
 		diffuse.Color = { 1.0f, 1.0f, 1.0f, 1.0f };
 		diffuse.SpecularColor = diffuse.Color;
 		diffuse.SpecularProbability = 0.0f; // niente riflesso: la texture si vedrebbe poco
-		diffuse.AlbedoTexture = 0.0f;
+		diffuse.AlbedoTexture = m_Assets.RegisterTexture("textures/earthmap.jpg", TextureKind::Color);
 
-		m_Materials.Add(dielectric);
-		m_Materials.Add(metal);
-		m_Materials.Add(diffuse);   // materiale 2: solo di sphere2, la sfera "terra"
-		m_Materials.Add(baseMat);
+		m_Assets.Materials.Add(dielectric);
+		m_Assets.Materials.Add(metal);
+		m_Assets.Materials.Add(diffuse);   // materiale 2: solo di sphere2, la sfera "terra"
+		m_Assets.Materials.Add(baseMat);
+		// i materiali ci sono solo ora: 0 dielettrico, 1 metallo, 2 terra, 3 base
+		base.Material = MaterialAt(3);
+		sphere1.Material = MaterialAt(0);
+		sphere2.Material = MaterialAt(2);
+		sphere3.Material = MaterialAt(1);
 		m_Spheres.Add(sphere1);
 		m_Spheres.Add(sphere2);
 		m_Spheres.Add(sphere3);
@@ -240,10 +237,10 @@ namespace Lucerna {
 				if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
 					Material mat;
 					mat = CreateRandom(true);
-					m_Materials.Add(mat);
+					m_Assets.Materials.Add(mat);
 
-					Sphere s = { {center, 0.2f}, 0.0 };
-					s.MaterialIndex = m_Materials.size() - 1;
+					Sphere s = { {center, 0.2f} };
+					s.Material = MaterialAt(m_Assets.Materials.size() - 1);
 
 					m_Spheres.Add(s);
 				}
@@ -252,7 +249,7 @@ namespace Lucerna {
 
 		/*
 		for (int i = 4; i < m_Spheres.size(); i++) {
-			m_Spheres.at(i).MaterialIndex = Random::GetFloat(3, m_Materials.size() - 1);
+			m_Spheres.at(i).Material = MaterialAt(Random::GetFloat(3, m_Assets.Materials.size() - 1));
 		}
 		*/
 	}
@@ -273,22 +270,22 @@ namespace Lucerna {
 		lightMaterial.EmissiveColor = lightMaterial.Color;
 		lightMaterial.EmissiveStrenght = 1.0f;
 
-		m_Materials.Add(dielectric);
-		m_Materials.Add(metal);
-		m_Materials.Add(diffuse);
-		m_Materials.Add(lightMaterial);
-		m_Materials.Add(baseMat);
+		m_Assets.Materials.Add(dielectric);
+		m_Assets.Materials.Add(metal);
+		m_Assets.Materials.Add(diffuse);
+		m_Assets.Materials.Add(lightMaterial);
+		m_Assets.Materials.Add(baseMat);
 
 		{
 			Sphere s;
 			s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
-			s.MaterialIndex = 1;
+			s.Material = MaterialAt(1);
 			m_Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
-			s.MaterialIndex = 3;
+			s.Material = MaterialAt(3);
 			m_Spheres.Add(s);
 		}
 
@@ -296,14 +293,14 @@ namespace Lucerna {
 			Material mat;
 			mat = CreateRandom(false);
 
-			m_Materials.Add(mat);
+			m_Assets.Materials.Add(mat);
 		}
 
 		for (int x = -5; x < 6; x++) {
 			for (int z = -5; z < 6; z++) {
 				float y = Random::GetFloat(-4, -3);
 
-				CreateBox({ x, y, z }, { x + 1, y + 1, z + 1 }, Random::GetInt(5, m_Materials.size() - 1));
+				CreateBox({ x, y, z }, { x + 1, y + 1, z + 1 }, MaterialAt(Random::GetInt(5, m_Assets.Materials.size() - 1)));
 			}
 		}
 	}
@@ -329,30 +326,30 @@ namespace Lucerna {
 		Material metal2 = CreateDefaultMetal({ 0.8549, 0.5490, 0.4, 1.0 }); metal2.Roughness = 0.25f;
 		Material metal3 = CreateDefaultMetal({ 0.8549, 0.5490, 0.4, 1.0 }); metal3.Roughness = 0.45f;
 
-		m_Materials.Add(white_diffuse);
-		m_Materials.Add(metal);
-		m_Materials.Add(red);
-		m_Materials.Add(blue);
-		m_Materials.Add(green);
-		m_Materials.Add(white_metal);
-		m_Materials.Add(white_glossy);
-		m_Materials.Add(glass1);
-		m_Materials.Add(glass2);
-		m_Materials.Add(light);
-		m_Materials.Add(metal1);
-		m_Materials.Add(metal2);
-		m_Materials.Add(metal3);
+		m_Assets.Materials.Add(white_diffuse);
+		m_Assets.Materials.Add(metal);
+		m_Assets.Materials.Add(red);
+		m_Assets.Materials.Add(blue);
+		m_Assets.Materials.Add(green);
+		m_Assets.Materials.Add(white_metal);
+		m_Assets.Materials.Add(white_glossy);
+		m_Assets.Materials.Add(glass1);
+		m_Assets.Materials.Add(glass2);
+		m_Assets.Materials.Add(light);
+		m_Assets.Materials.Add(metal1);
+		m_Assets.Materials.Add(metal2);
+		m_Assets.Materials.Add(metal3);
 
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, -0.5f, -4.5f, 1.0f };
-			left.MaterialIndex = 0;
+			left.Material = MaterialAt(0);
 
 			middle.Position = { 0.0f, -0.5f, -4.5f, 1.0f };
-			middle.MaterialIndex = 6;
+			middle.Material = MaterialAt(6);
 
 			right.Position = { 3.5f, -0.5f, -4.5f, 1.0f };
-			right.MaterialIndex = 5;
+			right.Material = MaterialAt(5);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -362,13 +359,13 @@ namespace Lucerna {
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, -1.0f, -2.0f, 0.5f };
-			left.MaterialIndex = 2;
+			left.Material = MaterialAt(2);
 
 			middle.Position = { 0.0f, -1.0f, -2.0f, 0.5f };
-			middle.MaterialIndex = 3;
+			middle.Material = MaterialAt(3);
 
 			right.Position = { 3.5f, -1.0f, -2.0f, 0.5f };
-			right.MaterialIndex = 4;
+			right.Material = MaterialAt(4);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -378,13 +375,13 @@ namespace Lucerna {
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, 2.2f, -5.5f, 0.5f };
-			left.MaterialIndex = 10;
+			left.Material = MaterialAt(10);
 
 			middle.Position = { 0.0f, 2.2f, -5.5f, 0.5f };
-			middle.MaterialIndex = 11;
+			middle.Material = MaterialAt(11);
 
 			right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
-			right.MaterialIndex = 12;
+			right.Material = MaterialAt(12);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -394,10 +391,10 @@ namespace Lucerna {
 		{
 			Sphere left, right;
 			left.Position = { -1.75f, -0.9f, -2.75f, 0.4f };
-			left.MaterialIndex = 8;
+			left.Material = MaterialAt(8);
 
 			right.Position = { 1.75f, -0.9f, -2.75f, 0.4f };
-			right.MaterialIndex = 7;
+			right.Material = MaterialAt(7);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(right);
@@ -410,14 +407,14 @@ namespace Lucerna {
 			bot.V = { 0.0f, 0.0f, -1.0f, 0.0f };
 			bot.Width = 20.0f;
 			bot.Height = 12.5f;
-			bot.MaterialIndex = 0;
+			bot.Material = MaterialAt(0);
 
 			back.PositionLLC = { -10.0f, -1.5f, -10.0f, 0.0f };
 			back.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 			back.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			back.Width = 20.0f;
 			back.Height = 8.0f;
-			back.MaterialIndex = 0;
+			back.Material = MaterialAt(0);
 
 			m_Quads.Add(bot);
 			m_Quads.Add(back);
@@ -431,25 +428,25 @@ namespace Lucerna {
 			panelLight1.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			panelLight1.Width = 10.0f;
 			panelLight1.Height = 8.0f;
-			panelLight1.MaterialIndex = 9;
+			panelLight1.Material = MaterialAt(9);
 
 			panelLight2.PositionLLC = { -9.5f, 4.5f, -0.1f, 0.0f };
 			panelLight2.U = { 1.0f, 0.0f, 1.0f, 0.0f };
 			panelLight2.V = { 0.0f, 1.0f, -1.0f, 0.0f };
 			panelLight2.Width = 10.0f;
 			panelLight2.Height = 8.0f;
-			panelLight2.MaterialIndex = 9;
+			panelLight2.Material = MaterialAt(9);
 
 			m_Quads.Add(panelLight2);
 		}
 
 		// SLAB
-		CreateBox({ -2.5, -1.5f, -3.5 }, { -1.0, -1.3f, -2.0 }, 1);
-		CreateBox({ 1.0, -1.5f, -3.5 }, { 2.5, -1.3f, -2.0 }, 1);
+		CreateBox({ -2.5, -1.5f, -3.5 }, { -1.0, -1.3f, -2.0 }, MaterialAt(1));
+		CreateBox({ 1.0, -1.5f, -3.5 }, { 2.5, -1.3f, -2.0 }, MaterialAt(1));
 
 		// MONOLITH
-		CreateBox({ -3.5, -1.5f, -7.3 }, { -2.0, 3.2f, -7.0 }, 1);
-		CreateBox({ 2.0, -1.5f, -7.3 }, { 3.5, 3.2f, -7.0 }, 1);
+		CreateBox({ -3.5, -1.5f, -7.3 }, { -2.0, 3.2f, -7.0 }, MaterialAt(1));
+		CreateBox({ 2.0, -1.5f, -7.3 }, { 3.5, 3.2f, -7.0 }, MaterialAt(1));
 	}
 
 	void World::PrepareSetup2() {
@@ -470,30 +467,30 @@ namespace Lucerna {
 		Material glass1 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.45f);
 		Material glass2 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.01f);
 
-		m_Materials.Add(white_diffuse);
-		m_Materials.Add(metal);
-		m_Materials.Add(red);
-		m_Materials.Add(blue);
-		m_Materials.Add(green);
-		m_Materials.Add(white_metal);
-		m_Materials.Add(white_glossy);
-		m_Materials.Add(glass1);
-		m_Materials.Add(glass2);
-		m_Materials.Add(light);
-		m_Materials.Add(lightR);
-		m_Materials.Add(lightG);
-		m_Materials.Add(lightB);
+		m_Assets.Materials.Add(white_diffuse);
+		m_Assets.Materials.Add(metal);
+		m_Assets.Materials.Add(red);
+		m_Assets.Materials.Add(blue);
+		m_Assets.Materials.Add(green);
+		m_Assets.Materials.Add(white_metal);
+		m_Assets.Materials.Add(white_glossy);
+		m_Assets.Materials.Add(glass1);
+		m_Assets.Materials.Add(glass2);
+		m_Assets.Materials.Add(light);
+		m_Assets.Materials.Add(lightR);
+		m_Assets.Materials.Add(lightG);
+		m_Assets.Materials.Add(lightB);
 
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, -0.5f, -4.5f, 1.0f };
-			left.MaterialIndex = 0;
+			left.Material = MaterialAt(0);
 
 			middle.Position = { 0.0f, -0.5f, -4.5f, 1.0f };
-			middle.MaterialIndex = 6;
+			middle.Material = MaterialAt(6);
 
 			right.Position = { 3.5f, -0.5f, -4.5f, 1.0f };
-			right.MaterialIndex = 5;
+			right.Material = MaterialAt(5);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -503,13 +500,13 @@ namespace Lucerna {
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, -1.0f, -2.0f, 0.5f };
-			left.MaterialIndex = 2;
+			left.Material = MaterialAt(2);
 
 			middle.Position = { 0.0f, -1.0f, -2.0f, 0.5f };
-			middle.MaterialIndex = 3;
+			middle.Material = MaterialAt(3);
 
 			right.Position = { 3.5f, -1.0f, -2.0f, 0.5f };
-			right.MaterialIndex = 4;
+			right.Material = MaterialAt(4);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -520,13 +517,13 @@ namespace Lucerna {
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, 2.2f, -5.5f, 0.5f };
-			left.MaterialIndex = 9;
+			left.Material = MaterialAt(9);
 
 			middle.Position = { 0.0f, 2.2f, -5.5f, 0.5f };
-			middle.MaterialIndex = 9;
+			middle.Material = MaterialAt(9);
 
 			right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
-			right.MaterialIndex = 9;
+			right.Material = MaterialAt(9);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -537,13 +534,13 @@ namespace Lucerna {
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, 2.2f, -3.0f, 0.5f };
-			left.MaterialIndex = 10;
+			left.Material = MaterialAt(10);
 
 			middle.Position = { 0.0f, 2.2f, -3.0f, 0.5f };
-			middle.MaterialIndex = 12;
+			middle.Material = MaterialAt(12);
 
 			right.Position = { 3.5f, 2.2f, -3.0f, 0.5f };
-			right.MaterialIndex = 11;
+			right.Material = MaterialAt(11);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -553,10 +550,10 @@ namespace Lucerna {
 		{
 			Sphere left, right;
 			left.Position = { -1.75f, -0.9f, -2.75f, 0.4f };
-			left.MaterialIndex = 8;
+			left.Material = MaterialAt(8);
 
 			right.Position = { 1.75f, -0.9f, -2.75f, 0.4f };
-			right.MaterialIndex = 7;
+			right.Material = MaterialAt(7);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(right);
@@ -570,14 +567,14 @@ namespace Lucerna {
 			bot.V = { 0.0f, 0.0f, -1.0f, 0.0f };
 			bot.Width = 20.0f;
 			bot.Height = 12.5f;
-			bot.MaterialIndex = 0;
+			bot.Material = MaterialAt(0);
 
 			back.PositionLLC = { -10.0f, -1.5f, -10.0f, 0.0f };
 			back.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 			back.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			back.Width = 20.0f;
 			back.Height = 8.0f;
-			back.MaterialIndex = 0;
+			back.Material = MaterialAt(0);
 
 			m_Quads.Add(bot);
 			m_Quads.Add(back);
@@ -591,18 +588,18 @@ namespace Lucerna {
 			panelLight1.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			panelLight1.Width = 10.0f;
 			panelLight1.Height = 8.0f;
-			panelLight1.MaterialIndex = 9;
+			panelLight1.Material = MaterialAt(9);
 
 			m_Quads.Add(panelLight1);
 		}
 
 		// SLAB
-		CreateBox({ -2.5, -1.5f, -3.5 }, { -1.0, -1.3f, -2.0 }, 1);
-		CreateBox({ 1.0, -1.5f, -3.5 }, { 2.5, -1.3f, -2.0 }, 1);
+		CreateBox({ -2.5, -1.5f, -3.5 }, { -1.0, -1.3f, -2.0 }, MaterialAt(1));
+		CreateBox({ 1.0, -1.5f, -3.5 }, { 2.5, -1.3f, -2.0 }, MaterialAt(1));
 
 		// MONOLITH
-		CreateBox({ -3.5, -1.5f, -7.3 }, { -2.0, 3.2f, -7.0 }, 1);
-		CreateBox({ 2.0, -1.5f, -7.3 }, { 3.5, 3.2f, -7.0 }, 1);
+		CreateBox({ -3.5, -1.5f, -7.3 }, { -2.0, 3.2f, -7.0 }, MaterialAt(1));
+		CreateBox({ 2.0, -1.5f, -7.3 }, { 3.5, 3.2f, -7.0 }, MaterialAt(1));
 	}
 
 	void World::PrepareSetup3() {
@@ -620,27 +617,27 @@ namespace Lucerna {
 		Material glass1 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.45f);
 		Material glass2 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.01f);
 
-		m_Materials.Add(white_diffuse);
-		m_Materials.Add(metal);
-		m_Materials.Add(red);
-		m_Materials.Add(blue);
-		m_Materials.Add(green);
-		m_Materials.Add(white_metal);
-		m_Materials.Add(white_glossy);
-		m_Materials.Add(glass1);
-		m_Materials.Add(glass2);
-		m_Materials.Add(light);
+		m_Assets.Materials.Add(white_diffuse);
+		m_Assets.Materials.Add(metal);
+		m_Assets.Materials.Add(red);
+		m_Assets.Materials.Add(blue);
+		m_Assets.Materials.Add(green);
+		m_Assets.Materials.Add(white_metal);
+		m_Assets.Materials.Add(white_glossy);
+		m_Assets.Materials.Add(glass1);
+		m_Assets.Materials.Add(glass2);
+		m_Assets.Materials.Add(light);
 
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, -0.5f, -4.5f, 1.0f };
-			left.MaterialIndex = 0;
+			left.Material = MaterialAt(0);
 
 			middle.Position = { 0.0f, -0.5f, -4.5f, 1.0f };
-			middle.MaterialIndex = 6;
+			middle.Material = MaterialAt(6);
 
 			right.Position = { 3.5f, -0.5f, -4.5f, 1.0f };
-			right.MaterialIndex = 5;
+			right.Material = MaterialAt(5);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -650,13 +647,13 @@ namespace Lucerna {
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, -1.0f, -2.0f, 0.5f };
-			left.MaterialIndex = 2;
+			left.Material = MaterialAt(2);
 
 			middle.Position = { 0.0f, -1.0f, -2.0f, 0.5f };
-			middle.MaterialIndex = 3;
+			middle.Material = MaterialAt(3);
 
 			right.Position = { 3.5f, -1.0f, -2.0f, 0.5f };
-			right.MaterialIndex = 4;
+			right.Material = MaterialAt(4);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -666,13 +663,13 @@ namespace Lucerna {
 		{
 			Sphere left, middle, right;
 			left.Position = { -3.5f, 2.2f, -5.5f, 0.5f };
-			left.MaterialIndex = 0;
+			left.Material = MaterialAt(0);
 
 			middle.Position = { 0.0f, 2.2f, -5.5f, 0.5f };
-			middle.MaterialIndex = 0;
+			middle.Material = MaterialAt(0);
 
 			right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
-			right.MaterialIndex = 0;
+			right.Material = MaterialAt(0);
 
 			m_Spheres.Add(left);
 			m_Spheres.Add(middle);
@@ -683,8 +680,8 @@ namespace Lucerna {
 		left.LoadObj("models/king.obj");
 		right.LoadObj("models/queen.obj");
 
-		UploadModel(left, { -1.75, -1.4, -2.75 }, 3);
-		UploadModel(right, { 1.75, -1.4, -2.75 }, 3);
+		UploadModel(left, { -1.75, -1.4, -2.75 }, MaterialAt(3));
+		UploadModel(right, { 1.75, -1.4, -2.75 }, MaterialAt(3));
 
 
 		{
@@ -694,14 +691,14 @@ namespace Lucerna {
 			bot.V = { 0.0f, 0.0f, -1.0f, 0.0f };
 			bot.Width = 10.0f;
 			bot.Height = 12.5f;
-			bot.MaterialIndex = 0;
+			bot.Material = MaterialAt(0);
 
 			back.PositionLLC = { -5.0f, -1.5f, -10.0f, 0.0f };
 			back.U = { 1.0f, 0.0f, 0.0f, 0.0f };
 			back.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			back.Width = 10.0f;
 			back.Height = 8.0f;
-			back.MaterialIndex = 0;
+			back.Material = MaterialAt(0);
 
 			m_Quads.Add(bot);
 			m_Quads.Add(back);
@@ -715,25 +712,25 @@ namespace Lucerna {
 			panelLight1.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			panelLight1.Width = 10.0f;
 			panelLight1.Height = 8.0f;
-			panelLight1.MaterialIndex = 9;
+			panelLight1.Material = MaterialAt(9);
 
 			panelLight2.PositionLLC = { -9.5f, 4.5f, -0.1f, 0.0f };
 			panelLight2.U = { 1.0f, 0.0f, 1.0f, 0.0f };
 			panelLight2.V = { 0.0f, 1.0f, -1.0f, 0.0f };
 			panelLight2.Width = 10.0f;
 			panelLight2.Height = 8.0f;
-			panelLight2.MaterialIndex = 9;
+			panelLight2.Material = MaterialAt(9);
 
 			m_Quads.Add(panelLight2);
 		}
 
 		// SLAB
-		CreateBox({ -2.5, -1.5f, -3.5 }, { -1.0, -1.3f, -2.0 }, 1);
-		CreateBox({ 1.0, -1.5f, -3.5 }, { 2.5, -1.3f, -2.0 }, 1);
+		CreateBox({ -2.5, -1.5f, -3.5 }, { -1.0, -1.3f, -2.0 }, MaterialAt(1));
+		CreateBox({ 1.0, -1.5f, -3.5 }, { 2.5, -1.3f, -2.0 }, MaterialAt(1));
 
 		// MONOLITH
-		CreateBox({ -3.5, -1.5f, -7.3 }, { -2.0, 3.2f, -7.0 }, 1);
-		CreateBox({ 2.0, -1.5f, -7.3 }, { 3.5, 3.2f, -7.0 }, 1);
+		CreateBox({ -3.5, -1.5f, -7.3 }, { -2.0, 3.2f, -7.0 }, MaterialAt(1));
+		CreateBox({ 2.0, -1.5f, -7.3 }, { 3.5, 3.2f, -7.0 }, MaterialAt(1));
 
 	}
 
@@ -759,12 +756,14 @@ namespace Lucerna {
 
 		// il material di fallback (0) serve solo ai triangoli senza usemtl; qui quasi tutti
 		// ce l'hanno, ma 0 e' comunque un indice MTL valido dopo la registrazione.
-		UploadModel(sponza, { 0.0f, 0.0f, 0.0f }, 0);
+		// l'asset prima del materiale: lo 0 esiste solo dopo che il MTL e' stato registrato
+		const ObjectId sponzaAsset = ObjAsset(sponza);
+		AddInstance(sponzaAsset, glm::mat4(1.0f), MaterialAt(0));
 
 		// I _ddn di Sponza sono in convenzione DirectX (verde verso il basso): sopra ogni fuga dei
 		// mattoni il verde e' positivo. L'MTL non lo dice, quindi lo fissa la scena.
-		for (Material& m : m_Materials)
-			if (m.NormalTexture >= 0.0f)
+		for (Material& m : m_Assets.Materials)
+			if (!m.NormalTexture.IsNil())
 				m.NormalFlipY = 1.0f;
 
 		// scala 0.01 + centratura su X/Z (il pavimento resta a y ~ -1.26)
@@ -775,19 +774,6 @@ namespace Lucerna {
 			m_Meshes.at(meshIndex).Transform = t;
 		}
 	}
-
-	// Un layer del sampler2DArray per path, deduplicato: due materiali con la stessa
-	// texture condividono il layer.
-	static int RegisterPath(std::vector<std::string>& paths, const std::string& path) {
-		for (size_t i = 0; i < paths.size(); i++)
-			if (paths[i] == path)
-				return static_cast<int>(i);
-		paths.push_back(path);
-		return static_cast<int>(paths.size()) - 1;
-	}
-
-	int World::RegisterTexture(const std::string& path) { return RegisterPath(m_TexturePaths, path); }
-	int World::RegisterDataTexture(const std::string& path) { return RegisterPath(m_DataTexturePaths, path); }
 
 	Material World::MaterialFromMtl(const MtlMaterial& mm) {
 		Material m;
@@ -813,98 +799,82 @@ namespace Lucerna {
 
 		// map_Kd: la texture porta il colore, quindi Color va a bianco per non tingerla due volte
 		if (!mm.map_Kd.empty()) {
-			m.AlbedoTexture = static_cast<float>(RegisterTexture(mm.map_Kd));
+			m.AlbedoTexture = m_Assets.RegisterTexture(mm.map_Kd, TextureKind::Color);
 			m.Color = glm::vec4(1.0f);
 		}
 		if (!mm.map_Bump.empty())
-			m.NormalTexture = static_cast<float>(RegisterDataTexture(mm.map_Bump));
+			m.NormalTexture = m_Assets.RegisterTexture(mm.map_Bump, TextureKind::Data);
 		// Molte copie di Sponza citano un _mask.tga che non distribuiscono e tengono la maschera
-		// nell'alpha della diffusa: se il file manca si usa quella (AlphaTexture = -1).
+		// nell'alpha della diffusa: se il file manca si usa quella (AlphaTexture nil).
 		if (!mm.map_d.empty()) {
 			if (std::filesystem::exists(mm.map_d))
-				m.AlphaTexture = static_cast<float>(RegisterDataTexture(mm.map_d));
+				m.AlphaTexture = m_Assets.RegisterTexture(mm.map_d, TextureKind::Data);
 			m.AlphaCutoff = 0.5f;
 		}
 		return m;
 	}
 
-	// Appende i materiali del MTL in coda a Materials e ritorna l'indice del primo. I triangoli
-	// del modello portano indici LOCALI (0..N-1): il chiamante li somma a questa base.
-	int World::RegisterMtlMaterials(const Model& model) {
-		const std::vector<MtlMaterial>& mtls = model.GetMaterials();
-		if (mtls.empty())
-			return -1;
+	// L'asset di un OBJ caricato (issue #26): se la sorgente c'e' gia' si riusa, cosi' due istanze
+	// dividono triangoli e BLAS e i materiali MTL non si duplicano. Altrimenti i materiali del MTL
+	// diventano gli slot dell'asset, e i triangoli citano lo slot con il loro indice locale.
+	ObjectId World::ObjAsset(const Model& model) {
+		if (const auto* existing = m_Assets.FindMesh({ model.GetPath() }))
+			return existing->Id;
 
-		const int base = static_cast<int>(m_Materials.size());
-		for (const MtlMaterial& mm : mtls)
-			m_Materials.Add(MaterialFromMtl(mm), mm.Name);
+		MeshAsset asset;
+		asset.Source = { model.GetPath() };
+		for (const MtlMaterial& mm : model.GetMaterials())
+			asset.MaterialSlots.push_back(m_Assets.Materials.Add(MaterialFromMtl(mm), mm.Name).Id);
 
-		std::cout << "MTL: registrati " << mtls.size() << " materiali (base " << base << ")"
-			<< ", texture totali " << m_TexturePaths.size() << std::endl;
-		return base;
+		asset.LocalMin = glm::vec4(1e30f);
+		asset.LocalMax = glm::vec4(-1e30f);
+		for (const Triangle* t : model.GetTriangles()) {
+			asset.LocalMin = glm::min(asset.LocalMin, glm::min(t->A, glm::min(t->B, t->C)));
+			asset.LocalMax = glm::max(asset.LocalMax, glm::max(t->A, glm::max(t->B, t->C)));
+			asset.Triangles.push_back(*t);
+		}
+
+		std::cout << "Model loaded: " << asset.Triangles.size() << " triangles, "
+			<< asset.MaterialSlots.size() << " MTL materials" << std::endl;
+		return m_Assets.Meshes.Add(asset, model.GetName()).Id;
 	}
 
-	void World::UploadModel(const Model& model, const glm::vec3& Position, int material) {
-		std::vector<Triangle*> triangles = model.GetTriangles();
+	// Un'istanza di asset. I triangoli restano in LOCAL SPACE: la posizione vive nella Transform.
+	int World::AddInstance(const ObjectId& asset, const glm::mat4& transform, const ObjectId& material) {
+		Mesh mesh;
+		mesh.Asset = asset;
+		mesh.Material = material;
+		mesh.Transform = transform;
+		const int index = m_Assets.Meshes.IndexOf(asset);
+		m_Meshes.Add(mesh, index >= 0 ? m_Assets.Meshes[index].Name : std::string());
+		m_Changes |= GeometryChanged | MeshesChanged;
+		return static_cast<int>(m_Meshes.size()) - 1;
+	}
 
-		if (triangles.empty()) {
+	void World::UploadModel(const Model& model, const glm::vec3& position, const ObjectId& material) {
+		if (model.GetTriangles().empty()) {
 			std::cerr << "Model upload skipped: no triangles were loaded." << std::endl;
 			return;
 		}
-
-		// OBJ multi-materiale: registra i materiali del MTL e ottieni l'indice base a cui
-		// rimappare gli indici locali dei triangoli. -1 = OBJ senza MTL (comportamento legacy).
-		const int matBase = RegisterMtlMaterials(model);
-
-		Mesh mesh;
-		mesh.FirstTriangle = static_cast<int>(m_Triangles.size());
-		mesh.NumTriangles = static_cast<int>(triangles.size());
-		mesh.MaterialIndex = static_cast<float>(material); // usato dai triangoli senza usemtl (-1)
-
-		glm::vec4 localMin(1e30f);
-		glm::vec4 localMax(-1e30f);
-
-		// i triangoli restano in LOCAL SPACE: la posizione vive nella Transform
-		for (const Triangle* t : triangles) {
-			Triangle tri = *t;
-
-			// rimappa l'indice materiale da locale (nel MTL) a globale (in Materials).
-			// -1 resta -1 e a valle diventa il fallback al materiale della mesh.
-			if (matBase >= 0 && tri.MaterialIndex >= 0.0f)
-				tri.MaterialIndex = static_cast<float>(matBase + static_cast<int>(tri.MaterialIndex));
-
-			localMin = glm::min(localMin, glm::min(tri.A, glm::min(tri.B, tri.C)));
-			localMax = glm::max(localMax, glm::max(tri.A, glm::max(tri.B, tri.C)));
-
-			m_Triangles.push_back(tri);
-		}
-
-		mesh.LocalMin = localMin;
-		mesh.LocalMax = localMax;
-
-		m_Meshes.Add(mesh, model.GetName());
-		m_MeshPaths.push_back(model.GetPath());
-		m_Meshes.at(static_cast<int>(m_Meshes.size()) - 1).Transform = glm::translate(glm::mat4(1.0f), Position);
-
-		std::cout << "Model uploaded: " << triangles.size() << " triangles (material "
-			<< material << ")" << std::endl;
+		AddInstance(ObjAsset(model), glm::translate(glm::mat4(1.0f), position), material);
 	}
 
-	// Carica un OBJ a runtime: i buffer dei triangoli si rifanno e tutti i BLAS si ricostruiscono.
-	// Costoso, ma e' un'azione esplicita dell'utente.
-	int World::AddMesh(const std::string& objPath, const glm::vec3& position, int material) {
-		Model model;
-		model.LoadObj(objPath.c_str());
-
-		if (model.GetTriangles().empty()) {
-			std::cerr << "AddMesh failed: " << objPath << std::endl;
-			return -1;
+	// Un'istanza di un OBJ a runtime. Il file si legge solo se la sua geometria non c'e' ancora.
+	int World::AddMesh(const std::string& objPath, const glm::vec3& position, const ObjectId& material) {
+		ObjectId asset;
+		if (const auto* existing = m_Assets.FindMesh({ objPath })) {
+			asset = existing->Id;
+		} else {
+			Model model;
+			model.LoadObj(objPath.c_str());
+			if (model.GetTriangles().empty()) {
+				std::cerr << "AddMesh failed: " << objPath << std::endl;
+				return -1;
+			}
+			asset = ObjAsset(model);
+			m_Changes |= MaterialsChanged | TexturesChanged; // i materiali del suo MTL
 		}
-
-		UploadModel(model, position, material);
-		m_Changes |= GeometryChanged | MeshesChanged;
-
-		return static_cast<int>(m_Meshes.size()) - 1;
+		return AddInstance(asset, glm::translate(glm::mat4(1.0f), position), material);
 	}
 
 	int World::QuadOwnerBox(int quadIndex) const {
@@ -967,33 +937,17 @@ namespace Lucerna {
 		return true;
 	}
 
-	// I triangoli di tutte le mesh vivono concatenati in Triangles, e ogni Mesh ci
-	// punta con FirstTriangle. Togliendone una si apre un buco: vanno rimossi i suoi
-	// triangoli e va sottratto il conteggio a tutte le mesh che stavano dopo, altrimenti
-	// le rimanenti indicherebbero triangoli altrui. Il RenderScene rifa' i buffer GPU.
+	// Toglie l'istanza. La geometria resta nella libreria: un'altra istanza puo' usarla, e un
+	// asset senza istanze non costa niente sulla GPU (il RenderScene carica solo quelli usati).
 	bool World::RemoveMesh(int meshIndex) {
 		if (meshIndex < 0 || meshIndex >= static_cast<int>(m_Meshes.size()))
 			return false;
-
-		const int first = static_cast<int>(m_Meshes[meshIndex].FirstTriangle);
-		const int count = static_cast<int>(m_Meshes[meshIndex].NumTriangles);
-
-		m_Triangles.erase(m_Triangles.begin() + first, m_Triangles.begin() + first + count);
-
 		m_Meshes.erase(m_Meshes.begin() + meshIndex);
-		if (meshIndex < static_cast<int>(m_MeshPaths.size()))
-			m_MeshPaths.erase(m_MeshPaths.begin() + meshIndex);
-
-		for (int i = meshIndex; i < static_cast<int>(m_Meshes.size()); i++)
-			m_Meshes[i].FirstTriangle -= count;
-
 		m_Changes |= GeometryChanged | MeshesChanged;
-
-		std::cout << "Mesh " << meshIndex << " removed (" << count << " triangles)" << std::endl;
 		return true;
 	}
 
-	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex) {
+	void World::CreateBox(const glm::vec3& a, const glm::vec3& b, const ObjectId& material) {
 		Box box;
 		box.Min = glm::vec4(fmin(a.x, b.x), fmin(a.y, b.y), fmin(a.z, b.z), 0.0f);
 		box.Max = glm::vec4(fmax(a.x, b.x), fmax(a.y, b.y), fmax(a.z, b.z), 0.0f);
@@ -1007,11 +961,11 @@ namespace Lucerna {
 		glm::vec3 nz = glm::normalize(dz);
 
 		box.index = m_Quads.size();
-		box.MaterialIndex = MaterialIndex;
+		box.Material = material;
 
 		Quad quad;
 
-		quad.MaterialIndex = box.MaterialIndex;
+		quad.Material = material;
 
 		// front
 		{
@@ -1092,7 +1046,7 @@ namespace Lucerna {
 			quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			quad.Width = 6.0f;
 			quad.Height = 4.0f;
-			quad.MaterialIndex = 5;
+			quad.Material = MaterialAt(5);
 
 			m_Quads.Add(quad);
 		}
@@ -1105,7 +1059,7 @@ namespace Lucerna {
 			quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			quad.Width = 4.0f;
 			quad.Height = 4.0f;
-			quad.MaterialIndex = 4;
+			quad.Material = MaterialAt(4);
 
 			m_Quads.Add(quad);
 		}
@@ -1118,7 +1072,7 @@ namespace Lucerna {
 			quad.V = { 0.0f, 1.0f, 0.0f, 0.0f };
 			quad.Width = 6.0f;
 			quad.Height = 4.0f;
-			quad.MaterialIndex = 0;
+			quad.Material = MaterialAt(0);
 
 			m_Quads.Add(quad);
 		}
@@ -1131,7 +1085,7 @@ namespace Lucerna {
 			quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
 			quad.Width = 4.0f;
 			quad.Height = 6.0f;
-			quad.MaterialIndex = 4;
+			quad.Material = MaterialAt(4);
 
 			m_Quads.Add(quad);
 		}
@@ -1144,7 +1098,7 @@ namespace Lucerna {
 			quad.V = { 0.0f, 0.0f, -1.0f, 0.0f };
 			quad.Width = 4.0f;
 			quad.Height = 6.0f;
-			quad.MaterialIndex = 4;
+			quad.Material = MaterialAt(4);
 
 			m_Quads.Add(quad);
 		}
@@ -1157,7 +1111,7 @@ namespace Lucerna {
 			quad.V = { 0.0f, 0.0f, 1.0f, 0.0f };
 			quad.Width = 0.5f;
 			quad.Height = 0.5f;
-			quad.MaterialIndex = 3;
+			quad.Material = MaterialAt(3);
 
 			m_Quads.Add(quad);
 		}
@@ -1195,13 +1149,13 @@ namespace Lucerna {
 		auto* object = m_Meshes.Find(id);
 		if (object == nullptr)
 			return;
-		// i triangoli appartengono alla geometria: qui cambiano solo transform e materiale
+		// l'asset e' la geometria: qui cambiano solo transform e materiale
 		object->Transform = mesh.Transform;
-		object->MaterialIndex = mesh.MaterialIndex;
+		object->Material = mesh.Material;
 		m_Changes |= MeshesChanged;
 	}
 	void World::Set(const ObjectId& id, const Material& material) {
-		if (Assign(m_Materials, id, material)) m_Changes |= MaterialsChanged;
+		if (Assign(m_Assets.Materials, id, material)) m_Changes |= MaterialsChanged;
 	}
 	void World::Set(const ObjectId& id, const PunctualLight& light) {
 		if (Assign(m_PunctualLights, id, light)) m_Changes |= LightsChanged;
@@ -1234,7 +1188,7 @@ namespace Lucerna {
 			return false;
 		};
 		rename(m_Spheres) || rename(m_Quads) || rename(m_Boxes) || rename(m_Meshes)
-			|| rename(m_PunctualLights) || rename(m_Materials);
+			|| rename(m_PunctualLights) || rename(m_Assets.Materials);
 	}
 
 	int World::AddSphere(const Sphere& sphere) {
@@ -1253,13 +1207,51 @@ namespace Lucerna {
 		return static_cast<int>(m_PunctualLights.size()) - 1;
 	}
 	int World::AddMaterial(const Material& material) {
-		m_Materials.Add(material);
+		m_Assets.Materials.Add(material);
 		m_Changes |= MaterialsChanged;
-		return static_cast<int>(m_Materials.size()) - 1;
+		return static_cast<int>(m_Assets.Materials.size()) - 1;
 	}
-	void World::AddTexture(const std::string& path) {
-		m_TexturePaths.push_back(path);
+	void World::AddTexture(const std::string& path, TextureKind kind) {
+		m_Assets.RegisterTexture(path, kind);
 		m_Changes |= TexturesChanged;
+	}
+
+	bool World::RemoveTexture(const ObjectId& id) {
+		const int index = m_Assets.Textures.IndexOf(id);
+		if (index < 0 || m_Assets.IsTextureUsed(id))
+			return false;
+		m_Assets.Textures.erase(m_Assets.Textures.begin() + index);
+		m_Changes |= TexturesChanged;
+		return true;
+	}
+
+	ObjectId World::MaterialAt(float index) const {
+		const int i = static_cast<int>(index);
+		if (i < 0 || i >= static_cast<int>(m_Assets.Materials.size())) {
+			std::cerr << "MaterialAt: nessun materiale " << i << std::endl;
+			return {};
+		}
+		return m_Assets.Materials[i].Id;
+	}
+
+	const MeshAsset* World::AssetOf(const Mesh& mesh) const {
+		for (const auto& asset : m_Assets.Meshes)
+			if (asset.Id == mesh.Asset)
+				return &asset;
+		return nullptr;
+	}
+
+	AABB World::WorldBounds(const Mesh& mesh) const {
+		AABB box;
+		const MeshAsset* asset = AssetOf(mesh);
+		if (asset == nullptr)
+			return box;
+		for (int corner = 0; corner < 8; corner++)
+			box.expand(glm::vec3(mesh.Transform * glm::vec4(
+				(corner & 1) ? asset->LocalMax.x : asset->LocalMin.x,
+				(corner & 2) ? asset->LocalMax.y : asset->LocalMin.y,
+				(corner & 4) ? asset->LocalMax.z : asset->LocalMin.z, 1.0f)));
+		return box;
 	}
 
 	bool World::RemoveLight(int lightIndex) {

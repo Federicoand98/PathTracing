@@ -6,13 +6,13 @@
 #include "ptpch.h"
 #include "Core/Random.h"
 #include "Core/Fields.h"
+#include "Core/ObjectId.h"
 
 namespace Lucerna {
 
-	// ATTENZIONE al layout: questo struct viene caricato tale e quale in un SSBO std430.
-	// In std430 un vec4 e' allineato a 16 byte, ma alignof(glm::vec4) e' 4: senza il
-	// padding esplicito qui sotto il C++ metterebbe RefractionColor a 72 mentre lo shader
-	// la legge a 80, e l'intero struct avrebbe stride 96 invece di 112.
+	// Un materiale: un asset della AssetLibrary (issue #26). Le texture sono altri asset e si
+	// citano per id; il layer del texture array lo sceglie il RenderScene, che ne fa un
+	// GpuMaterial (Render/GpuTypes.h) con lo stesso ordine di campi.
 	struct Material {
 		glm::vec4 Color {0.0f};
 		float Roughness = 1.0f;
@@ -23,12 +23,11 @@ namespace Lucerna {
 		glm::vec4 SpecularColor{0.0f};
 		float RefractionProbability = 0.0f;
 		float RefractionRoughness = 1.0f;
-		glm::vec2 _pad0{ 0.0f };     // porta RefractionColor all'offset 80 (multiplo di 16)
 		// bianco = vetro trasparente (colore trasmesso a distanza unitaria). Nero darebbe
 		// vetro completamente assorbente: vedi il Beer-Lambert in PathTracing.comp.
 		glm::vec4 RefractionColor{1.0f};
 
-		float AlbedoTexture = -1.0f; // layer nel sampler2DArray, -1 = nessuna texture
+		ObjectId AlbedoTexture;      // texture a colori, nil = nessuna
 		float Checker = 0.0f;        // 0 = off, 1 = scacchiera UV, 2 = scacchiera world-space
 		float CheckerScale = 8.0f;   // celle per unita' di UV (o di spazio, se world-space)
 
@@ -50,32 +49,21 @@ namespace Lucerna {
 		// ignorano (il loro F0 è già la base color).
 		float SpecularTint = 0.0f;
 
-		// Normal map in spazio tangente (ADR 0007). Il layer indicizza World::DataTexturePaths,
-		// un array separato da quello dell'albedo perche' i normal map non sono sRGB.
-		float NormalTexture = -1.0f; // -1 = nessun normal map
+		// Normal map in spazio tangente (ADR 0007): una texture di dati, non sRGB
+		ObjectId NormalTexture;      // nil = nessun normal map
 		float NormalStrength = 1.0f; // scala la pendenza: 0 = piatto, 1 = come authored
 		float NormalFlipY = 0.0f;    // 1 = verde invertito (convenzione DirectX)
 
 		// Alpha mask (ADR 0008). AlphaCutoff > 0 = materiale mascherato: i suoi triangoli vanno
 		// nella geometria non opaca del BLAS. Lo decidono i loader, la UI cambia solo la soglia.
-		float AlphaTexture = -1.0f;  // layer in DataTexturePaths (canale rosso), -1 = alpha dell'albedo
+		ObjectId AlphaTexture;       // texture di dati (canale rosso), nil = alpha dell'albedo
 		float AlphaCutoff = 0.0f;    // il raggio passa dove l'alpha e' sotto la soglia; 0 = opaco
-		float _pad2 = 0.0f;          // porta la dimensione a 192, multiplo di 16
 	};
-
-	static_assert(sizeof(Material) == 192, "Material deve essere 192 byte per combaciare con lo std430");
-	static_assert(offsetof(Material, RefractionColor) == 80, "RefractionColor deve stare a 80 (std430 allinea i vec4 a 16)");
-	static_assert(offsetof(Material, AlbedoTexture) == 96, "AlbedoTexture deve stare a 96");
-	static_assert(offsetof(Material, NoiseColorA) == 128, "NoiseColorA deve stare a 128 (std430 allinea i vec4 a 16)");
-	static_assert(offsetof(Material, Metalness) == 160, "Metalness deve stare a 160");
-	static_assert(offsetof(Material, SpecularTint) == 164, "SpecularTint deve stare a 164");
-	static_assert(offsetof(Material, NormalTexture) == 168, "NormalTexture deve stare a 168");
-	static_assert(offsetof(Material, AlphaCutoff) == 184, "AlphaCutoff deve stare a 184");
 
 	// Dielettrico opaco "sano" nel senso del modello Principled: riflesso non tinto
 	// (SpecularColor bianco), F0 standard 0.04, niente trasmissione. E' il punto di
 	// partenza che l'editor Principled si aspetta.
-	// Chiavi JSON dei campi (ADR 0010). Il padding std430 non si salva; i campi assenti in un
+	// Chiavi JSON dei campi (ADR 0010); le texture si scrivono col loro id. I campi assenti in un
 	// file restano al default, quindi una scena vecchia resta caricabile quando se ne aggiunge uno.
 	constexpr auto JsonFields(const Material*) {
 		using M = Material;

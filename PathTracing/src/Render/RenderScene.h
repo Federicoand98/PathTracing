@@ -59,6 +59,7 @@ namespace Lucerna {
 		void BuildGeometry(const World& world);
 		void BuildMeshInfos(const World& world);
 		void BuildLights(const World& world);
+		float MaterialIndexOf(const ObjectId& id) const; // -1 = nessun materiale
 		void Upload(GpuBuffer& buffer, const void* data, size_t bytes);
 		void LoadEnvironment();
 
@@ -72,8 +73,13 @@ namespace Lucerna {
 		GpuImage m_Environment;
 		VkSampler m_EnvironmentSampler = VK_NULL_HANDLE;
 
-		std::vector<float> m_NumOpaque;  // per mesh: la partizione si rifa' solo con la geometria
-		std::vector<MeshInfo> m_MeshInfos; // l'ingresso della TLAS, che si rifa' anche per le primitive
+		// Gli id diventano posizioni nei buffer solo qui (issue #26)
+		std::unordered_map<ObjectId, int> m_MaterialIndex;
+		std::unordered_map<ObjectId, int> m_TextureLayer;   // layer nell'array del suo tipo
+		std::unordered_map<ObjectId, int> m_AssetBlas;      // asset di geometria -> indice in m_AssetRanges
+		std::vector<MeshInfo> m_AssetRanges;  // per asset usato: triangoli e partizione, il suo BLAS
+		std::vector<MeshInfo> m_MeshInfos;    // per istanza: l'ingresso della TLAS
+		std::vector<int> m_InstanceBlas;      // per istanza: il BLAS del suo asset, -1 = nessuno
 
 		int m_NumLights = 0, m_NumSpheres = 0, m_NumMaterials = 0;
 		glm::vec3 m_BackgroundColor{ 0.0f };

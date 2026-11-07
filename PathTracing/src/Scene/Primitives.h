@@ -7,6 +7,7 @@
 
 #include "ptpch.h"
 #include "Core/Fields.h"
+#include "Core/ObjectId.h"
 
 namespace Lucerna {
 
@@ -31,22 +32,6 @@ namespace Lucerna {
         }
     };
 
-    // Struttura di authoring lato CPU: comoda da costruire, mai caricata sulla GPU.
-    struct Triangle {
-        glm::vec4 A;
-        glm::vec4 B;
-        glm::vec4 C;
-        glm::vec4 NormalA;
-        glm::vec4 NormalB;
-        glm::vec4 NormalC;
-        glm::vec2 UVA{ 0.0f };
-        glm::vec2 UVB{ 0.0f };
-        glm::vec2 UVC{ 0.0f };
-        // -1 = eredita il materiale della mesh (mono-materiale); >= 0 = materiale esplicito
-        // per triangolo, per gli OBJ multi-materiale (usemtl). Finisce in TriangleUV.A.z.
-        float MaterialIndex = -1.0f;
-    };
-
     struct Face {
         int vertex_ins[3];
         int uv_ins[3];
@@ -54,45 +39,41 @@ namespace Lucerna {
         int material = -1; // indice LOCALE nel MTL del modello, -1 = nessun usemtl
     };
 
-    // Una mesh della scena: i suoi triangoli (in LOCAL SPACE, in World::Triangles a partire da
-    // FirstTriangle) e dove sta. Trasformarla cambia solo Transform: i triangoli e il BLAS restano.
-    // La versione GPU, con inversa, AABB world e la divisione opachi/mascherati, la deriva il
-    // RenderScene (issue #24).
+    // Un'istanza di mesh (issue #26): dove sta e quale asset di geometria mostra. Due istanze
+    // dello stesso asset condividono triangoli e BLAS; trasformarle cambia solo Transform.
     struct Mesh {
         glm::mat4 Transform{ 1.0f };
-        glm::vec4 LocalMin{ 0.0f };   // AABB in local space
-        glm::vec4 LocalMax{ 0.0f };
-        int FirstTriangle = 0;
-        int NumTriangles = 0;
-        float MaterialIndex = 0;      // float come per sfere e quad: lo modifica lo stesso MaterialCombo
-
-        // AABB world: il box che racchiude gli 8 angoli locali trasformati
-        AABB WorldBounds() const {
-            AABB box;
-            for (int corner = 0; corner < 8; corner++)
-                box.expand(glm::vec3(Transform * glm::vec4(
-                    (corner & 1) ? LocalMax.x : LocalMin.x,
-                    (corner & 2) ? LocalMax.y : LocalMin.y,
-                    (corner & 4) ? LocalMax.z : LocalMin.z, 1.0f)));
-            return box;
-        }
+        ObjectId Asset;     // un MeshAsset della AssetLibrary
+        ObjectId Material;  // per i triangoli dell'asset senza slot (MaterialSlot = -1)
     };
+
+    constexpr auto JsonFields(const Mesh*) {
+        return std::make_tuple(Field("transform", &Mesh::Transform), Field("asset", &Mesh::Asset), Field("material", &Mesh::Material));
+    }
 
     struct Sphere {
         glm::vec4 Position{0.0f}; // (x, y, z, RADIUS)
-        float MaterialIndex = 0;
-        glm::vec3 padding{ 0.0f };
+        ObjectId Material;
     };
 
     struct Quad {
         glm::vec4 PositionLLC{0.0f};
         glm::vec4 U{0.0f};
         glm::vec4 V{0.0f};
-        float MaterialIndex = 0;
+        ObjectId Material;
         float Width = 1.0f;
         float Height = 1.0f;
-        float padding = 0.0f;
     };
+
+    constexpr auto JsonFields(const Sphere*) {
+        return std::make_tuple(Field("position", &Sphere::Position), Field("material", &Sphere::Material));
+    }
+
+    constexpr auto JsonFields(const Quad*) {
+        using Q = Quad;
+        return std::make_tuple(Field("posLLC", &Q::PositionLLC), Field("u", &Q::U), Field("v", &Q::V),
+                               Field("width", &Q::Width), Field("height", &Q::Height), Field("material", &Q::Material));
+    }
 
     // Il Sole: l'Emitter senza geometria (ADR 0006). Angoli in gradi. Elevazione 0 = orizzonte,
     // 90 = zenit; azimut attorno all'asse y, 0 = verso +z, 90 = verso +x.
@@ -173,9 +154,8 @@ namespace Lucerna {
     struct Box {
         glm::vec4 Min{ 0.0f };
         glm::vec4 Max{ 0.0f };
-        float index = 0;
-        float MaterialIndex = 0;
-        glm::vec2 padding{ 0.0f };
+        float index = 0;    // il primo dei suoi 6 quad, consecutivi
+        ObjectId Material;
 
         // Riscrive le 6 facce del box nella lista dei quad (un ObjectList, o un vettore di Quad)
         template<class QuadList>
@@ -190,7 +170,7 @@ namespace Lucerna {
 
             Quad quad;
 
-            quad.MaterialIndex = MaterialIndex;
+            quad.Material = Material;
 
             // front
             {
@@ -259,6 +239,11 @@ namespace Lucerna {
             }
         }
     };
+
+    // Le sue 6 facce non si salvano: le rigenera CreateBox al load
+    constexpr auto JsonFields(const Box*) {
+        return std::make_tuple(Field("min", &Box::Min), Field("max", &Box::Max), Field("material", &Box::Material));
+    }
 }
 
 #endif //PATHTRACING_PRIMITIVES_H

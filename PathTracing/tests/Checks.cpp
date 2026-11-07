@@ -1,7 +1,7 @@
 // Controlli della logica senza GPU: si lanciano con ./build/LucernaChecks, escono con 1 al primo
 // che fallisce. Ne aggiungo uno quando una logica ha casi limite che un render non mostra.
 #include "Core/ObjectId.h"
-#include "Scene/SceneObject.h"
+#include "Core/SceneObject.h"
 #include "Legacy/World.h"
 
 #include <cstdio>
@@ -74,7 +74,7 @@ int main() {
 	CHECK(world.TakeChanges() == CameraChanged);
 	world.Set(ObjectId::Generate(), moved);             // un id che non c'e' non fa niente
 	CHECK(world.TakeChanges() == NoChange);
-	world.CreateBox(glm::vec3(0.0f), glm::vec3(1.0f), 0.0f);
+	world.CreateBox(glm::vec3(0.0f), glm::vec3(1.0f), ObjectId{});
 	CHECK(world.TakeChanges() == PrimitivesChanged);
 	Box box = world.Boxes()[0];
 	const std::vector<Quad> facesBefore = world.Quads().Pack();
@@ -89,6 +89,26 @@ int main() {
 	CHECK(facesAfter.size() == 6 && facesMoved);
 	world.RemoveSphere(s);
 	CHECK(world.TakeChanges() == PrimitivesChanged && world.Spheres().empty());
+
+	// Asset (issue #26): lo stesso OBJ piazzato due volte si carica una volta sola
+	World assets;
+	const int first = assets.AddMesh("res/models/pawn.obj", glm::vec3(0.0f), ObjectId{});
+	const int second = assets.AddMesh("res/models/pawn.obj", glm::vec3(1.0f), ObjectId{});
+	CHECK(first == 0 && second == 1 && assets.Meshes().size() == 2);
+	CHECK(assets.Assets().Meshes.size() == 1 && assets.Meshes()[0].Asset == assets.Meshes()[1].Asset);
+	CHECK(assets.AssetOf(assets.Meshes()[1]) != nullptr && !assets.AssetOf(assets.Meshes()[1])->Triangles.empty());
+
+	// Una texture usata da un materiale non si toglie; una inutilizzata si', e libera il suo posto
+	assets.TakeChanges();
+	assets.AddTexture("textures/a.png", TextureKind::Color);
+	assets.AddTexture("textures/a.png", TextureKind::Color);          // stessa immagine e tipo: una sola
+	assets.AddTexture("textures/a.png", TextureKind::Data);           // come dato e' un altro asset
+	CHECK(assets.Textures().size() == 2 && assets.TakeChanges() == TexturesChanged);
+	Material textured;
+	textured.AlbedoTexture = assets.Textures()[0].Id;
+	assets.AddMaterial(textured);
+	CHECK(!assets.RemoveTexture(assets.Textures()[0].Id) && assets.Textures().size() == 2);
+	CHECK(assets.RemoveTexture(assets.Textures()[1].Id) && assets.Textures().size() == 1);
 
 	return failures ? 1 : 0;
 }

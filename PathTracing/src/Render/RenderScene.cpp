@@ -8,13 +8,14 @@ namespace Lucerna {
 	namespace {
 		// Gli emettitori per la NEE: sfere e quad con materiale emissivo, il Sole, le luci punto e
 		// spot. I triangoli emissivi delle mesh sono esclusi (nessuna scena li usa; li campiona il BSDF).
-		std::vector<GPULight> CollectLights(const World& world) {
+		std::vector<GPULight> CollectLights(const World& world, const std::unordered_map<ObjectId, int>& materialIndex) {
 			std::vector<GPULight> lights;
 
-			auto radianceOf = [&](int matIndex, glm::vec3& outRadiance) -> bool {
-				if (matIndex < 0 || matIndex >= static_cast<int>(world.Materials().size()))
+			auto radianceOf = [&](const ObjectId& id, glm::vec3& outRadiance) -> bool {
+				const auto found = materialIndex.find(id);
+				if (found == materialIndex.end())
 					return false;
-				const Material& m = world.Materials()[matIndex];
+				const Material& m = world.Materials()[found->second];
 				glm::vec3 rad = glm::vec3(m.EmissiveColor) * m.EmissiveStrenght;
 				// luminanza Rec.709: scarta gli emissivi neri o a strength nulla
 				float lum = glm::dot(rad, glm::vec3(0.2126f, 0.7152f, 0.0722f));
@@ -27,7 +28,7 @@ namespace Lucerna {
 			// Sfere emissive: campionate via cono (solid angle). Meta = (tipo=0, objType=0, indice).
 			for (size_t i = 0; i < world.Spheres().size(); i++) {
 				glm::vec3 rad;
-				if (!radianceOf(static_cast<int>(world.Spheres()[i].MaterialIndex), rad))
+				if (!radianceOf(world.Spheres()[i].Material, rad))
 					continue;
 				float r = world.Spheres()[i].Position.w;
 				GPULight L;
@@ -42,7 +43,7 @@ namespace Lucerna {
 			// il campionamento nello shader e' q = LLC + s*E1 + t*E2 con s,t in [0,1].
 			for (size_t i = 0; i < world.Quads().size(); i++) {
 				glm::vec3 rad;
-				if (!radianceOf(static_cast<int>(world.Quads()[i].MaterialIndex), rad))
+				if (!radianceOf(world.Quads()[i].Material, rad))
 					continue;
 				glm::vec3 u = glm::vec3(world.Quads()[i].U);
 				glm::vec3 v = glm::vec3(world.Quads()[i].V);
@@ -144,6 +145,43 @@ namespace Lucerna {
 
 			return boxes;
 		}
+
+		// Il Material degli asset come lo legge lo shader: stessi campi, layer al posto degli id
+		GpuMaterial ToGpu(const Material& m, const std::unordered_map<ObjectId, int>& layer) {
+			auto layerOf = [&](const ObjectId& id) {
+				const auto found = layer.find(id);
+				return found == layer.end() ? -1.0f : static_cast<float>(found->second);
+			};
+			GpuMaterial g;
+			g.Color = m.Color;
+			g.Roughness = m.Roughness;
+			g.SpecularProbability = m.SpecularProbability;
+			g.RefractionRatio = m.RefractionRatio;
+			g.EmissiveStrenght = m.EmissiveStrenght;
+			g.EmissiveColor = m.EmissiveColor;
+			g.SpecularColor = m.SpecularColor;
+			g.RefractionProbability = m.RefractionProbability;
+			g.RefractionRoughness = m.RefractionRoughness;
+			g.RefractionColor = m.RefractionColor;
+			g.AlbedoTexture = layerOf(m.AlbedoTexture);
+			g.Checker = m.Checker;
+			g.CheckerScale = m.CheckerScale;
+			g.NoiseType = m.NoiseType;
+			g.NoiseScale = m.NoiseScale;
+			g.NoiseBlend = m.NoiseBlend;
+			g.NoiseOctaves = m.NoiseOctaves;
+			g.NoiseTurbulence = m.NoiseTurbulence;
+			g.NoiseColorA = m.NoiseColorA;
+			g.NoiseColorB = m.NoiseColorB;
+			g.Metalness = m.Metalness;
+			g.SpecularTint = m.SpecularTint;
+			g.NormalTexture = layerOf(m.NormalTexture);
+			g.NormalStrength = m.NormalStrength;
+			g.NormalFlipY = m.NormalFlipY;
+			g.AlphaTexture = layerOf(m.AlphaTexture);
+			g.AlphaCutoff = m.AlphaCutoff;
+			return g;
+		}
 	}
 
 	RenderScene::RenderScene() {
@@ -244,35 +282,72 @@ namespace Lucerna {
 			vk.UploadBuffer(buffer, data, bytes);
 	}
 
+	float RenderScene::MaterialIndexOf(const ObjectId& id) const {
+		const auto found = m_MaterialIndex.find(id);
+		return found == m_MaterialIndex.end() ? -1.0f : static_cast<float>(found->second);
+	}
+
 	void RenderScene::Sync(const World& world, uint32_t changes) {
-		// il decode delle immagini e' costoso: si ricarica solo se l'elenco e' cambiato
+		// Prima gli indici: tutto il resto traduce gli id in posizioni nei buffer. I materiali si
+		// aggiungono solo in coda, quindi gli indici gia' caricati restano validi.
+		// Un materiale modificato ricarica solo i materiali; uno nuovo cambia anche gli indici
+		// che primitive e mesh portano sulla GPU.
+		bool materialsAdded = false;
+		if (changes & MaterialsChanged) {
+			materialsAdded = world.Materials().size() != m_MaterialIndex.size();
+			for (size_t i = 0; i < world.Materials().size() && !materialsAdded; i++) {
+				const auto found = m_MaterialIndex.find(world.Materials()[i].Id);
+				materialsAdded = found == m_MaterialIndex.end() || found->second != static_cast<int>(i);
+			}
+		}
+		if (materialsAdded) {
+			m_MaterialIndex.clear();
+			for (size_t i = 0; i < world.Materials().size(); i++)
+				m_MaterialIndex[world.Materials()[i].Id] = static_cast<int>(i);
+		}
+
+		// I layer sono un dettaglio della GPU (issue #26): ogni tipo di texture ha il suo array, e
+		// una texture tolta libera il suo. Il decode e' costoso: si ricarica solo se l'elenco cambia.
 		if (changes & TexturesChanged) {
-			m_AlbedoTextures.Load(world.TexturePaths());
-			m_DataTextures.Load(world.DataTexturePaths(), 1024, VK_FORMAT_R8G8B8A8_UNORM);
+			std::vector<std::string> color, data;
+			m_TextureLayer.clear();
+			for (const auto& texture : world.Textures()) {
+				std::vector<std::string>& list = texture.Kind == TextureKind::Color ? color : data;
+				m_TextureLayer[texture.Id] = static_cast<int>(list.size());
+				list.push_back(texture.Path);
+			}
+			m_AlbedoTextures.Load(color);
+			m_DataTextures.Load(data, 1024, VK_FORMAT_R8G8B8A8_UNORM);
 		}
 
 		if (changes & GeometryChanged)
 			BuildGeometry(world);
-		if (changes & (GeometryChanged | MeshesChanged))
+		if ((changes & (GeometryChanged | MeshesChanged)) || materialsAdded)
 			BuildMeshInfos(world);
 		if (changes & GeometryChanged)
-			m_Accel.BuildMeshes(m_MeshInfos, m_TriPositions);
+			m_Accel.BuildMeshes(m_AssetRanges, m_TriPositions);
 
-		if (changes & PrimitivesChanged) {
-			// Gli oggetti portano anche id e nome: sulla GPU vanno i soli dati (issue #23)
-			const std::vector<Sphere> spheres = world.Spheres().Pack();
-			const std::vector<Quad> quads = world.Quads().Pack();
-			Upload(m_Spheres, spheres.data(), sizeof(Sphere) * spheres.size());
-			Upload(m_Quads, quads.data(), sizeof(Quad) * quads.size());
+		if ((changes & PrimitivesChanged) || materialsAdded) {
+			std::vector<GpuSphere> spheres;
+			for (const Sphere& s : world.Spheres())
+				spheres.push_back({ s.Position, MaterialIndexOf(s.Material) });
+			std::vector<GpuQuad> quads;
+			for (const Quad& q : world.Quads())
+				quads.push_back({ q.PositionLLC, q.U, q.V, MaterialIndexOf(q.Material), q.Width, q.Height });
+			Upload(m_Spheres, spheres.data(), sizeof(GpuSphere) * spheres.size());
+			Upload(m_Quads, quads.data(), sizeof(GpuQuad) * quads.size());
 			m_NumSpheres = static_cast<int>(spheres.size());
-			m_Accel.BuildPrimitives(PrimitiveBounds(world));
 		}
+		if (changes & PrimitivesChanged)
+			m_Accel.BuildPrimitives(PrimitiveBounds(world));
 		if (changes & (GeometryChanged | MeshesChanged | PrimitivesChanged))
-			m_Accel.BuildTopLevel(m_MeshInfos);
+			m_Accel.BuildTopLevel(m_MeshInfos, m_InstanceBlas);
 
-		if (changes & MaterialsChanged) {
-			const std::vector<Material> materials = world.Materials().Pack();
-			Upload(m_Materials, materials.data(), sizeof(Material) * materials.size());
+		if (changes & (MaterialsChanged | TexturesChanged)) {
+			std::vector<GpuMaterial> materials;
+			for (const Material& m : world.Materials())
+				materials.push_back(ToGpu(m, m_TextureLayer));
+			Upload(m_Materials, materials.data(), sizeof(GpuMaterial) * materials.size());
 			m_NumMaterials = static_cast<int>(materials.size());
 		}
 
@@ -286,38 +361,60 @@ namespace Lucerna {
 		}
 	}
 
-	// Separa posizioni, normali e UV nei buffer dei triangoli (local space) e ricostruisce i BLAS.
-	// Dentro ogni mesh i triangoli mascherati vanno in coda: diventano la seconda geometria del
-	// BLAS, l'unica senza il flag opaco (ADR 0008). Il World tiene l'ordine in cui li ha caricati.
+	// I triangoli degli asset usati da almeno un'istanza, uno dopo l'altro, e un BLAS per asset:
+	// due istanze dello stesso asset dividono entrambi (issue #26). Dentro ogni asset i triangoli
+	// mascherati vanno in coda e diventano la seconda geometria del BLAS, l'unica non opaca
+	// (ADR 0008). Lo slot di un triangolo diventa l'indice del suo materiale nel buffer.
 	void RenderScene::BuildGeometry(const World& world) {
-		const std::vector<Triangle>& triangles = world.Triangles();
-		std::vector<uint32_t> order(triangles.size());
-		for (uint32_t i = 0; i < order.size(); i++)
-			order[i] = i;
-
-		m_NumOpaque.assign(world.Meshes().size(), 0.0f);
-		for (size_t m = 0; m < world.Meshes().size(); m++) {
-			const Mesh& mesh = world.Meshes()[m];
-			auto first = order.begin() + mesh.FirstTriangle;
-			auto opaqueEnd = std::stable_partition(first, first + mesh.NumTriangles, [&](uint32_t t) {
-				const float own = triangles[t].MaterialIndex;
-				const int mi = own >= 0.0f ? static_cast<int>(own) : static_cast<int>(mesh.MaterialIndex);
-				return mi < 0 || mi >= static_cast<int>(world.Materials().size()) || world.Materials()[mi].AlphaCutoff <= 0.0f;
-			});
-			m_NumOpaque[m] = static_cast<float>(opaqueEnd - first);
-		}
+		// ponytail: un asset ha una sola partizione, calcolata col materiale della prima istanza per
+		// i triangoli senza slot; un'istanza con un materiale mascherato diverso resta opaca.
+		// Servirebbe un BLAS per (asset, partizione).
+		std::unordered_map<ObjectId, ObjectId> fallback;
+		for (const Mesh& mesh : world.Meshes())
+			fallback.emplace(mesh.Asset, mesh.Material);
 
 		std::vector<TrianglePosition> positions;
 		std::vector<TriangleNormal> normals;
 		std::vector<TriangleUV> uvs;
-		positions.reserve(order.size());
-		normals.reserve(order.size());
-		uvs.reserve(order.size());
-		for (uint32_t i : order) {
-			const Triangle& t = triangles[i];
-			positions.push_back({ t.A, t.B, t.C });
-			normals.push_back({ t.NormalA, t.NormalB, t.NormalC });
-			uvs.push_back({ glm::vec4(t.UVA, t.MaterialIndex, 0.0f), glm::vec4(t.UVB, 0.0f, 0.0f), glm::vec4(t.UVC, 0.0f, 0.0f) });
+		m_AssetRanges.clear();
+		m_AssetBlas.clear();
+		for (const auto& asset : world.Assets().Meshes) {
+			const auto used = fallback.find(asset.Id);
+			if (used == fallback.end() || asset.Triangles.empty())
+				continue;
+
+			auto materialOf = [&](const Triangle& t) -> float {
+				const int slot = static_cast<int>(t.MaterialSlot);
+				if (slot < 0 || slot >= static_cast<int>(asset.MaterialSlots.size()))
+					return -1.0f; // il materiale dell'istanza
+				return MaterialIndexOf(asset.MaterialSlots[slot]);
+			};
+			auto masked = [&](const Triangle& t) {
+				const float own = materialOf(t);
+				const int mi = static_cast<int>(own >= 0.0f ? own : MaterialIndexOf(used->second));
+				return mi >= 0 && mi < static_cast<int>(world.Materials().size()) && world.Materials()[mi].AlphaCutoff > 0.0f;
+			};
+
+			std::vector<uint32_t> order(asset.Triangles.size());
+			for (uint32_t i = 0; i < order.size(); i++)
+				order[i] = i;
+			const auto opaqueEnd = std::stable_partition(order.begin(), order.end(),
+				[&](uint32_t t) { return !masked(asset.Triangles[t]); });
+
+			MeshInfo range;
+			range.FirstTriangle = static_cast<float>(positions.size());
+			range.NumTriangles = static_cast<float>(order.size());
+			range.NumOpaque = static_cast<float>(opaqueEnd - order.begin());
+			m_AssetBlas[asset.Id] = static_cast<int>(m_AssetRanges.size());
+			m_AssetRanges.push_back(range);
+
+			for (uint32_t i : order) {
+				const Triangle& t = asset.Triangles[i];
+				positions.push_back({ t.A, t.B, t.C });
+				normals.push_back({ t.NormalA, t.NormalB, t.NormalC });
+				// A.z porta il materiale del triangolo (-1 = quello dell'istanza); B/C restano liberi
+				uvs.push_back({ glm::vec4(t.UVA, materialOf(t), 0.0f), glm::vec4(t.UVB, 0.0f, 0.0f), glm::vec4(t.UVC, 0.0f, 0.0f) });
+			}
 		}
 		Upload(m_TriPositions, positions.data(), sizeof(TrianglePosition) * positions.size());
 		Upload(m_TriNormals, normals.data(), sizeof(TriangleNormal) * normals.size());
@@ -326,28 +423,30 @@ namespace Lucerna {
 
 	void RenderScene::BuildMeshInfos(const World& world) {
 		m_MeshInfos.clear();
-		m_MeshInfos.reserve(world.Meshes().size());
-		for (size_t m = 0; m < world.Meshes().size(); m++) {
-			const Mesh& mesh = world.Meshes()[m];
-			const AABB bounds = mesh.WorldBounds();
+		m_InstanceBlas.clear();
+		for (const Mesh& mesh : world.Meshes()) {
+			const MeshAsset* asset = world.AssetOf(mesh);
+			const auto blas = m_AssetBlas.find(mesh.Asset);
 			MeshInfo info;
+			if (asset != nullptr && blas != m_AssetBlas.end()) {
+				const AABB bounds = world.WorldBounds(mesh);
+				info = m_AssetRanges[blas->second];
+				info.BoundsMin = glm::vec4(bounds.min, 0.0f);
+				info.BoundsMax = glm::vec4(bounds.max, 0.0f);
+				info.LocalMin = asset->LocalMin;
+				info.LocalMax = asset->LocalMax;
+			}
 			info.Transform = mesh.Transform;
 			info.InvTransform = glm::inverse(mesh.Transform);
-			info.BoundsMin = glm::vec4(bounds.min, 0.0f);
-			info.BoundsMax = glm::vec4(bounds.max, 0.0f);
-			info.LocalMin = mesh.LocalMin;
-			info.LocalMax = mesh.LocalMax;
-			info.FirstTriangle = static_cast<float>(mesh.FirstTriangle);
-			info.NumTriangles = static_cast<float>(mesh.NumTriangles);
-			info.MaterialIndex = mesh.MaterialIndex;
-			info.NumOpaque = m_NumOpaque[m];
+			info.MaterialIndex = MaterialIndexOf(mesh.Material);
 			m_MeshInfos.push_back(info);
+			m_InstanceBlas.push_back(blas != m_AssetBlas.end() ? blas->second : -1);
 		}
 		Upload(m_Meshes, m_MeshInfos.data(), sizeof(MeshInfo) * m_MeshInfos.size());
 	}
 
 	void RenderScene::BuildLights(const World& world) {
-		const std::vector<GPULight> lights = CollectLights(world);
+		const std::vector<GPULight> lights = CollectLights(world, m_MaterialIndex);
 		m_NumLights = static_cast<int>(lights.size());
 		if (getenv("PT_LIGHTS"))
 			std::cout << "PTLIGHTS " << m_NumLights << " spheres=" << world.Spheres().size()

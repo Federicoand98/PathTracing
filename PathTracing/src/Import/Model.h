@@ -5,6 +5,7 @@
 
 #include "ptpch.h"
 #include "Scene/Primitives.h"
+#include "Assets/AssetLibrary.h"
 
 namespace Lucerna {
 

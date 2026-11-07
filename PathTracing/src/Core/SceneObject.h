@@ -1,7 +1,7 @@
 #pragma once
 
-#ifndef SCENE_SCENEOBJECT_H
-#define SCENE_SCENEOBJECT_H
+#ifndef CORE_SCENEOBJECT_H
+#define CORE_SCENEOBJECT_H
 
 #include "Core/ObjectId.h"
 
@@ -11,9 +11,8 @@
 
 namespace Lucerna {
 
-	// Un oggetto della scena (issue #23): i suoi dati, che sono anche la struct GPU (Sphere,
-	// Quad, Material...), piu' l'identita'. Eredita dai dati, quindi sphere.Position si legge
-	// come prima; l'identita' non entra nella struct, che resta il layout std430.
+	// Un oggetto della scena o un asset (issue #23, #26): i suoi dati piu' l'identita'. Eredita
+	// dai dati, quindi sphere.Position si legge come prima; l'identita' resta fuori dalla struct.
 	template<class T>
 	struct SceneObject : T {
 		ObjectId Id;
@@ -27,7 +26,7 @@ namespace Lucerna {
 	};
 
 	// La lista di un tipo di oggetti: aggiunge con un id nuovo e un nome unico, trova per id,
-	// e impacchetta i soli dati per la GPU. Si legge come un std::vector (indice, size, range-for);
+	// e impacchetta i soli dati. Si legge come un std::vector (indice, size, range-for);
 	// si aggiunge solo con Add, cosi' nessun oggetto resta senza identita'.
 	//
 	// I nomi sono unici nella lista, come i data-block di Blender: un secondo "stone" diventa
@@ -111,4 +110,4 @@ namespace Lucerna {
 	};
 }
 
-#endif // SCENE_SCENEOBJECT_H
+#endif // CORE_SCENEOBJECT_H

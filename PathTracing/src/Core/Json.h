@@ -4,6 +4,7 @@
 #define SERIALIZATION_JSON_H
 
 #include "Core/Fields.h"
+#include "Core/ObjectId.h"
 
 #include <nlohmann/json.hpp>
 #include <glm/glm.hpp>
@@ -51,6 +52,12 @@ namespace nlohmann {
 }
 
 namespace Lucerna {
+
+	// Un ObjectId si scrive come le sue 16 cifre esadecimali; "" o un testo che non lo e' = nil
+	inline void to_json(nlohmann::json& j, const ObjectId& id) { j = id.IsNil() ? std::string() : id.ToString(); }
+	inline void from_json(const nlohmann::json& j, ObjectId& id) {
+		id = j.is_string() ? ObjectId::Parse(j.get<std::string>()).value_or(ObjectId{}) : ObjectId{};
+	}
 
 	// Una struct e' "riflessa" se esiste JsonFields(const T*): la si cerca per ADL.
 	template<class T>

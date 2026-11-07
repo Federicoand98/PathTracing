@@ -6,10 +6,10 @@
 #include "ptpch.h"
 
 #include "Core/Ray.h"
-#include "Assets/Material.h"
+#include "Assets/AssetLibrary.h"
 #include "Scene/Primitives.h"
 #include "Import/Model.h"
-#include "Scene/SceneObject.h"
+#include "Core/SceneObject.h"
 
 struct cgltf_data; // GltfLoader.cpp: World.h non dipende da cgltf
 
@@ -56,17 +56,22 @@ namespace Lucerna {
 		// geometria + materiali del file. Ritorna false se il parsing fallisce (scena invariata).
 		// Definita in GltfLoader.cpp per non appesantire World.cpp con la dipendenza cgltf.
 		bool LoadGltf(const std::string& path);
+		// Carica dalla sorgente la geometria degli asset che non ce l'hanno (letti da un file di
+		// scena). false = qualcuna manca: le sue istanze non si vedono.
+		bool LoadMissingGeometry();
 
 		// ---- lettura: le collezioni non si modificano da fuori (issue #25)
 		const ObjectList<Sphere>& Spheres() const { return m_Spheres; }
 		const ObjectList<Quad>& Quads() const { return m_Quads; }      // anche le 6 facce di ogni box
 		const ObjectList<Box>& Boxes() const { return m_Boxes; }
-		const ObjectList<Material>& Materials() const { return m_Materials; }
-		const ObjectList<Mesh>& Meshes() const { return m_Meshes; }
+		const ObjectList<Mesh>& Meshes() const { return m_Meshes; }  // le istanze; la geometria e' negli asset
 		const ObjectList<PunctualLight>& PunctualLights() const { return m_PunctualLights; }
-		const std::vector<Triangle>& Triangles() const { return m_Triangles; }
-		const std::vector<std::string>& TexturePaths() const { return m_TexturePaths; }
-		const std::vector<std::string>& DataTexturePaths() const { return m_DataTexturePaths; }
+		const AssetLibrary& Assets() const { return m_Assets; }
+		const ObjectList<Material>& Materials() const { return m_Assets.Materials; }
+		const ObjectList<Texture>& Textures() const { return m_Assets.Textures; }
+		// L'asset di geometria di un'istanza (nullptr se manca) e la sua AABB world
+		const MeshAsset* AssetOf(const Mesh& mesh) const;
+		AABB WorldBounds(const Mesh& mesh) const;
 		const SunParams& Sun() const { return m_Sun; }
 		const SceneCamera& Camera() const { return m_Camera; }
 		const glm::vec3& BackgroundColor() const { return m_BackgroundColor; }
@@ -77,7 +82,7 @@ namespace Lucerna {
 		void Set(const ObjectId& id, const Sphere& sphere);
 		void Set(const ObjectId& id, const Quad& quad);
 		void Set(const ObjectId& id, const Box& box);      // riscrive anche i suoi 6 quad
-		void Set(const ObjectId& id, const Mesh& mesh);    // transform e materiale; i triangoli no
+		void Set(const ObjectId& id, const Mesh& mesh);    // transform e materiale; l'asset no
 		void Set(const ObjectId& id, const Material& material);
 		void Set(const ObjectId& id, const PunctualLight& light);
 		void SetSun(const SunParams& sun);
@@ -94,9 +99,11 @@ namespace Lucerna {
 		int AddQuad(const Quad& quad);
 		int AddLight(const PunctualLight& light, const std::string& name);
 		int AddMaterial(const Material& material);
-		void AddTexture(const std::string& path);
-		void CreateBox(const glm::vec3& a, const glm::vec3& b, float MaterialIndex);
-		int AddMesh(const std::string& objPath, const glm::vec3& position, int material);
+		void AddTexture(const std::string& path, TextureKind kind);
+		void CreateBox(const glm::vec3& a, const glm::vec3& b, const ObjectId& material);
+		// Un'istanza di un OBJ: la geometria si carica solo la prima volta (issue #26)
+		int AddMesh(const std::string& objPath, const glm::vec3& position, const ObjectId& material);
+		int AddInstance(const ObjectId& asset, const glm::mat4& transform, const ObjectId& material);
 
 		// Al contrario delle creazioni, le rimozioni NON sono append: invalidano ogni indice
 		// successivo a quello tolto, nella collezione toccata. Chi tiene indici (la selezione)
@@ -106,6 +113,7 @@ namespace Lucerna {
 		bool RemoveBox(int boxIndex);     // porta via anche i suoi 6 quad
 		bool RemoveMesh(int meshIndex);
 		bool RemoveLight(int lightIndex);
+		bool RemoveTexture(const ObjectId& id); // solo se nessun materiale la usa: libera il suo layer
 
 		// -1 se il quad e' autonomo, altrimenti l'indice del box che lo possiede
 		int QuadOwnerBox(int quadIndex) const;
@@ -134,14 +142,8 @@ namespace Lucerna {
 		ObjectList<Sphere> m_Spheres{ "Sphere" };
 		ObjectList<Quad> m_Quads{ "Quad" };        // anche le 6 facce di ogni box, nascoste nell'outliner
 		ObjectList<Box> m_Boxes{ "Box" };
-		ObjectList<Material> m_Materials{ "Material" };
 		ObjectList<Mesh> m_Meshes{ "Mesh" };
-		std::vector<std::string> m_MeshPaths;       // path OBJ per la serializzazione
-		// I triangoli di tutte le mesh, in local space e nell'ordine di caricamento: ogni Mesh ne
-		// possiede un intervallo. I buffer GPU li deriva il RenderScene (issue #24).
-		std::vector<Triangle> m_Triangles;
-		std::vector<std::string> m_TexturePaths;     // un layer del sampler2DArray ciascuna
-		std::vector<std::string> m_DataTexturePaths; // normal map e alpha mask MTL, in un array UNORM a parte
+		AssetLibrary m_Assets;                     // geometria, materiali, texture (issue #26)
 
 		void PrepareMaterials();
 		void PrepareSimpleScene();
@@ -154,13 +156,12 @@ namespace Lucerna {
 		void PrepareSetup3();
 		void PrepareSponza();
 
-		void UploadModel(const Model& model, const glm::vec3& Position, int material);
-
-		// Traduzione MTL -> engine. Vivono qui perche' toccano Materials e TexturePaths.
-		int RegisterMtlMaterials(const Model& model);      // appende i materiali MTL, ritorna l'indice base (-1 se l'OBJ non ha MTL)
-		int RegisterTexture(const std::string& path);      // dedup in TexturePaths, ritorna il layer
-		int RegisterDataTexture(const std::string& path); // idem in DataTexturePaths
+		// L'asset di un OBJ: gia' caricato, oppure costruito ora coi suoi materiali MTL come slot
+		ObjectId ObjAsset(const Model& model);
+		void UploadModel(const Model& model, const glm::vec3& position, const ObjectId& material);
 		Material MaterialFromMtl(const MtlMaterial& mtl);  // MtlMaterial -> Material dell'engine
+		// Le scene procedurali citano i materiali per posizione: l'i-esimo materiale, nil se non c'e'
+		ObjectId MaterialAt(float index) const;
 
 		void CreateCornellBox();
 	};

@@ -234,11 +234,11 @@ namespace Lucerna {
 
 	}
 
-	void SceneAccel::BuildTopLevel(const std::vector<MeshInfo>& meshes) {
+	void SceneAccel::BuildTopLevel(const std::vector<MeshInfo>& meshes, const std::vector<int>& blas) {
 		VulkanContext& vk = VulkanContext::Get();
 
 		std::vector<VkAccelerationStructureInstanceKHR> instances;
-		instances.reserve(m_MeshBlas.size() + 1);
+		instances.reserve(meshes.size() + 1);
 
 		auto addInstance = [&](VkAccelerationStructureKHR blas, const glm::mat4& transform, uint32_t customIndex, bool masked) {
 			VkAccelerationStructureInstanceKHR instance{};
@@ -253,10 +253,12 @@ namespace Lucerna {
 			instances.push_back(instance);
 		};
 
-		for (size_t i = 0; i < m_MeshBlas.size(); i++)
-			if (m_MeshBlas[i] != VK_NULL_HANDLE)
-				addInstance(m_MeshBlas[i], meshes[i].Transform, static_cast<uint32_t>(i),
+		for (size_t i = 0; i < meshes.size(); i++) {
+			const int b = blas[i];
+			if (b >= 0 && b < static_cast<int>(m_MeshBlas.size()) && m_MeshBlas[b] != VK_NULL_HANDLE)
+				addInstance(m_MeshBlas[b], meshes[i].Transform, static_cast<uint32_t>(i),
 				            meshes[i].NumOpaque < meshes[i].NumTriangles);
+		}
 		if (m_ProceduralBlas != VK_NULL_HANDLE)
 			addInstance(m_ProceduralBlas, glm::mat4(1.0f), 0, false);
 
