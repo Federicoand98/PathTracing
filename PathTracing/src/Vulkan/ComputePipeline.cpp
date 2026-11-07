@@ -1,6 +1,6 @@
-#include "ComputePipeline.h"
+#include "Vulkan/ComputePipeline.h"
 
-namespace PathTracer {
+namespace Lucerna {
 
 	ComputePipeline::ComputePipeline(const std::string& spirvPath, const std::vector<VkDescriptorType>& bindings, uint32_t pushConstantSize)
 		: m_Bindings(bindings), m_PushConstantSize(pushConstantSize) {

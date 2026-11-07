@@ -3,9 +3,9 @@
 #ifndef COMPUTEPIPELINE_H
 #define COMPUTEPIPELINE_H
 
-#include "VulkanContext.h"
+#include "Vulkan/VulkanContext.h"
 
-namespace PathTracer {
+namespace Lucerna {
 
 	/*
 	* Pipeline compute con i descrittori in push: si dichiarano a ogni dispatch, senza pool ne'

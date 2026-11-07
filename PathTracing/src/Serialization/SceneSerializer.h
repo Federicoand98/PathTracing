@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace PathTracer {
+namespace Lucerna {
 
 	class World;
 	struct RenderSettings;

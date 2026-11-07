@@ -31,6 +31,7 @@ out/
 .vscode/
 .idea/
 cmake-build-debug/
+PathTracing/build/
 cmake-build-relwithdebinfo/
 PathTracing/res/PathTracing.exe
 PathTracing/res/Lucerna
