@@ -1,0 +1,1911 @@
+{
+  "assets": {
+    "materials": [
+      {
+        "albedoTexture": "479d5b18ef2711a2",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "9898400a2b087522",
+        "metalness": 0.0,
+        "name": "Material__25",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "c80fd340f600de33",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "9a09cb73579d9cc7",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "34adad6ab316e08c",
+        "metalness": 0.0,
+        "name": "Material__298",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "46034f2eb54667c7",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "640d404a4003e27c",
+        "metalness": 0.0,
+        "name": "Material__47",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 0.0,
+        "normalStrength": 1.0,
+        "normalTexture": "",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "2e41eff8fd3b71c4",
+        "alphaCutoff": 0.5,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "d41e8edbe3a38c7c",
+        "metalness": 0.0,
+        "name": "Material__57",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 0.0,
+        "normalStrength": 1.0,
+        "normalTexture": "",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "ebeae3ef09b661d0",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "adbb9ed51a29d74a",
+        "metalness": 0.0,
+        "name": "arch",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "d5bd0e771a35fd59",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "5a66dd09408e6a04",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "2b1d5afd414384ed",
+        "metalness": 0.0,
+        "name": "bricks",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "b6732a09ecaa286d",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "beed2fe6485ff81d",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "59a65d12bb2e1803",
+        "metalness": 0.0,
+        "name": "ceiling",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "2be3a256d9d8a052",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "2858e251bf47c965",
+        "alphaCutoff": 0.5,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "2ad87361e62fe2d9",
+        "metalness": 0.0,
+        "name": "chain",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "62b741017fb26d80",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "6f207959a1901eb3",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "5e23e0be5e8c5bc2",
+        "metalness": 0.0,
+        "name": "column_a",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "a7119a3d9ef8391d",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "d95281327d40d016",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "d55e5a1083f7d14e",
+        "metalness": 0.0,
+        "name": "column_b",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "b2dbd8a6292f4bdb",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "918ea1eaae7388b0",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "299553055601626e",
+        "metalness": 0.0,
+        "name": "column_c",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "f0deb46cce18c462",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "039939f088179ced",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "7f128a4283031ba1",
+        "metalness": 0.0,
+        "name": "details",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "e482dfc64bc046be",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "4871eb9762a79199",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "9cc12d4d5d10f4db",
+        "metalness": 0.0,
+        "name": "fabric_a",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "d1f00b7c006033cc",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "e8fad094da390ed1",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "497ab7ce79a04d06",
+        "metalness": 0.0,
+        "name": "fabric_c",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "d84032cd51db5e70",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "298f5561028219c7",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "1be9a09b865f164c",
+        "metalness": 0.0,
+        "name": "fabric_d",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "d1f00b7c006033cc",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "f5db70926ace4d6c",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "cb4d5254ee9f1e98",
+        "metalness": 0.0,
+        "name": "fabric_e",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "d1f00b7c006033cc",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "c87438bef539f77e",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "49402e890d1ad714",
+        "metalness": 0.0,
+        "name": "fabric_f",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "d84032cd51db5e70",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "d39ee9ef2dba447f",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "52aa7b1dd17a73ab",
+        "metalness": 0.0,
+        "name": "fabric_g",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "d84032cd51db5e70",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "2f3b1e5c47360c36",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "24957a563135bab3",
+        "metalness": 0.0,
+        "name": "flagpole",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "d26e301a3078a2b1",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "725242f19c5b4ab9",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "76fdaec7eb0a9de9",
+        "metalness": 0.0,
+        "name": "floor",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "75bd743ec31d0c42",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "221d3546a8f9c4e7",
+        "alphaCutoff": 0.5,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "8a4577a791b72d45",
+        "metalness": 0.0,
+        "name": "leaf",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "e6b603fbfc299300",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "e25bed5be854ad65",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "937addde1c27ba86",
+        "metalness": 0.0,
+        "name": "roof",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "b1984ef1fafe1f16",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "cdfa0f16daebb345",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "d6b0901b9260856b",
+        "metalness": 0.0,
+        "name": "vase",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "572939cc4307b6eb",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "559eb8014b03ebe4",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "7218923bf1170988",
+        "metalness": 0.0,
+        "name": "vase_hanging",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "97451e7bb98a1a74",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      },
+      {
+        "albedoTexture": "80dec9b99854efca",
+        "alphaCutoff": 0.0,
+        "alphaTexture": "",
+        "checker": 0.0,
+        "checkerScale": 8.0,
+        "color": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "emissiveStrength": 0.0,
+        "id": "078f987625ec9ef3",
+        "metalness": 0.0,
+        "name": "vase_round",
+        "noiseBlend": 1.0,
+        "noiseColorA": [
+          0.07999999821186066,
+          0.05999999865889549,
+          0.05000000074505806,
+          1.0
+        ],
+        "noiseColorB": [
+          0.8500000238418579,
+          0.800000011920929,
+          0.75,
+          1.0
+        ],
+        "noiseOctaves": 5.0,
+        "noiseScale": 4.0,
+        "noiseTurbulence": 10.0,
+        "noiseType": 0.0,
+        "normalFlipY": 1.0,
+        "normalStrength": 1.0,
+        "normalTexture": "20fdbcbce6ecff13",
+        "refractionColor": [
+          0.47040000557899475,
+          0.47040000557899475,
+          0.47040000557899475,
+          1.0
+        ],
+        "refractionProbability": 0.0,
+        "refractionRatio": 1.0,
+        "refractionRoughness": 0.45076295733451843,
+        "roughness": 0.45076295733451843,
+        "specularColor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "specularProbability": 0.03999999910593033,
+        "specularTint": 0.0
+      }
+    ],
+    "meshes": [
+      {
+        "id": "ad2e4bd853ec75f8",
+        "materialSlots": [
+          "9898400a2b087522",
+          "34adad6ab316e08c",
+          "640d404a4003e27c",
+          "d41e8edbe3a38c7c",
+          "adbb9ed51a29d74a",
+          "2b1d5afd414384ed",
+          "59a65d12bb2e1803",
+          "2ad87361e62fe2d9",
+          "5e23e0be5e8c5bc2",
+          "d55e5a1083f7d14e",
+          "299553055601626e",
+          "7f128a4283031ba1",
+          "9cc12d4d5d10f4db",
+          "497ab7ce79a04d06",
+          "1be9a09b865f164c",
+          "cb4d5254ee9f1e98",
+          "49402e890d1ad714",
+          "52aa7b1dd17a73ab",
+          "24957a563135bab3",
+          "76fdaec7eb0a9de9",
+          "8a4577a791b72d45",
+          "937addde1c27ba86",
+          "d6b0901b9260856b",
+          "7218923bf1170988",
+          "078f987625ec9ef3"
+        ],
+        "name": "sponza.obj",
+        "source": {
+          "file": "models/Sponza/sponza.obj",
+          "mesh": -1,
+          "primitive": -1
+        }
+      }
+    ],
+    "textures": [
+      {
+        "id": "479d5b18ef2711a2",
+        "kind": "color",
+        "name": "lion",
+        "path": "models/Sponza/textures/lion.tga"
+      },
+      {
+        "id": "c80fd340f600de33",
+        "kind": "data",
+        "name": "lion_ddn",
+        "path": "models/Sponza/textures/lion_ddn.tga"
+      },
+      {
+        "id": "9a09cb73579d9cc7",
+        "kind": "color",
+        "name": "background",
+        "path": "models/Sponza/textures/background.tga"
+      },
+      {
+        "id": "46034f2eb54667c7",
+        "kind": "data",
+        "name": "background_ddn",
+        "path": "models/Sponza/textures/background_ddn.tga"
+      },
+      {
+        "id": "2e41eff8fd3b71c4",
+        "kind": "color",
+        "name": "vase_plant",
+        "path": "models/Sponza/textures/vase_plant.tga"
+      },
+      {
+        "id": "ebeae3ef09b661d0",
+        "kind": "color",
+        "name": "sponza_arch_diff",
+        "path": "models/Sponza/textures/sponza_arch_diff.tga"
+      },
+      {
+        "id": "d5bd0e771a35fd59",
+        "kind": "data",
+        "name": "sponza_arch_ddn",
+        "path": "models/Sponza/textures/sponza_arch_ddn.tga"
+      },
+      {
+        "id": "5a66dd09408e6a04",
+        "kind": "color",
+        "name": "spnza_bricks_a_diff",
+        "path": "models/Sponza/textures/spnza_bricks_a_diff.tga"
+      },
+      {
+        "id": "b6732a09ecaa286d",
+        "kind": "data",
+        "name": "spnza_bricks_a_ddn",
+        "path": "models/Sponza/textures/spnza_bricks_a_ddn.tga"
+      },
+      {
+        "id": "beed2fe6485ff81d",
+        "kind": "color",
+        "name": "sponza_ceiling_a_diff",
+        "path": "models/Sponza/textures/sponza_ceiling_a_diff.tga"
+      },
+      {
+        "id": "2be3a256d9d8a052",
+        "kind": "data",
+        "name": "sponza_ceiling_a_ddn",
+        "path": "models/Sponza/textures/sponza_ceiling_a_ddn.tga"
+      },
+      {
+        "id": "2858e251bf47c965",
+        "kind": "color",
+        "name": "chain_texture",
+        "path": "models/Sponza/textures/chain_texture.tga"
+      },
+      {
+        "id": "62b741017fb26d80",
+        "kind": "data",
+        "name": "chain_texture_ddn",
+        "path": "models/Sponza/textures/chain_texture_ddn.tga"
+      },
+      {
+        "id": "6f207959a1901eb3",
+        "kind": "color",
+        "name": "sponza_column_a_diff",
+        "path": "models/Sponza/textures/sponza_column_a_diff.tga"
+      },
+      {
+        "id": "a7119a3d9ef8391d",
+        "kind": "data",
+        "name": "sponza_column_a_ddn",
+        "path": "models/Sponza/textures/sponza_column_a_ddn.tga"
+      },
+      {
+        "id": "d95281327d40d016",
+        "kind": "color",
+        "name": "sponza_column_b_diff",
+        "path": "models/Sponza/textures/sponza_column_b_diff.tga"
+      },
+      {
+        "id": "b2dbd8a6292f4bdb",
+        "kind": "data",
+        "name": "sponza_column_b_ddn",
+        "path": "models/Sponza/textures/sponza_column_b_ddn.tga"
+      },
+      {
+        "id": "918ea1eaae7388b0",
+        "kind": "color",
+        "name": "sponza_column_c_diff",
+        "path": "models/Sponza/textures/sponza_column_c_diff.tga"
+      },
+      {
+        "id": "f0deb46cce18c462",
+        "kind": "data",
+        "name": "sponza_column_c_ddn",
+        "path": "models/Sponza/textures/sponza_column_c_ddn.tga"
+      },
+      {
+        "id": "039939f088179ced",
+        "kind": "color",
+        "name": "sponza_details_diff",
+        "path": "models/Sponza/textures/sponza_details_diff.tga"
+      },
+      {
+        "id": "e482dfc64bc046be",
+        "kind": "data",
+        "name": "sponza_details_ddn",
+        "path": "models/Sponza/textures/sponza_details_ddn.tga"
+      },
+      {
+        "id": "4871eb9762a79199",
+        "kind": "color",
+        "name": "sponza_fabric_diff",
+        "path": "models/Sponza/textures/sponza_fabric_diff.tga"
+      },
+      {
+        "id": "d1f00b7c006033cc",
+        "kind": "data",
+        "name": "sponza_fabric_ddn",
+        "path": "models/Sponza/textures/sponza_fabric_ddn.tga"
+      },
+      {
+        "id": "e8fad094da390ed1",
+        "kind": "color",
+        "name": "sponza_curtain_diff",
+        "path": "models/Sponza/textures/sponza_curtain_diff.tga"
+      },
+      {
+        "id": "d84032cd51db5e70",
+        "kind": "data",
+        "name": "sponza_curtain_ddn",
+        "path": "models/Sponza/textures/sponza_curtain_ddn.tga"
+      },
+      {
+        "id": "298f5561028219c7",
+        "kind": "color",
+        "name": "sponza_fabric_blue_diff",
+        "path": "models/Sponza/textures/sponza_fabric_blue_diff.tga"
+      },
+      {
+        "id": "f5db70926ace4d6c",
+        "kind": "color",
+        "name": "sponza_fabric_green_diff",
+        "path": "models/Sponza/textures/sponza_fabric_green_diff.tga"
+      },
+      {
+        "id": "c87438bef539f77e",
+        "kind": "color",
+        "name": "sponza_curtain_green_diff",
+        "path": "models/Sponza/textures/sponza_curtain_green_diff.tga"
+      },
+      {
+        "id": "d39ee9ef2dba447f",
+        "kind": "color",
+        "name": "sponza_curtain_blue_diff",
+        "path": "models/Sponza/textures/sponza_curtain_blue_diff.tga"
+      },
+      {
+        "id": "2f3b1e5c47360c36",
+        "kind": "color",
+        "name": "sponza_flagpole_diff",
+        "path": "models/Sponza/textures/sponza_flagpole_diff.tga"
+      },
+      {
+        "id": "d26e301a3078a2b1",
+        "kind": "data",
+        "name": "sponza_flagpole_ddn",
+        "path": "models/Sponza/textures/sponza_flagpole_ddn.tga"
+      },
+      {
+        "id": "725242f19c5b4ab9",
+        "kind": "color",
+        "name": "sponza_floor_a_diff",
+        "path": "models/Sponza/textures/sponza_floor_a_diff.tga"
+      },
+      {
+        "id": "75bd743ec31d0c42",
+        "kind": "data",
+        "name": "sponza_floor_a_ddn",
+        "path": "models/Sponza/textures/sponza_floor_a_ddn.tga"
+      },
+      {
+        "id": "221d3546a8f9c4e7",
+        "kind": "color",
+        "name": "sponza_thorn_diff",
+        "path": "models/Sponza/textures/sponza_thorn_diff.tga"
+      },
+      {
+        "id": "e6b603fbfc299300",
+        "kind": "data",
+        "name": "sponza_thorn_ddn",
+        "path": "models/Sponza/textures/sponza_thorn_ddn.tga"
+      },
+      {
+        "id": "e25bed5be854ad65",
+        "kind": "color",
+        "name": "sponza_roof_diff",
+        "path": "models/Sponza/textures/sponza_roof_diff.tga"
+      },
+      {
+        "id": "b1984ef1fafe1f16",
+        "kind": "data",
+        "name": "sponza_roof_ddn",
+        "path": "models/Sponza/textures/sponza_roof_ddn.tga"
+      },
+      {
+        "id": "cdfa0f16daebb345",
+        "kind": "color",
+        "name": "vase_dif",
+        "path": "models/Sponza/textures/vase_dif.tga"
+      },
+      {
+        "id": "572939cc4307b6eb",
+        "kind": "data",
+        "name": "vase_ddn",
+        "path": "models/Sponza/textures/vase_ddn.tga"
+      },
+      {
+        "id": "559eb8014b03ebe4",
+        "kind": "color",
+        "name": "vase_hanging",
+        "path": "models/Sponza/textures/vase_hanging.tga"
+      },
+      {
+        "id": "97451e7bb98a1a74",
+        "kind": "data",
+        "name": "vase_hanging_ddn",
+        "path": "models/Sponza/textures/vase_hanging_ddn.tga"
+      },
+      {
+        "id": "80dec9b99854efca",
+        "kind": "color",
+        "name": "vase_round",
+        "path": "models/Sponza/textures/vase_round.tga"
+      },
+      {
+        "id": "20fdbcbce6ecff13",
+        "kind": "data",
+        "name": "vase_round_ddn",
+        "path": "models/Sponza/textures/vase_round_ddn.tga"
+      }
+    ]
+  },
+  "background": [
+    0.11999999731779099,
+    0.11999999731779099,
+    0.11999999731779099
+  ],
+  "boxes": [],
+  "camera": {
+    "aperture": 0.0,
+    "direction": [
+      0.9880188703536987,
+      0.1185622587800026,
+      -0.09880188852548599
+    ],
+    "focusDistance": 5.0,
+    "position": [
+      -9.0,
+      1.5,
+      0.800000011920929
+    ],
+    "verticalFov": 45.0
+  },
+  "environmentMapping": false,
+  "meshes": [
+    {
+      "asset": "ad2e4bd853ec75f8",
+      "id": "85c7da547e2048e1",
+      "material": "9898400a2b087522",
+      "name": "sponza.obj",
+      "transform": [
+        0.009999999776482582,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.009999999776482582,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.009999999776482582,
+        0.0,
+        0.6000000238418579,
+        0.0,
+        0.4000000059604645,
+        1.0
+      ]
+    }
+  ],
+  "punctualLights": [],
+  "quads": [],
+  "render": {
+    "denoise": false,
+    "denoiseAPhi": 0.20000000298023224,
+    "denoiseAutoFade": true,
+    "denoiseCPhi": 1.0,
+    "denoiseNPhi": 64.0,
+    "denoisePPhi": 1.0,
+    "denoiseStrength": 1.0,
+    "exposure": 1.0,
+    "fireflyClamp": 0.0,
+    "historyCap": 32,
+    "nee": true,
+    "rayDepth": 5,
+    "renderScale": 1.0,
+    "reproject": true,
+    "samplesPerPixel": 1,
+    "tonemap": true
+  },
+  "spheres": [],
+  "sun": {
+    "angularRadius": 0.27000001072883606,
+    "azimuth": 100.0,
+    "color": [
+      1.0,
+      1.0,
+      1.0
+    ],
+    "elevation": 75.0,
+    "enabled": true,
+    "irradiance": 3.0
+  },
+  "version": 2
+}

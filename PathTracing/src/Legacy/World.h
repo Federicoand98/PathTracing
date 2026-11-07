@@ -15,18 +15,6 @@ namespace Lucerna {
 
 
 
-	enum class SceneType {
-		TWO_SPHERES = 0,
-		RANDOM_SPHERES = 1,
-		CORNELL_BOX = 2,
-		RANDOM_BOXES = 3,
-		CORNELL_BOX_MESH = 4,
-		SETUP_1 = 5,
-		SETUP_2 = 6,
-		SETUP_3 = 7,
-		SPONZA = 8
-	};
-
 	// Cosa e' cambiato nella scena dall'ultimo frame (issue #25): il RenderScene aggiorna solo
 	// quello, e qualunque cambiamento fa ripartire l'accumulo.
 	enum SceneChange : uint32_t {
@@ -47,7 +35,6 @@ namespace Lucerna {
 		World();
 		~World();
 
-		void LoadScene();
 		void DestroyScene();
 
 		// I file passano dal registry degli importer (issue #27), quindi qui nessun formato.
@@ -123,7 +110,6 @@ namespace Lucerna {
 		// frame. Una scena nuova li ha tutti.
 		uint32_t TakeChanges() { const uint32_t c = m_Changes; m_Changes = NoChange; return c; }
 
-		int CurrentScene = 6; // quale scena carica LoadScene: scegliere non cambia niente finche' non si carica
 
 	private:
 		friend class SceneSerializer; // legge e rimpiazza la scena intera, poi segna tutto cambiato
@@ -144,21 +130,6 @@ namespace Lucerna {
 		ObjectList<Mesh> m_Meshes{ "Mesh" };
 		AssetLibrary m_Assets;                     // geometria, materiali, texture (issue #26)
 
-		void PrepareMaterials();
-		void PrepareSimpleScene();
-		void PrepareCornellBox();
-		void PrepareCornellBoxMesh();
-		void PrepareRandomSpheres();
-		void PrepareRandomBoxes();
-		void PrepareSetup1();
-		void PrepareSetup2();
-		void PrepareSetup3();
-		void PrepareSponza();
-
-		// Le scene procedurali citano i materiali per posizione: l'i-esimo materiale, nil se non c'e'
-		ObjectId MaterialAt(float index) const;
-
-		void CreateCornellBox();
 	};
 }
 

@@ -12,6 +12,7 @@
 #include <GLFW/glfw3.h>
 #include "Vulkan/VulkanContext.h"
 #include "Render/Renderer.h"
+#include "Serialization/BuiltinScenes.h"
 #include "Editor/Camera.h"
 #include "ImGuizmo.h"
 #include "ptpch.h"
@@ -111,6 +112,7 @@ namespace Lucerna {
 		// Apre un file (rimpiazzando la scena) e registra path+mtime per il live-link;
 		// PollLiveLink controlla ogni frame se il file e' cambiato e in tal caso lo riapre.
 		bool OpenFile(const std::string& path);
+		bool LoadBuiltinScene(int index);
 		void PollLiveLink();
 		static std::vector<std::string> FileFilters(); // per il file dialog, dal registry degli importer
 	private:
@@ -167,6 +169,8 @@ namespace Lucerna {
 
 		// Live-link glTF (ADR 0003): il renderer osserva il file caricato e lo ricarica quando
 		// cambia (tipicamente perche' Blender l'ha ri-esportato su save). Read-only verso Blender.
+		std::vector<BuiltinScene> m_BuiltinScenes;     // res/scenes/builtin (issue #28)
+		int m_CurrentScene = -1;                        // in m_BuiltinScenes, -1 = un file aperto o caricato
 		std::string m_WatchPath;                        // il file aperto, vuoto = nessuno
 		bool m_LiveLink = true;                         // riapre il file quando cambia
 		std::filesystem::file_time_type m_WatchMtime{}; // ultimo timestamp visto

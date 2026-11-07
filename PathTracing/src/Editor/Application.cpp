@@ -6,6 +6,7 @@
 #include "Editor/Input.h"
 #include "Core/Random.h"
 #include "Serialization/SceneSerializer.h"
+#include "Serialization/BuiltinScenes.h"
 #include "Import/Importer.h"
 #include "vendor/portable-file-dialogs.h"
 
@@ -51,18 +52,26 @@ namespace Lucerna {
 								 m_Camera(45.0f, 0.1f, 100.0f) {
 		s_Instance = this;
 
-		// Test/CI headless: PT_SCENE=<n> sceglie la scena prima del load.
-		if (const char* sc = getenv("PT_SCENE"))
-			m_World.CurrentScene = atoi(sc);
-
-		m_World.LoadScene();
+		// Le scene integrate sono file (issue #28). PT_SCENE=<numero o nome> sceglie quella di
+		// partenza; senza, Setup 2.
+		m_BuiltinScenes = ListBuiltinScenes();
+		const char* startScene = getenv("PT_SCENE");
+		if (const BuiltinScene* scene = FindBuiltinScene(m_BuiltinScenes, startScene ? startScene : "setup-2"))
+			LoadBuiltinScene(static_cast<int>(scene - m_BuiltinScenes.data()));
+		else {
+			std::cerr << "PT_SCENE: nessuna scena '" << startScene << "'. Ci sono:";
+			for (const BuiltinScene& b : m_BuiltinScenes)
+				std::cerr << " " << b.Number << " (" << b.Key << ")";
+			std::cerr << std::endl;
+		}
 
 		// Test/CI headless: PT_GLTF=<file> apre una scena glTF al posto di quella di default.
 		if (const char* g = getenv("PT_GLTF"))
 			OpenFile(g); // qualunque formato del registry, non solo glTF
 		// PT_SCENE_FILE=<file.json> apre una scena salvata (formato 2)
 		if (const char* f = getenv("PT_SCENE_FILE"))
-			SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(f);
+			if (SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(f))
+				m_CurrentScene = -1;
 
 		// Test/CI headless: PT_NEE=0 forza la NEE spenta (A/B col light sampling).
 		// PT_CAM=x,y,z,dx,dy,dz: posizione e direzione della camera, per catture ripetibili
@@ -291,8 +300,21 @@ namespace Lucerna {
 			return false;
 
 		m_WatchPath = path;
+		m_CurrentScene = -1;
 		std::error_code ec;
 		m_WatchMtime = std::filesystem::last_write_time(path, ec); // ec ignorato: se fallisce, 0 -> ricarica al primo poll
+		return true;
+	}
+
+	// Una scena integrata e' un file di scena come gli altri. La selezione si azzera prima: la
+	// finestra "Viewport" viene disegnata piu' avanti in questo stesso frame e userebbe gli
+	// indici della scena vecchia.
+	bool Application::LoadBuiltinScene(int index) {
+		m_Selection = {};
+		if (!SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(m_BuiltinScenes[index].Path))
+			return false;
+		m_CurrentScene = index;
+		m_WatchPath.clear(); // il live-link e' del file aperto con Open
 		return true;
 	}
 
@@ -447,15 +469,15 @@ namespace Lucerna {
 	void Application::DrawSceneTab() {
 		ImGui::Spacing();
 
-		if (ImGui::Combo("Scene", &m_World.CurrentScene,
-			"Two Spheres\0Random Spheres\0Cornell Box\0Random Boxes\0Cornell Box (meshes)\0Setup 1\0Setup 2\0Setup 3\0Sponza\0\0")) {
-			// gli indici della vecchia scena non significano piu' niente: la finestra
-			// "Viewport" viene disegnata piu' avanti in QUESTO stesso frame e userebbe
-			// la selezione stale per indicizzare collezioni gia' svuotate
-			m_Selection = {};
-
-			m_World.DestroyScene();
-			m_World.LoadScene(); // la scena imposta anche la sua inquadratura
+		// Le scene integrate: i file di res/scenes/builtin, ognuno con la sua inquadratura e le sue
+		// impostazioni di render (issue #28)
+		const char* current = m_CurrentScene >= 0 && m_CurrentScene < static_cast<int>(m_BuiltinScenes.size())
+			? m_BuiltinScenes[m_CurrentScene].DisplayName.c_str() : "";
+		if (ImGui::BeginCombo("Scene", current)) {
+			for (int i = 0; i < static_cast<int>(m_BuiltinScenes.size()); i++)
+				if (ImGui::Selectable(m_BuiltinScenes[i].DisplayName.c_str(), i == m_CurrentScene))
+					LoadBuiltinScene(i);
+			ImGui::EndCombo();
 		}
 
 		// Open (issue #27): rimpiazza la scena col contenuto di un file, in qualunque formato il
@@ -520,8 +542,10 @@ namespace Lucerna {
 		ImGui::SameLine();
 		if (ImGui::Button("Load")) {
 			// la scena caricata si segna tutta cambiata: il renderer la ricarica come un cambio scena
-			if (SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(scenePath))
+			if (SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(scenePath)) {
 				m_Selection = {};
+				m_CurrentScene = -1;
+			}
 		}
 		ImGui::SameLine();
 		ImGui::TextDisabled("%s", scenePath.c_str());

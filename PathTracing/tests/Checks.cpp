@@ -4,6 +4,7 @@
 #include "Core/SceneObject.h"
 #include "Legacy/World.h"
 #include "Import/Importer.h"
+#include "Serialization/BuiltinScenes.h"
 
 #include <cstdio>
 #include <unordered_set>
@@ -121,6 +122,14 @@ int main() {
 	CHECK(assets.Meshes().size() == instancesBefore && assets.Add("res/models/missing.obj", glm::mat4(1.0f), ObjectId{}) == -1);
 	// Open di un OBJ: la scena diventa il modello, con i suoi asset e basta
 	CHECK(assets.Open("res/models/pawn.obj") && assets.Meshes().size() == 1 && assets.Assets().Meshes.size() == 1);
+
+	// Scene integrate (issue #28): i file di res/scenes/builtin, per numero o per nome
+	const std::vector<BuiltinScene> builtin = ListBuiltinScenes("res/scenes/builtin");
+	CHECK(builtin.size() == 7 && builtin.front().Number == 0 && builtin.back().Number == 8);
+	CHECK(FindBuiltinScene(builtin, "6") != nullptr && FindBuiltinScene(builtin, "6")->Key == "setup-2");
+	CHECK(FindBuiltinScene(builtin, "sponza") == &builtin.back());
+	CHECK(FindBuiltinScene(builtin, "4") != nullptr && FindBuiltinScene(builtin, "4")->DisplayName == "Cornell Box Meshes");
+	CHECK(FindBuiltinScene(builtin, "1") == nullptr && FindBuiltinScene(builtin, "") == nullptr);  // le scene casuali non ci sono piu'
 
 	return failures ? 1 : 0;
 }
