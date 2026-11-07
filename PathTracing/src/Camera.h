@@ -55,6 +55,7 @@ namespace PathTracer {
 		void RecalculateView();
 		void RecalculateRayDirections();
 	public:
+		// Copiato ogni frame dalla SceneCamera: la vista usa l'obiettivo dell'inquadratura (ADR 0011)
 		float m_VerticalFOV = 45.0f;
 	private:
 		glm::mat4 m_Projection{ 1.0f };

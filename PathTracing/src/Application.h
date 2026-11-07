@@ -3,6 +3,7 @@
 #ifndef APPLICATION_H
 #define APPLICATION_H
 
+#include "Preferences.h"
 #include <iostream>
 #include <filesystem>
 #include "imgui.h"
@@ -167,7 +168,10 @@ namespace PathTracer {
 		bool m_GltfWatch = true;                        // auto-reload al cambio del file
 		std::filesystem::file_time_type m_GltfMtime{};  // ultimo timestamp visto
 		bool m_IsRunning;
-		bool m_Vsync = true;
+		Preferences m_Preferences;
+		SceneCamera m_LastShot; // l'inquadratura del frame scorso: se cambia da fuori, la vista la segue
+		void SyncCameras(bool viewMoved);
+		bool m_Vsync = true; // effettivo: PT_NOVSYNC lo spegne per la sessione senza toccare le preferenze
 		float m_Timer = 0.0f;
 		float m_DeltaTime = 0.0f;
 		float m_ResetTimer = 0.0f;

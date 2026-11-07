@@ -158,6 +158,25 @@ namespace PathTracer {
 		return any;
 	}
 
+	// La prima camera prospettica del file diventa l'inquadratura: Blender esporta quella attiva.
+	// yfov e' il FOV verticale, la stessa grandezza nostra. L'obiettivo (profondita' di campo)
+	// non e' in glTF e resta com'e'.
+	void World::ImportCamera(const cgltf_data* data) {
+		for (size_t n = 0; n < data->nodes_count; n++) {
+			const cgltf_node& node = data->nodes[n];
+			if (!node.camera || node.camera->type != cgltf_camera_type_perspective)
+				continue;
+			float world[16];
+			cgltf_node_transform_world(&node, world);
+			const glm::mat4 m = glm::make_mat4(world);
+			Camera.Position = glm::vec3(m[3]);
+			Camera.Direction = glm::normalize(-glm::vec3(m[2])); // una camera glTF guarda lungo -Z
+			Camera.VerticalFOV = glm::degrees(node.camera->data.perspective.yfov);
+			std::cout << "glTF: camera " << (node.camera->name ? node.camera->name : "") << std::endl;
+			return;
+		}
+	}
+
 	bool World::LoadGltf(const std::string& path) {
 		cgltf_options options = {};
 		cgltf_data* data = nullptr;
@@ -173,8 +192,12 @@ namespace PathTracer {
 			return false;
 		}
 
-		// da qui in poi si rimpiazza la scena: prima di toccare il World, tutto e' andato a buon fine
+		// da qui in poi si rimpiazza la scena: prima di toccare il World, tutto e' andato a buon fine.
+		// Un glTF senza camera tiene l'inquadratura corrente (ADR 0011): DestroyScene la azzererebbe.
+		const SceneCamera previousCamera = Camera;
 		DestroyScene();
+		Camera = previousCamera;
+		ImportCamera(data);
 
 		// I raggi che mancano la geometria ritornano BackgroundColor come radianza. Senza luci
 		// nel file e' la sola illuminazione, quindi un cielo azzurro; con le luci si usa il grigio

@@ -3,6 +3,7 @@
 #ifndef RENDERER_H
 #define RENDERER_H
 
+#include "RenderSettings.h"
 #include "ptpch.h"
 #include "imgui.h"
 #include "Primitives.h"
@@ -45,40 +46,8 @@ namespace PathTracer {
 		float GetPathTraceMs() const { return m_PathTraceMs; }
 		float GetDenoiseMs() const { return m_DenoiseMs; }
 	public:
-		bool PathTracing = true;
-		bool PostProcessing = true;
-		bool EnvironmentMapping = false; // true = cubemap, false = BackgroundColor
-		float FireflyClamp = 0.0f;   // 0 = off
-		float Aperture = 0.0f;       // raggio lente; 0 = pinhole, niente DOF
-		float FocusDistance = 5.0f;  // distanza del piano di fuoco
-		float Exposure = 1.0;
-		int AOVView = 0; // 0 = beauty, 1 = albedo, 2 = normal, 3 = depth, 4 = storia
-		// Riproiezione temporale (ADR 0002): al posto di azzerare l'accumulo quando la camera
-		// si muove, si riusa il frame precedente riproiettandolo. Il cap limita il ghosting da
-		// storia stantia e vale solo in movimento; da fermo N cresce libero e converge.
-		bool Reproject = true;
-		int HistoryCap = 32;
-		// Next Event Estimation (light sampling + MIS): a ogni vertice non-speculare campiona
-		// direttamente gli emettitori invece di aspettare che un rimbalzo casuale li becchi.
-		// Crollo di varianza sulle scene con luci piccole; inattivo (nessun costo) se la scena
-		// non ha geometria emissiva. Lato shader e' l'uniform numLights: qui lo si azzera per
-		// spegnere la NEE senza toccare la light list.
-		bool NEE = true;
-		// Denoiser à-trous (view filter read-only): agisce solo sulla vista Beauty, si attenua
-		// da solo con l'accumulo. I sigma sono gli edge-stop (luminanza/normale/profondita').
-		bool Denoise = false;
-		float DenoiseStrength = 1.0f; // [0,1] peso del blend col beauty grezzo (1 = tutto denoised)
-		// Auto-attenuazione: scala lo strength ~1/sqrt(N) col numero di campioni. A immagine
-		// convergente il denoiser si spegne (niente perdita di ombre soft/AO sul frame pulito);
-		// resta forte solo quando serve, cioe' sui frame rumorosi (interattivo, pochi spp).
-		bool DenoiseAutoFade = true;
-		float DenoiseCPhi = 1.0f;    // sigma luminanza (grande = piu' sfoca ombre/rumore)
-		float DenoiseNPhi = 64.0f;   // esponente normale (grande = spigoli piu' netti)
-		float DenoisePPhi = 1.0f;    // sigma profondita' in unita' mondo (separa le silhouette)
-		float DenoiseAPhi = 0.2f;    // sigma albedo (piccolo = blocca i bordi di materiale/tinta)
-		float RenderScale = 1.0f;    // 1 = piena risoluzione; < 1 = ridotta mentre ci si muove
-		int m_SamplesPerPixel = 1;
-		int m_RayDepth = 5;
+		RenderSettings Settings; // come si calcola l'immagine: si salva con la scena (ADR 0010)
+		ViewSettings View;       // cosa si guarda: mai salvato
 	private:
 		void UpdateAccumulationCounter();
 		void ResizeRenderTargets(uint32_t width, uint32_t height); // colore + AOV, stessa risoluzione

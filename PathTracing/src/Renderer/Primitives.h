@@ -6,6 +6,7 @@
 #define PATHTRACING_PRIMITIVES_H
 
 #include "ptpch.h"
+#include "../Serialization/Fields.h"
 
 namespace PathTracer {
 
@@ -164,6 +165,42 @@ namespace PathTracer {
         float InnerAngle = 30.0f;    // gradi dall'asse: dentro, luce piena
         float OuterAngle = 45.0f;    // gradi dall'asse: fuori, buio; in mezzo la sfumatura glTF
     };
+
+    // La camera della scena (ADR 0011): l'inquadratura, salvata con la scena. La viewport ha
+    // la sua camera di navigazione, che ne prende in prestito l'obiettivo.
+    struct SceneCamera {
+        glm::vec3 Position{ 0.0f, 0.0f, 6.0f };
+        glm::vec3 Direction{ 0.0f, 0.0f, -1.0f };
+        float VerticalFOV = 45.0f;   // gradi
+        // Obiettivo thin-lens
+        float Aperture = 0.0f;       // raggio della lente; 0 = pinhole, niente profondita' di campo
+        float FocusDistance = 5.0f;  // distanza del piano di fuoco
+
+        bool SamePose(const SceneCamera& o) const { return Position == o.Position && Direction == o.Direction; }
+    };
+
+    constexpr auto JsonFields(const SceneCamera*) {
+        using C = SceneCamera;
+        return std::make_tuple(Field("position", &C::Position), Field("direction", &C::Direction),
+                               Field("verticalFov", &C::VerticalFOV), Field("aperture", &C::Aperture),
+                               Field("focusDistance", &C::FocusDistance));
+    }
+
+    constexpr auto JsonFields(const SunParams*) {
+        using S = SunParams;
+        return std::make_tuple(Field("enabled", &S::Enabled), Field("elevation", &S::Elevation), Field("azimuth", &S::Azimuth),
+                               Field("angularRadius", &S::AngularRadius), Field("color", &S::Color), Field("irradiance", &S::Irradiance));
+    }
+
+    // Nel file il tipo e' una stringa, "point" o "spot": piu' leggibile del bool, ed estendibile.
+    constexpr auto JsonFields(const PunctualLight*) {
+        using L = PunctualLight;
+        return std::make_tuple(
+            Custom<L>("type", [](const L& l) { return std::string(l.Spot ? "spot" : "point"); },
+                              [](L& l, const std::string& s) { l.Spot = s == "spot"; }),
+            Field("position", &L::Position), Field("direction", &L::Direction), Field("color", &L::Color),
+            Field("intensity", &L::Intensity), Field("innerAngle", &L::InnerAngle), Field("outerAngle", &L::OuterAngle));
+    }
 
     struct Box {
         glm::vec4 Min{ 0.0f };

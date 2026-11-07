@@ -5,6 +5,7 @@
 
 #include "ptpch.h"
 #include "../Random.h"
+#include "../Serialization/Fields.h"
 
 namespace PathTracer {
 
@@ -74,6 +75,25 @@ namespace PathTracer {
 	// Dielettrico opaco "sano" nel senso del modello Principled: riflesso non tinto
 	// (SpecularColor bianco), F0 standard 0.04, niente trasmissione. E' il punto di
 	// partenza che l'editor Principled si aspetta.
+	// Chiavi JSON dei campi (ADR 0010). Il padding std430 non si salva; i campi assenti in un
+	// file restano al default, quindi una scena vecchia resta caricabile quando se ne aggiunge uno.
+	constexpr auto JsonFields(const Material*) {
+		using M = Material;
+		return std::make_tuple(
+			Field("color", &M::Color), Field("roughness", &M::Roughness),
+			Field("specularProbability", &M::SpecularProbability), Field("refractionRatio", &M::RefractionRatio),
+			Field("emissiveStrength", &M::EmissiveStrenght), Field("emissiveColor", &M::EmissiveColor),
+			Field("specularColor", &M::SpecularColor), Field("refractionProbability", &M::RefractionProbability),
+			Field("refractionRoughness", &M::RefractionRoughness), Field("refractionColor", &M::RefractionColor),
+			Field("albedoTexture", &M::AlbedoTexture), Field("checker", &M::Checker), Field("checkerScale", &M::CheckerScale),
+			Field("noiseType", &M::NoiseType), Field("noiseScale", &M::NoiseScale), Field("noiseBlend", &M::NoiseBlend),
+			Field("noiseOctaves", &M::NoiseOctaves), Field("noiseTurbulence", &M::NoiseTurbulence),
+			Field("noiseColorA", &M::NoiseColorA), Field("noiseColorB", &M::NoiseColorB),
+			Field("metalness", &M::Metalness), Field("specularTint", &M::SpecularTint),
+			Field("normalTexture", &M::NormalTexture), Field("normalStrength", &M::NormalStrength), Field("normalFlipY", &M::NormalFlipY),
+			Field("alphaTexture", &M::AlphaTexture), Field("alphaCutoff", &M::AlphaCutoff));
+	}
+
 	static Material CreateDefaultPrincipled(glm::vec4 color = { 0.8f, 0.8f, 0.8f, 1.0f }) {
 		Material m;
 		m.Color = color;

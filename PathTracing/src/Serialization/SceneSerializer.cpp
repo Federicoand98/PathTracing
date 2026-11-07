@@ -1,6 +1,8 @@
 #include "SceneSerializer.h"
 
 #include "World.h"
+#include "Json.h"
+#include "../Renderer/RenderSettings.h"
 
 #include <nlohmann/json.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -38,96 +40,19 @@ namespace PathTracer {
 		return m;
 	}
 
-	// ---- Material: campi con nome (leggibile e modificabile a mano) --------
-	// Il padding std430 non si serializza. I campi assenti in un file restano al default
-	// del costruttore, quindi un file vecchio resta caricabile quando aggiungo un campo.
-
-	static json MaterialToJson(const Material& m) {
-		return {
-			{ "color", ToJson(m.Color) },
-			{ "roughness", m.Roughness },
-			{ "specularProbability", m.SpecularProbability },
-			{ "refractionRatio", m.RefractionRatio },
-			{ "emissiveStrength", m.EmissiveStrenght },
-			{ "emissiveColor", ToJson(m.EmissiveColor) },
-			{ "specularColor", ToJson(m.SpecularColor) },
-			{ "refractionProbability", m.RefractionProbability },
-			{ "refractionRoughness", m.RefractionRoughness },
-			{ "refractionColor", ToJson(m.RefractionColor) },
-			{ "albedoTexture", m.AlbedoTexture },
-			{ "checker", m.Checker },
-			{ "checkerScale", m.CheckerScale },
-			{ "noiseType", m.NoiseType },
-			{ "noiseScale", m.NoiseScale },
-			{ "noiseBlend", m.NoiseBlend },
-			{ "noiseOctaves", m.NoiseOctaves },
-			{ "noiseTurbulence", m.NoiseTurbulence },
-			{ "noiseColorA", ToJson(m.NoiseColorA) },
-			{ "noiseColorB", ToJson(m.NoiseColorB) },
-			{ "metalness", m.Metalness },
-			{ "specularTint", m.SpecularTint },
-			{ "normalTexture", m.NormalTexture },
-			{ "normalStrength", m.NormalStrength },
-			{ "normalFlipY", m.NormalFlipY },
-			{ "alphaTexture", m.AlphaTexture },
-			{ "alphaCutoff", m.AlphaCutoff },
-		};
-	}
-
-	static Material MaterialFromJson(const json& j) {
-		Material m; // parte dai default: i campi mancanti restano sensati
-		auto f = [&](const char* k, float d) { return j.contains(k) ? j[k].get<float>() : d; };
-		auto v4 = [&](const char* k, glm::vec4 d) { return j.contains(k) ? ReadVec4(j[k], d) : d; };
-
-		m.Color = v4("color", m.Color);
-		m.Roughness = f("roughness", m.Roughness);
-		m.SpecularProbability = f("specularProbability", m.SpecularProbability);
-		m.RefractionRatio = f("refractionRatio", m.RefractionRatio);
-		m.EmissiveStrenght = f("emissiveStrength", m.EmissiveStrenght);
-		m.EmissiveColor = v4("emissiveColor", m.EmissiveColor);
-		m.SpecularColor = v4("specularColor", m.SpecularColor);
-		m.RefractionProbability = f("refractionProbability", m.RefractionProbability);
-		m.RefractionRoughness = f("refractionRoughness", m.RefractionRoughness);
-		m.RefractionColor = v4("refractionColor", m.RefractionColor);
-		m.AlbedoTexture = f("albedoTexture", m.AlbedoTexture);
-		m.Checker = f("checker", m.Checker);
-		m.CheckerScale = f("checkerScale", m.CheckerScale);
-		m.NoiseType = f("noiseType", m.NoiseType);
-		m.NoiseScale = f("noiseScale", m.NoiseScale);
-		m.NoiseBlend = f("noiseBlend", m.NoiseBlend);
-		m.NoiseOctaves = f("noiseOctaves", m.NoiseOctaves);
-		m.NoiseTurbulence = f("noiseTurbulence", m.NoiseTurbulence);
-		m.NoiseColorA = v4("noiseColorA", m.NoiseColorA);
-		m.NoiseColorB = v4("noiseColorB", m.NoiseColorB);
-		m.Metalness = f("metalness", m.Metalness);
-		m.SpecularTint = f("specularTint", m.SpecularTint);
-		m.NormalTexture = f("normalTexture", m.NormalTexture);
-		m.NormalStrength = f("normalStrength", m.NormalStrength);
-		m.NormalFlipY = f("normalFlipY", m.NormalFlipY);
-		m.AlphaTexture = f("alphaTexture", m.AlphaTexture);
-		m.AlphaCutoff = f("alphaCutoff", m.AlphaCutoff);
-		return m;
-	}
-
 	// ---- Serialize ---------------------------------------------------------
 
 	bool SceneSerializer::Serialize(const std::string& path) const {
 		json root;
 		root["version"] = 1;
 		root["background"] = ToJson(m_World.BackgroundColor);
-		const SunParams& sun = m_World.Sun;
-		root["sun"] = { { "enabled", sun.Enabled }, { "elevation", sun.Elevation }, { "azimuth", sun.Azimuth },
-		                { "angularRadius", sun.AngularRadius }, { "color", ToJson(sun.Color) }, { "irradiance", sun.Irradiance } };
-
-		json lights = json::array();
-		for (const PunctualLight& p : m_World.PunctualLights)
-			lights.push_back({ { "type", p.Spot ? "spot" : "point" }, { "position", ToJson(p.Position) },
-			                   { "direction", ToJson(p.Direction) }, { "color", ToJson(p.Color) },
-			                   { "intensity", p.Intensity }, { "innerAngle", p.InnerAngle }, { "outerAngle", p.OuterAngle } });
-		root["punctualLights"] = lights;
-
-		for (const Material& m : m_World.Materials)
-			root["materials"].push_back(MaterialToJson(m));
+		root["environmentMapping"] = m_World.EnvironmentMapping;
+		root["camera"] = m_World.Camera;
+		root["sun"] = m_World.Sun;
+		root["punctualLights"] = m_World.PunctualLights;
+		root["materials"] = m_World.Materials;
+		if (m_Render)
+			root["render"] = *m_Render;
 
 		for (const Sphere& s : m_World.Spheres)
 			root["spheres"].push_back({ { "position", ToJson(s.Position) },
@@ -200,32 +125,16 @@ namespace PathTracer {
 
 		m_World.BackgroundColor = ReadVec3(root.value("background", json()), glm::vec3(0.6f, 0.7f, 0.9f));
 
-		// Una scena salvata prima del Sole non ha il blocco: resta spento, come dopo DestroyScene.
-		if (root.contains("sun")) {
-			const json& sj = root["sun"];
-			SunParams& sun = m_World.Sun;
-			sun.Enabled = sj.value("enabled", sun.Enabled);
-			sun.Elevation = sj.value("elevation", sun.Elevation);
-			sun.Azimuth = sj.value("azimuth", sun.Azimuth);
-			sun.AngularRadius = sj.value("angularRadius", sun.AngularRadius);
-			sun.Color = ReadVec3(sj.value("color", json()), sun.Color);
-			sun.Irradiance = sj.value("irradiance", sun.Irradiance);
-		}
-
-		for (const json& lj : root.value("punctualLights", json::array())) {
-			PunctualLight p;
-			p.Spot = lj.value("type", std::string("point")) == "spot";
-			p.Position = ReadVec3(lj.value("position", json()), p.Position);
-			p.Direction = ReadVec3(lj.value("direction", json()), p.Direction);
-			p.Color = ReadVec3(lj.value("color", json()), p.Color);
-			p.Intensity = lj.value("intensity", p.Intensity);
-			p.InnerAngle = lj.value("innerAngle", p.InnerAngle);
-			p.OuterAngle = lj.value("outerAngle", p.OuterAngle);
-			m_World.PunctualLights.push_back(p);
-		}
-
-		for (const json& mj : root.value("materials", json::array()))
-			m_World.Materials.push_back(MaterialFromJson(mj));
+		m_World.EnvironmentMapping = root.value("environmentMapping", m_World.EnvironmentMapping);
+		// Un blocco assente lascia il valore com'e': una scena salvata prima del Sole lo tiene
+		// spento, come dopo DestroyScene, e una salvata prima di RenderSettings non tocca la
+		// qualita' corrente.
+		root.value("sun", json()).get_to(m_World.Sun);
+		root.value("camera", json()).get_to(m_World.Camera);
+		root.value("punctualLights", json::array()).get_to(m_World.PunctualLights);
+		root.value("materials", json::array()).get_to(m_World.Materials);
+		if (m_Render)
+			root.value("render", json()).get_to(*m_Render);
 
 		for (const json& sj : root.value("spheres", json::array())) {
 			Sphere s;
