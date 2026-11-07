@@ -146,10 +146,15 @@ namespace Lucerna {
 		const bool geometryChanged = world.GeometryVersion != m_GeometryVersion;
 		m_GeometryVersion = world.GeometryVersion;
 
-		Upload(m_Spheres, world.Spheres.data(), sizeof(Sphere) * world.Spheres.size());
-		Upload(m_Materials, world.Materials.data(), sizeof(Material) * world.Materials.size());
-		Upload(m_Quads, world.Quads.data(), sizeof(Quad) * world.Quads.size());
-		Upload(m_Meshes, world.Meshes.data(), sizeof(MeshInfo) * world.Meshes.size());
+		// Gli oggetti portano anche id e nome: sulla GPU vanno i soli dati, impacchettati (issue #23)
+		const std::vector<Sphere> spheres = world.Spheres.Pack();
+		const std::vector<Material> materials = world.Materials.Pack();
+		const std::vector<Quad> quads = world.Quads.Pack();
+		const std::vector<MeshInfo> meshes = world.Meshes.Pack();
+		Upload(m_Spheres, spheres.data(), sizeof(Sphere) * spheres.size());
+		Upload(m_Materials, materials.data(), sizeof(Material) * materials.size());
+		Upload(m_Quads, quads.data(), sizeof(Quad) * quads.size());
+		Upload(m_Meshes, meshes.data(), sizeof(MeshInfo) * meshes.size());
 
 		if (geometryChanged) {
 			Upload(m_TriPositions, world.TriPositions.data(), sizeof(TrianglePosition) * world.TriPositions.size());

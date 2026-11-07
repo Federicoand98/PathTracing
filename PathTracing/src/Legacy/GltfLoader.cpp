@@ -147,7 +147,7 @@ namespace Lucerna {
 					p.InnerAngle = glm::degrees(gl.spot_inner_cone_angle);
 					p.OuterAngle = glm::degrees(gl.spot_outer_cone_angle);
 				}
-				PunctualLights.push_back(p);
+				PunctualLights.Add(p, gl.name ? gl.name : (node.name ? node.name : (p.Spot ? "Spot light" : "Point light")));
 				any = true;
 			}
 		}
@@ -219,7 +219,7 @@ namespace Lucerna {
 				m.AlbedoTexture = static_cast<float>(RegisterTexture(baseTex));
 				m.Color = glm::vec4(1.0f); // la texture porta il colore, non tingerla due volte
 			}
-			Materials.push_back(m);
+			Materials.Add(m, gm.name ? gm.name : "");
 		}
 
 		size_t triTotal = 0;
@@ -317,8 +317,7 @@ namespace Lucerna {
 				mesh.LocalMin = localMin;
 				mesh.LocalMax = localMax;
 
-				Meshes.push_back(mesh);
-				MeshNames.push_back(node.mesh->name ? node.mesh->name : "gltf_mesh");
+				Meshes.Add(mesh, node.mesh->name ? node.mesh->name : (node.name ? node.name : ""));
 				MeshPaths.push_back(path);
 				SetMeshTransform(static_cast<int>(Meshes.size()) - 1, transform);
 				triTotal += triCount;

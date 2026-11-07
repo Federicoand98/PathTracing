@@ -40,6 +40,53 @@ namespace Lucerna {
 		return m;
 	}
 
+	// ---- identita' degli oggetti (issue #23) ---------------------------------
+	// Ogni oggetto salvato porta "id" e "name" accanto ai suoi campi. Un file senza (salvato
+	// prima dell'issue) carica gli oggetti con un id nuovo e il nome di default del tipo.
+
+	static void WriteIdentity(json& j, const ObjectId& id, const std::string& name) {
+		j["id"] = id.ToString();
+		j["name"] = name;
+	}
+
+	static ObjectId ReadId(const json& j) {
+		if (auto it = j.find("id"); it != j.end() && it->is_string())
+			if (std::optional<ObjectId> id = ObjectId::Parse(it->get<std::string>()))
+				return *id;
+		return {};
+	}
+
+	static std::string ReadName(const json& j) { return j.value("name", std::string()); }
+
+	// Le liste i cui oggetti hanno una tabella di campi (materiali, luci)
+	template<class T>
+	static json ObjectsToJson(const ObjectList<T>& list) {
+		json a = json::array();
+		for (const SceneObject<T>& o : list) {
+			json j = static_cast<const T&>(o);
+			WriteIdentity(j, o.Id, o.Name);
+			a.push_back(j);
+		}
+		return a;
+	}
+
+	template<class T>
+	static void ObjectsFromJson(const json& a, ObjectList<T>& list) {
+		if (!a.is_array()) return;
+		for (const json& j : a) {
+			T data{};
+			j.get_to(data);
+			list.Add(data, ReadName(j), ReadId(j));
+		}
+	}
+
+	// Un oggetto creato da una funzione del World (CreateBox, AddMesh) riceve dopo l'identita' salvata
+	template<class T>
+	static void RestoreIdentity(ObjectList<T>& list, SceneObject<T>& o, const json& j) {
+		if (ObjectId id = ReadId(j); !id.IsNil()) o.Id = id;
+		if (std::string name = ReadName(j); !name.empty()) list.Rename(o, name);
+	}
+
 	// ---- Serialize ---------------------------------------------------------
 
 	bool SceneSerializer::Serialize(const std::string& path) const {
@@ -49,31 +96,34 @@ namespace Lucerna {
 		root["environmentMapping"] = m_World.EnvironmentMapping;
 		root["camera"] = m_World.Camera;
 		root["sun"] = m_World.Sun;
-		root["punctualLights"] = m_World.PunctualLights;
-		root["materials"] = m_World.Materials;
+		root["punctualLights"] = ObjectsToJson(m_World.PunctualLights);
+		root["materials"] = ObjectsToJson(m_World.Materials);
 		if (m_Render)
 			root["render"] = *m_Render;
 
-		for (const Sphere& s : m_World.Spheres)
-			root["spheres"].push_back({ { "position", ToJson(s.Position) },
-										{ "material", (int)s.MaterialIndex } });
+		for (const SceneObject<Sphere>& s : m_World.Spheres) {
+			json j = { { "position", ToJson(s.Position) }, { "material", (int)s.MaterialIndex } };
+			WriteIdentity(j, s.Id, s.Name);
+			root["spheres"].push_back(j);
+		}
 
 		// Solo i quad autonomi: quelli di un box vengono rigenerati da CreateBox al load,
 		// quindi salvarli li duplicherebbe.
 		for (size_t i = 0; i < m_World.Quads.size(); i++) {
 			if (m_World.QuadOwnerBox((int)i) >= 0) continue;
-			const Quad& q = m_World.Quads[i];
-			root["quads"].push_back({ { "posLLC", ToJson(q.PositionLLC) },
-									  { "u", ToJson(q.U) }, { "v", ToJson(q.V) },
-									  { "width", q.Width }, { "height", q.Height },
-									  { "material", (int)q.MaterialIndex } });
+			const SceneObject<Quad>& q = m_World.Quads[i];
+			json j = { { "posLLC", ToJson(q.PositionLLC) }, { "u", ToJson(q.U) }, { "v", ToJson(q.V) },
+			           { "width", q.Width }, { "height", q.Height }, { "material", (int)q.MaterialIndex } };
+			WriteIdentity(j, q.Id, q.Name);
+			root["quads"].push_back(j);
 		}
 
 		// Un box e' definito da min/max/materiale: i 6 quad sono derivati.
-		for (const Box& b : m_World.Boxes)
-			root["boxes"].push_back({ { "min", ToJson(glm::vec3(b.Min)) },
-									  { "max", ToJson(glm::vec3(b.Max)) },
-									  { "material", (int)b.MaterialIndex } });
+		for (const SceneObject<Box>& b : m_World.Boxes) {
+			json j = { { "min", ToJson(glm::vec3(b.Min)) }, { "max", ToJson(glm::vec3(b.Max)) }, { "material", (int)b.MaterialIndex } };
+			WriteIdentity(j, b.Id, b.Name);
+			root["boxes"].push_back(j);
+		}
 
 		// La mesh si salva come path OBJ + trasformazione + materiale: i triangoli e i BLAS
 		// si ricostruiscono al load. Una mesh senza path (sorgente ignota) viene saltata.
@@ -83,9 +133,10 @@ namespace Lucerna {
 				std::cerr << "Serialize: mesh " << i << " senza path, saltata" << std::endl;
 				continue;
 			}
-			root["meshes"].push_back({ { "path", meshPath },
-									   { "transform", ToJson(m_World.Meshes[i].Transform) },
-									   { "material", (int)m_World.Meshes[i].MaterialIndex } });
+			json j = { { "path", meshPath }, { "transform", ToJson(m_World.Meshes[i].Transform) },
+			           { "material", (int)m_World.Meshes[i].MaterialIndex } };
+			WriteIdentity(j, m_World.Meshes[i].Id, m_World.Meshes[i].Name);
+			root["meshes"].push_back(j);
 		}
 
 		root["textures"] = m_World.TexturePaths;
@@ -131,8 +182,8 @@ namespace Lucerna {
 		// qualita' corrente.
 		root.value("sun", json()).get_to(m_World.Sun);
 		root.value("camera", json()).get_to(m_World.Camera);
-		root.value("punctualLights", json::array()).get_to(m_World.PunctualLights);
-		root.value("materials", json::array()).get_to(m_World.Materials);
+		ObjectsFromJson(root.value("punctualLights", json::array()), m_World.PunctualLights);
+		ObjectsFromJson(root.value("materials", json::array()), m_World.Materials);
 		if (m_Render)
 			root.value("render", json()).get_to(*m_Render);
 
@@ -140,7 +191,7 @@ namespace Lucerna {
 			Sphere s;
 			s.Position = ReadVec4(sj.value("position", json()), glm::vec4(0.0f));
 			s.MaterialIndex = (float)sj.value("material", 0);
-			m_World.Spheres.push_back(s);
+			m_World.Spheres.Add(s, ReadName(sj), ReadId(sj));
 		}
 
 		for (const json& qj : root.value("quads", json::array())) {
@@ -151,15 +202,17 @@ namespace Lucerna {
 			q.Width = qj.value("width", 1.0f);
 			q.Height = qj.value("height", 1.0f);
 			q.MaterialIndex = (float)qj.value("material", 0);
-			m_World.Quads.push_back(q);
+			m_World.Quads.Add(q, ReadName(qj), ReadId(qj));
 		}
 
 		// I box vanno DOPO i quad autonomi: CreateBox appende i suoi 6 quad in coda e imposta
 		// Box::index, cosi' l'invariante "index crescente" su cui conta lo shader regge.
-		for (const json& bj : root.value("boxes", json::array()))
+		for (const json& bj : root.value("boxes", json::array())) {
 			m_World.CreateBox(ReadVec3(bj.value("min", json()), glm::vec3(0.0f)),
 							  ReadVec3(bj.value("max", json()), glm::vec3(1.0f)),
 							  (float)bj.value("material", 0));
+			RestoreIdentity(m_World.Boxes, m_World.Boxes.back(), bj);
+		}
 
 		m_World.TexturePaths = root.value("textures", std::vector<std::string>{});
 		m_World.DataTexturePaths = root.value("dataTextures", std::vector<std::string>{});
@@ -171,8 +224,10 @@ namespace Lucerna {
 			if (meshPath.empty()) continue;
 
 			const int idx = m_World.AddMesh(meshPath, glm::vec3(0.0f), mj.value("material", 0));
-			if (idx >= 0)
+			if (idx >= 0) {
 				m_World.SetMeshTransform(idx, ReadMat4(mj.value("transform", json()), glm::mat4(1.0f)));
+				RestoreIdentity(m_World.Meshes, m_World.Meshes[idx], mj);
+			}
 		}
 
 		std::cout << "Scena caricata: " << path << " ("
