@@ -84,12 +84,12 @@ namespace Lucerna {
 			MeshAsset asset;
 			asset.Source = { path };
 			for (const MtlMaterial& mm : model.GetMaterials())
-				asset.MaterialSlots.push_back(assets.Materials.Add(MaterialFromMtl(mm, assets), mm.Name).Id);
+				asset.MaterialSlots.push_back(assets.AddMaterial(MaterialFromMtl(mm, assets), mm.Name));
 			CopyGeometry(model, asset);
 
 			std::cout << "OBJ caricato: " << asset.Triangles.size() << " triangoli, "
 				<< asset.MaterialSlots.size() << " materiali MTL" << std::endl;
-			instance.Asset = assets.Meshes.Add(asset, model.GetName()).Id;
+			instance.Asset = assets.AddMesh(asset, model.GetName());
 			scene.Instances.push_back({ { model.GetName() }, instance });
 			return true;
 		}

@@ -85,12 +85,9 @@ lucerna_module(Assets        DEPS Core)
 lucerna_module(Scene         DEPS Core Assets)
 lucerna_module(Import        DEPS Core Assets Scene LIBS cgltf)
 lucerna_module(Vulkan        DEPS Core LIBS Vulkan::Vulkan glfw stb)
-# Transitorio (milestone Scene architecture): World e il codice ancora intrecciato con lui.
-# Ogni issue ne porta fuori un pezzo, la #29 lo cancella.
-lucerna_module(Legacy        DEPS Core Assets Scene Import)
-lucerna_module(Render        DEPS Core Assets Scene Vulkan Legacy LIBS stb)
-lucerna_module(Serialization DEPS Core Assets Scene Legacy Render)
-lucerna_module(Editor        DEPS Core Assets Scene Import Vulkan Legacy Render Serialization LIBS imgui imguizmo glfw)
+lucerna_module(Render        DEPS Core Assets Scene Vulkan LIBS stb)
+lucerna_module(Serialization DEPS Core Assets Scene Import Render)
+lucerna_module(Editor        DEPS Core Assets Scene Import Vulkan Render Serialization LIBS imgui imguizmo glfw)
 
 get_property(LUCERNA_MODULES GLOBAL PROPERTY LUCERNA_MODULES)
 file(WRITE ${CMAKE_BINARY_DIR}/modules.txt "${LUCERNA_MODULES}")
@@ -99,7 +96,7 @@ add_executable(${PROJECT_NAME} "${SRC_DIR}/Main.cpp")
 
 # Controlli della logica senza GPU (tests/Checks.cpp): ./build/LucernaChecks
 add_executable(LucernaChecks "${CMAKE_CURRENT_SOURCE_DIR}/tests/Checks.cpp")
-target_link_libraries(LucernaChecks PRIVATE LucernaScene LucernaLegacy)
+target_link_libraries(LucernaChecks PRIVATE LucernaScene LucernaImport LucernaSerialization)
 set_target_properties(LucernaChecks PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 target_link_libraries(${PROJECT_NAME} PRIVATE LucernaEditor)
 

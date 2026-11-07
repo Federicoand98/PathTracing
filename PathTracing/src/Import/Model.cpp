@@ -225,7 +225,7 @@ namespace Lucerna {
 			triangle->UVB = uvAt(face->uv_ins[1]);
 			triangle->UVC = uvAt(face->uv_ins[2]);
 
-			// indice LOCALE nel MTL del modello; World lo rimappa al globale. -1 resta -1
+			// indice LOCALE nel MTL del modello: diventa lo slot del materiale. -1 resta -1
 			// (nessun usemtl) e a valle diventa il fallback al materiale della mesh.
 			triangle->MaterialSlot = (float)face->material;
 

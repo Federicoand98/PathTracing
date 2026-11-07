@@ -121,7 +121,7 @@ namespace Lucerna {
 		m_DenoiseMs = m_DenoiseWritten ? static_cast<float>(ticks[3] - ticks[2]) * toMs : 0.0f;
 	}
 
-	void Renderer::Render(const RenderView& view, World& world) {
+	void Renderer::Render(const RenderView& view, Scene& scene, AssetLibrary& assets) {
 		m_View = view;
 		if (m_Width == 0 || m_Height == 0)
 			return;
@@ -137,10 +137,10 @@ namespace Lucerna {
 			m_PickAvailable = true;
 		}
 
-		// La scena per la GPU segue il World; qualunque cambiamento della scena, o delle impostazioni
+		// La scena per la GPU segue scena e asset; qualunque loro cambiamento, o delle impostazioni
 		// che toccano l'integratore, invalida i campioni accumulati.
-		const uint32_t changes = world.TakeChanges();
-		m_Scene->Sync(world, changes);
+		const uint32_t changes = scene.TakeChanges() | assets.TakeChanges();
+		m_Scene->Sync(scene, assets, changes);
 		if (changes != NoChange || AccumulationKey(Settings, View) != AccumulationKey(m_LastSettings, m_LastView))
 			RestartAccumulation();
 		m_LastSettings = Settings;
@@ -189,7 +189,7 @@ namespace Lucerna {
 		glm::mat4 viewProjection = view.Projection * view.View;
 		bool aovNeedsUpdate = (viewProjection != m_PrevViewProjection) || m_PTCounter <= 1;
 
-		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(Settings.SamplesPerPixel), static_cast<uint32_t>(Settings.RayDepth), Settings.FireflyClamp, world.Camera().Aperture, world.Camera().FocusDistance, View.AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, Settings.HistoryCap, Settings.NEE, pickPixel, *m_Scene, m_View };
+		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(Settings.SamplesPerPixel), static_cast<uint32_t>(Settings.RayDepth), Settings.FireflyClamp, scene.Camera().Aperture, scene.Camera().FocusDistance, View.AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, Settings.HistoryCap, Settings.NEE, pickPixel, *m_Scene, m_View };
 
 		// Le scritture del frame scorso diventano visibili a questo, e il tonemap non deve
 		// sovrascrivere il display mentre ImGui lo sta ancora leggendo.

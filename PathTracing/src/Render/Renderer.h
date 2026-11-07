@@ -7,7 +7,7 @@
 #include "ptpch.h"
 #include "Scene/Primitives.h"
 #include "Render/RenderView.h"
-#include "Legacy/World.h"
+#include "Scene/Scene.h"
 #include "Vulkan/ComputePipeline.h"
 #include "Render/PathTracer.h"
 #include "Render/Denoiser.h"
@@ -19,9 +19,9 @@ namespace Lucerna {
 		Renderer() = default;
 
 		void Initialize();
-		// Consuma i cambiamenti del World: la scena per la GPU si aggiorna e, se qualcosa che
+		// Consuma i cambiamenti di scena e asset: la scena per la GPU si aggiorna e, se qualcosa che
 		// cambia l'immagine e' cambiato, l'accumulo riparte da solo (issue #25).
-		void Render(const RenderView& view, World& world);
+		void Render(const RenderView& view, Scene& scene, AssetLibrary& assets);
 		void OnResize(uint32_t width, uint32_t height);
 		// Solo per chi lo chiede esplicitamente (il bottone "Reset Accumulation"): ogni modifica
 		// della scena o delle impostazioni che cambia l'immagine fa gia' ripartire l'accumulo.
@@ -63,7 +63,7 @@ namespace Lucerna {
 		void ReadTimestamps();
 	private:
 		RenderView m_View;
-		std::unique_ptr<RenderScene> m_Scene;  // la scena per la GPU, ricostruita dal World a ogni reset
+		std::unique_ptr<RenderScene> m_Scene;  // la scena per la GPU, aggiornata da scena e asset a ogni frame
 		std::unique_ptr<PathTracer> m_PathTracer;
 		std::unique_ptr<Denoiser> m_Denoiser;
 		std::unique_ptr<ComputePipeline> m_Tonemap;

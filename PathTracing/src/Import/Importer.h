@@ -13,7 +13,7 @@
 namespace Lucerna {
 
 	// Quello che un file porta oltre agli asset: le istanze delle sue mesh, le luci e, se le ha,
-	// Sole, inquadratura e sfondo. Lo applica il World, aprendo o aggiungendo il file (issue #27).
+	// Sole, inquadratura e sfondo. Lo applicano OpenFile e AddFile (SceneFiles.h, issue #27).
 	struct ImportedScene {
 		struct Named { std::string Name; };
 		struct Instance : Named { Mesh Data; };
@@ -29,7 +29,7 @@ namespace Lucerna {
 	/*
 	* Un formato di file. Legge un file negli asset e in una ImportedScene, e sa rileggere la
 	* geometria degli asset che vengono da un suo file (un file di scena salva solo la sorgente).
-	* Non conosce il World: aprire o aggiungere e' affare di chi lo chiama.
+	* Non conosce la Scene: aprire o aggiungere e' affare di chi lo chiama.
 	*/
 	class Importer {
 	public:

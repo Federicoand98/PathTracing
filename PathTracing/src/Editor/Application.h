@@ -25,7 +25,7 @@
 * 
 * @member m_Renderer: An instance of the Renderer ckass that handles all rendering tasks.
 * @member m_Camera: An instace of the Camera class that represents the camera in the 3D world.
-* @member m_World: An instance of the World class that represents the 3D world.
+* @member m_Scene, m_Assets: the scene description and the assets it references by id.
 */
 
 namespace Lucerna {
@@ -165,7 +165,8 @@ namespace Lucerna {
 
 		Renderer m_Renderer;
 		Camera m_Camera;
-		World m_World;
+		Scene m_Scene;          // la descrizione della scena (issue #29)
+		AssetLibrary m_Assets;  // geometria, materiali e texture che la scena cita per id
 
 		// Live-link glTF (ADR 0003): il renderer osserva il file caricato e lo ricarica quando
 		// cambia (tipicamente perche' Blender l'ha ri-esportato su save). Read-only verso Blender.

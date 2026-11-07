@@ -1,6 +1,7 @@
 #include "Serialization/SceneSerializer.h"
 
-#include "Legacy/World.h"
+#include "Scene/Scene.h"
+#include "Import/SceneFiles.h"
 #include "Core/Json.h"
 #include "Render/RenderSettings.h"
 
@@ -53,7 +54,7 @@ namespace Lucerna {
 		}
 	}
 
-	// Un oggetto creato da una funzione del World (CreateBox) riceve dopo l'identita' salvata
+	// Un oggetto creato da una funzione della Scene (CreateBox) riceve dopo l'identita' salvata
 	template<class T>
 	static void RestoreIdentity(ObjectList<T>& list, SceneObject<T>& o, const json& j) {
 		if (ObjectId id = ReadId(j); !id.IsNil()) o.Id = id;
@@ -67,7 +68,8 @@ namespace Lucerna {
 	static constexpr int FORMAT_VERSION = 2;
 
 	bool SceneSerializer::Serialize(const std::string& path) const {
-		const World& w = m_World;
+		const Scene& w = m_Scene;
+		const AssetLibrary& a = m_Assets;
 		json root;
 		root["version"] = FORMAT_VERSION;
 		root["background"] = w.m_BackgroundColor;
@@ -77,9 +79,9 @@ namespace Lucerna {
 		if (m_Render)
 			root["render"] = *m_Render;
 
-		root["assets"]["textures"] = ObjectsToJson(w.m_Assets.Textures);
-		root["assets"]["materials"] = ObjectsToJson(w.m_Assets.Materials);
-		root["assets"]["meshes"] = ObjectsToJson(w.m_Assets.Meshes);
+		root["assets"]["textures"] = ObjectsToJson(a.m_Textures);
+		root["assets"]["materials"] = ObjectsToJson(a.m_Materials);
+		root["assets"]["meshes"] = ObjectsToJson(a.m_Meshes);
 
 		root["punctualLights"] = ObjectsToJson(w.m_PunctualLights);
 		root["spheres"] = ObjectsToJson(w.m_Spheres);
@@ -129,10 +131,12 @@ namespace Lucerna {
 			return false;
 		}
 
-		World& w = m_World;
-		w.DestroyScene();
+		Scene& w = m_Scene;
+		AssetLibrary& a = m_Assets;
+		w.Clear();
+		a.Clear();
 
-		// Un blocco assente lascia il valore com'e': il default del World appena svuotato
+		// Un blocco assente lascia il valore com'e': il default della scena appena svuotata
 		root.value("background", json()).get_to(w.m_BackgroundColor);
 		w.m_EnvironmentMapping = root.value("environmentMapping", w.m_EnvironmentMapping);
 		root.value("sun", json()).get_to(w.m_Sun);
@@ -141,9 +145,9 @@ namespace Lucerna {
 			root.value("render", json()).get_to(*m_Render);
 
 		const json assets = root.value("assets", json::object());
-		ObjectsFromJson(assets.value("textures", json::array()), w.m_Assets.Textures);
-		ObjectsFromJson(assets.value("materials", json::array()), w.m_Assets.Materials);
-		ObjectsFromJson(assets.value("meshes", json::array()), w.m_Assets.Meshes);
+		ObjectsFromJson(assets.value("textures", json::array()), a.m_Textures);
+		ObjectsFromJson(assets.value("materials", json::array()), a.m_Materials);
+		ObjectsFromJson(assets.value("meshes", json::array()), a.m_Meshes);
 
 		ObjectsFromJson(root.value("punctualLights", json::array()), w.m_PunctualLights);
 		ObjectsFromJson(root.value("spheres", json::array()), w.m_Spheres);
@@ -159,12 +163,13 @@ namespace Lucerna {
 		ObjectsFromJson(root.value("meshes", json::array()), w.m_Meshes);
 
 		// la geometria si rilegge dalle sorgenti: un glTF si analizza una volta per tutte le sue mesh
-		w.LoadMissingGeometry();
+		LoadMissingGeometry(a);
 
 		std::cout << "Scena caricata: " << path << " (" << w.m_Spheres.size() << " sfere, "
-			<< w.m_Boxes.size() << " box, " << w.m_Meshes.size() << " istanze di " << w.m_Assets.Meshes.size()
-			<< " mesh, " << w.m_Assets.Materials.size() << " materiali)" << std::endl;
-		w.m_Changes = AllChanged;
+			<< w.m_Boxes.size() << " box, " << w.m_Meshes.size() << " istanze di " << a.m_Meshes.size()
+			<< " mesh, " << a.m_Materials.size() << " materiali)" << std::endl;
+		w.m_Changes = SceneChanges;
+		a.m_Changes = AssetChanges;
 		return true;
 	}
 }

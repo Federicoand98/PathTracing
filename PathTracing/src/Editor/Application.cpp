@@ -6,6 +6,7 @@
 #include "Editor/Input.h"
 #include "Core/Random.h"
 #include "Serialization/SceneSerializer.h"
+#include "Import/SceneFiles.h"
 #include "Serialization/BuiltinScenes.h"
 #include "Import/Importer.h"
 #include "vendor/portable-file-dialogs.h"
@@ -70,7 +71,7 @@ namespace Lucerna {
 			OpenFile(g); // qualunque formato del registry, non solo glTF
 		// PT_SCENE_FILE=<file.json> apre una scena salvata (formato 2)
 		if (const char* f = getenv("PT_SCENE_FILE"))
-			if (SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(f))
+			if (SceneSerializer(m_Scene, m_Assets, &m_Renderer.Settings).Deserialize(f))
 				m_CurrentScene = -1;
 
 		// Test/CI headless: PT_NEE=0 forza la NEE spenta (A/B col light sampling).
@@ -78,7 +79,7 @@ namespace Lucerna {
 		if (const char* c = getenv("PT_CAM")) {
 			glm::vec3 pos, dir;
 			if (sscanf(c, "%f,%f,%f,%f,%f,%f", &pos.x, &pos.y, &pos.z, &dir.x, &dir.y, &dir.z) == 6) {
-				m_World.MoveCamera(pos, glm::normalize(dir)); // e' l'inquadratura: la vista la segue in SyncCameras
+				m_Scene.MoveCamera(pos, glm::normalize(dir)); // e' l'inquadratura: la vista la segue in SyncCameras
 			}
 		}
 
@@ -100,7 +101,8 @@ namespace Lucerna {
 
 	Application::~Application() {
 		//Shutdown();
-		m_World.DestroyScene();
+		m_Scene.Clear();
+		m_Assets.Clear();
 		s_Instance = nullptr;
 	}
 
@@ -296,7 +298,7 @@ namespace Lucerna {
 	// successo salva path e mtime: da qui in poi PollLiveLink lo sorveglia.
 	bool Application::OpenFile(const std::string& path) {
 		m_Selection = {};
-		if (!m_World.Open(path))
+		if (!Lucerna::OpenFile(path, m_Scene, m_Assets))
 			return false;
 
 		m_WatchPath = path;
@@ -311,7 +313,7 @@ namespace Lucerna {
 	// indici della scena vecchia.
 	bool Application::LoadBuiltinScene(int index) {
 		m_Selection = {};
-		if (!SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(m_BuiltinScenes[index].Path))
+		if (!SceneSerializer(m_Scene, m_Assets, &m_Renderer.Settings).Deserialize(m_BuiltinScenes[index].Path))
 			return false;
 		m_CurrentScene = index;
 		m_WatchPath.clear(); // il live-link e' del file aperto con Open
@@ -353,7 +355,7 @@ namespace Lucerna {
 		m_WatchMtime = mtime;
 		std::cout << "Live-link: rilevato cambio, riapro " << m_WatchPath << std::endl;
 		m_Selection = {};
-		m_World.Open(m_WatchPath);
+		Lucerna::OpenFile(m_WatchPath, m_Scene, m_Assets);
 	}
 
 	void Application::CalculateTime() {
@@ -505,18 +507,18 @@ namespace Lucerna {
 		}
 
 		{
-			bool environment = m_World.EnvironmentMapping();
-			glm::vec3 background = m_World.BackgroundColor();
+			bool environment = m_Scene.EnvironmentMapping();
+			glm::vec3 background = m_Scene.BackgroundColor();
 			bool changed = ImGui::Checkbox("Environment Mapping", &environment);
 			if (!environment)
 				changed |= ImGui::ColorEdit3("Background", glm::value_ptr(background));
 			if (changed)
-				m_World.SetBackground(background, environment);
+				m_Scene.SetBackground(background, environment);
 		}
 
 		ImGui::SeparatorText("Sun");
 		{
-			SunParams sun = m_World.Sun();
+			SunParams sun = m_Scene.Sun();
 			bool changed = ImGui::Checkbox("Sun enabled", &sun.Enabled);
 			if (sun.Enabled) {
 				changed |= ImGui::SliderFloat("Elevation", &sun.Elevation, -90.0f, 90.0f, "%.1f deg");
@@ -526,7 +528,7 @@ namespace Lucerna {
 				changed |= ImGui::DragFloat("Irradiance", &sun.Irradiance, 0.05f, 0.0f, 1000.0f, "%.2f");
 			}
 			if (changed)
-				m_World.SetSun(sun);
+				m_Scene.SetSun(sun);
 		}
 
 		ImGui::SeparatorText("Scene file");
@@ -537,12 +539,12 @@ namespace Lucerna {
 		const std::string scenePath = std::string("scenes/") + m_SceneFilename + ".json";
 		if (ImGui::Button("Save")) {
 			std::filesystem::create_directories("scenes");
-			SceneSerializer(m_World, &m_Renderer.Settings).Serialize(scenePath);
+			SceneSerializer(m_Scene, m_Assets, &m_Renderer.Settings).Serialize(scenePath);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Load")) {
 			// la scena caricata si segna tutta cambiata: il renderer la ricarica come un cambio scena
-			if (SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(scenePath)) {
+			if (SceneSerializer(m_Scene, m_Assets, &m_Renderer.Settings).Deserialize(scenePath)) {
 				m_Selection = {};
 				m_CurrentScene = -1;
 			}
@@ -564,54 +566,54 @@ namespace Lucerna {
 		// I 6 quad che compongono un box vivono ANCHE in Quads: elencarli entrambi
 		// riempirebbe l'outliner di duplicati (Random Boxes ha 121 box = 726 quad).
 		// Le facce si selezionano tramite il box che le possiede.
-		std::vector<bool> quadOwnedByBox(m_World.Quads().size(), false);
-		for (const Box& box : m_World.Boxes()) {
+		std::vector<bool> quadOwnedByBox(m_Scene.Quads().size(), false);
+		for (const Box& box : m_Scene.Boxes()) {
 			int first = static_cast<int>(box.index);
-			for (int q = first; q < first + 6 && q < (int)m_World.Quads().size(); q++)
+			for (int q = first; q < first + 6 && q < (int)m_Scene.Quads().size(); q++)
 				quadOwnedByBox[q] = true;
 		}
 
 		const size_t standaloneQuads = std::count(quadOwnedByBox.begin(), quadOwnedByBox.end(), false);
-		const bool empty = m_World.Spheres().empty() && m_World.Boxes().empty()
-						&& standaloneQuads == 0 && m_World.Meshes().empty() && m_World.PunctualLights().empty();
+		const bool empty = m_Scene.Spheres().empty() && m_Scene.Boxes().empty()
+						&& standaloneQuads == 0 && m_Scene.Meshes().empty() && m_Scene.PunctualLights().empty();
 
 		ImGui::BeginChild("OutlinerList", ImVec2(0.0f, 190.0f), true);
 
 		if (empty)
 			ImGui::TextDisabled("empty scene");
 
-		if (!m_World.Spheres().empty() && ImGui::TreeNodeEx("spheres", ImGuiTreeNodeFlags_DefaultOpen, "Spheres (%zu)", m_World.Spheres().size())) {
-			for (size_t i = 0; i < m_World.Spheres().size(); i++)
-				SelectableObjectRow(m_World.Spheres()[i].Name.c_str(), SelectionType::Sphere, (int)i, m_World.Materials().IndexOf(m_World.Spheres()[i].Material));
+		if (!m_Scene.Spheres().empty() && ImGui::TreeNodeEx("spheres", ImGuiTreeNodeFlags_DefaultOpen, "Spheres (%zu)", m_Scene.Spheres().size())) {
+			for (size_t i = 0; i < m_Scene.Spheres().size(); i++)
+				SelectableObjectRow(m_Scene.Spheres()[i].Name.c_str(), SelectionType::Sphere, (int)i, m_Assets.Materials().IndexOf(m_Scene.Spheres()[i].Material));
 			ImGui::TreePop();
 		}
 
-		if (!m_World.Boxes().empty() && ImGui::TreeNodeEx("boxes", ImGuiTreeNodeFlags_DefaultOpen, "Boxes (%zu)", m_World.Boxes().size())) {
-			for (size_t i = 0; i < m_World.Boxes().size(); i++)
-				SelectableObjectRow(m_World.Boxes()[i].Name.c_str(), SelectionType::Box, (int)i, m_World.Materials().IndexOf(m_World.Boxes()[i].Material));
+		if (!m_Scene.Boxes().empty() && ImGui::TreeNodeEx("boxes", ImGuiTreeNodeFlags_DefaultOpen, "Boxes (%zu)", m_Scene.Boxes().size())) {
+			for (size_t i = 0; i < m_Scene.Boxes().size(); i++)
+				SelectableObjectRow(m_Scene.Boxes()[i].Name.c_str(), SelectionType::Box, (int)i, m_Assets.Materials().IndexOf(m_Scene.Boxes()[i].Material));
 			ImGui::TreePop();
 		}
 
 		if (standaloneQuads > 0 && ImGui::TreeNodeEx("quads", ImGuiTreeNodeFlags_DefaultOpen, "Quads (%zu)", standaloneQuads)) {
-			for (size_t i = 0; i < m_World.Quads().size(); i++) {
+			for (size_t i = 0; i < m_Scene.Quads().size(); i++) {
 				if (quadOwnedByBox[i])
 					continue; // faccia di un box
 
-				SelectableObjectRow(m_World.Quads()[i].Name.c_str(), SelectionType::Quad, (int)i, m_World.Materials().IndexOf(m_World.Quads()[i].Material));
+				SelectableObjectRow(m_Scene.Quads()[i].Name.c_str(), SelectionType::Quad, (int)i, m_Assets.Materials().IndexOf(m_Scene.Quads()[i].Material));
 			}
 			ImGui::TreePop();
 		}
 
-		if (!m_World.Meshes().empty() && ImGui::TreeNodeEx("meshes", ImGuiTreeNodeFlags_DefaultOpen, "Meshes (%zu)", m_World.Meshes().size())) {
-			for (size_t i = 0; i < m_World.Meshes().size(); i++) {
-				SelectableObjectRow(m_World.Meshes()[i].Name.c_str(), SelectionType::Mesh, (int)i, m_World.Materials().IndexOf(m_World.Meshes()[i].Material));
+		if (!m_Scene.Meshes().empty() && ImGui::TreeNodeEx("meshes", ImGuiTreeNodeFlags_DefaultOpen, "Meshes (%zu)", m_Scene.Meshes().size())) {
+			for (size_t i = 0; i < m_Scene.Meshes().size(); i++) {
+				SelectableObjectRow(m_Scene.Meshes()[i].Name.c_str(), SelectionType::Mesh, (int)i, m_Assets.Materials().IndexOf(m_Scene.Meshes()[i].Material));
 			}
 			ImGui::TreePop();
 		}
 
-		if (!m_World.PunctualLights().empty() && ImGui::TreeNodeEx("lights", ImGuiTreeNodeFlags_DefaultOpen, "Lights (%zu)", m_World.PunctualLights().size())) {
-			for (size_t i = 0; i < m_World.PunctualLights().size(); i++)
-				SelectableObjectRow(m_World.PunctualLights()[i].Name.c_str(), SelectionType::Light, (int)i, -1);
+		if (!m_Scene.PunctualLights().empty() && ImGui::TreeNodeEx("lights", ImGuiTreeNodeFlags_DefaultOpen, "Lights (%zu)", m_Scene.PunctualLights().size())) {
+			for (size_t i = 0; i < m_Scene.PunctualLights().size(); i++)
+				SelectableObjectRow(m_Scene.PunctualLights()[i].Name.c_str(), SelectionType::Light, (int)i, -1);
 			ImGui::TreePop();
 		}
 
@@ -688,16 +690,16 @@ namespace Lucerna {
 
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: {
-			Sphere sphere = m_World.Spheres().at(SelectedIndex());
+			Sphere sphere = m_Scene.Spheres().at(SelectedIndex());
 			bool changed = ImGui::DragFloat3("Center", glm::value_ptr(sphere.Position), 0.1f);
 			changed |= ImGui::DragFloat("Radius", &sphere.Position.w, 0.05f, 0.001f, 1000.0f);
 			changed |= MaterialCombo("Material", sphere.Material);
 			if (changed)
-				m_World.Set(m_Selection.Id, sphere);
+				m_Scene.Set(m_Selection.Id, sphere);
 			break;
 		}
 		case SelectionType::Quad: {
-			Quad quad = m_World.Quads().at(SelectedIndex());
+			Quad quad = m_Scene.Quads().at(SelectedIndex());
 			bool changed = ImGui::DragFloat3("Corner", glm::value_ptr(quad.PositionLLC), 0.1f);
 			changed |= ImGui::DragFloat3("U axis", glm::value_ptr(quad.U), 0.05f);
 			changed |= ImGui::DragFloat3("V axis", glm::value_ptr(quad.V), 0.05f);
@@ -705,12 +707,12 @@ namespace Lucerna {
 			changed |= ImGui::DragFloat("Height", &quad.Height, 0.1f, 0.001f, 1000.0f);
 			changed |= MaterialCombo("Material", quad.Material);
 			if (changed)
-				m_World.Set(m_Selection.Id, quad);
+				m_Scene.Set(m_Selection.Id, quad);
 			ImGui::TextDisabled("pivot = lower-left corner");
 			break;
 		}
 		case SelectionType::Box: {
-			Box box = m_World.Boxes().at(SelectedIndex());
+			Box box = m_Scene.Boxes().at(SelectedIndex());
 
 			bool changed = false;
 			changed |= ImGui::DragFloat3("Min", glm::value_ptr(box.Min), 0.1f);
@@ -718,17 +720,16 @@ namespace Lucerna {
 			changed |= MaterialCombo("Material", box.Material);
 
 			if (changed)
-				m_World.Set(m_Selection.Id, box); // riscrive anche i suoi 6 quad
+				m_Scene.Set(m_Selection.Id, box); // riscrive anche i suoi 6 quad
 			ImGui::TextDisabled("axis-aligned: cannot be rotated");
 			break;
 		}
 		case SelectionType::Mesh: {
-			Mesh mesh = m_World.Meshes().at(SelectedIndex());
-			const MeshAsset* asset = m_World.AssetOf(mesh);
+			Mesh mesh = m_Scene.Meshes().at(SelectedIndex());
+			const MeshAsset* asset = m_Assets.FindMesh(mesh.Asset);
 			ImGui::Text("Triangles: %d", asset ? static_cast<int>(asset->Triangles.size()) : 0);
 			// le istanze dello stesso asset dividono triangoli e BLAS (issue #26)
-			const int assetIndex = m_World.Assets().Meshes.IndexOf(mesh.Asset);
-			ImGui::TextDisabled("mesh asset: %s", assetIndex >= 0 ? m_World.Assets().Meshes[assetIndex].Name.c_str() : "missing");
+			ImGui::TextDisabled("mesh asset: %s", asset ? m_Assets.FindMesh(mesh.Asset)->Name.c_str() : "missing");
 
 			glm::vec3 position = glm::vec3(mesh.Transform[3]); // la traslazione e' l'ultima colonna
 			bool changed = ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
@@ -740,11 +741,11 @@ namespace Lucerna {
 				changed = true;
 			}
 			if (changed)
-				m_World.Set(m_Selection.Id, mesh);
+				m_Scene.Set(m_Selection.Id, mesh);
 			break;
 		}
 		case SelectionType::Light: {
-			PunctualLight light = m_World.PunctualLights().at(SelectedIndex());
+			PunctualLight light = m_Scene.PunctualLights().at(SelectedIndex());
 			bool changed = false;
 			int type = light.Spot ? 1 : 0;
 			if (ImGui::Combo("Type", &type, "Point\0Spot\0\0")) {
@@ -767,7 +768,7 @@ namespace Lucerna {
 				light.InnerAngle = glm::min(light.InnerAngle, light.OuterAngle);
 			}
 			if (changed)
-				m_World.Set(m_Selection.Id, light);
+				m_Scene.Set(m_Selection.Id, light);
 			break;
 		}
 		default:
@@ -788,27 +789,27 @@ namespace Lucerna {
 	// Un DragFloat sull'indice del materiale non dice niente su cosa si sta scegliendo:
 	// qui ogni voce mostra la pastiglia col colore del materiale.
 	bool Application::MaterialCombo(const char* label, ObjectId& material) {
-		if (m_World.Materials().empty())
+		if (m_Assets.Materials().empty())
 			return false;
 
-		const int count = static_cast<int>(m_World.Materials().size());
-		const int current = m_World.Materials().IndexOf(material);
+		const int count = static_cast<int>(m_Assets.Materials().size());
+		const int current = m_Assets.Materials().IndexOf(material);
 
-		const std::string preview = current >= 0 ? m_World.Materials()[current].Name : "(none)";
+		const std::string preview = current >= 0 ? m_Assets.Materials()[current].Name : "(none)";
 		bool changed = false;
 
 		if (ImGui::BeginCombo(label, preview.c_str())) {
 			for (int i = 0; i < count; i++) {
 				ImGui::PushID(i);
 
-				const glm::vec4& color = m_World.Materials()[i].Color;
+				const glm::vec4& color = m_Assets.Materials()[i].Color;
 				ImGui::ColorButton("##swatch", ImVec4(color.r, color.g, color.b, 1.0f),
 					ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop, ImVec2(14.0f, 14.0f));
 				ImGui::SameLine();
 
-				const std::string& item = m_World.Materials()[i].Name;
+				const std::string& item = m_Assets.Materials()[i].Name;
 				if (ImGui::Selectable(item.c_str(), i == current)) {
-					material = m_World.Materials()[i].Id;
+					material = m_Assets.Materials()[i].Id;
 					changed = true;
 				}
 
@@ -830,15 +831,15 @@ namespace Lucerna {
 
 	// Le texture di un tipo, piu' "None". Un materiale cita la texture per id (issue #26).
 	bool Application::TextureCombo(const char* label, ObjectId& texture, TextureKind kind) {
-		const int current = m_World.Textures().IndexOf(texture);
+		const int current = m_Assets.Textures().IndexOf(texture);
 		bool changed = false;
-		if (ImGui::BeginCombo(label, current >= 0 ? m_World.Textures()[current].Name.c_str() : "None")) {
+		if (ImGui::BeginCombo(label, current >= 0 ? m_Assets.Textures()[current].Name.c_str() : "None")) {
 			if (ImGui::Selectable("None", current < 0)) {
 				texture = {};
 				changed = true;
 			}
-			for (int i = 0; i < static_cast<int>(m_World.Textures().size()); i++) {
-				const auto& t = m_World.Textures()[i];
+			for (int i = 0; i < static_cast<int>(m_Assets.Textures().size()); i++) {
+				const auto& t = m_Assets.Textures()[i];
 				if (t.Kind != kind)
 					continue;
 				ImGui::PushID(i);
@@ -862,10 +863,10 @@ namespace Lucerna {
 	// Il materiale scelto per i nuovi oggetti, se esiste ancora; altrimenti il primo, creandolo
 	// se la scena non ne ha.
 	ObjectId Application::EnsureMaterialExists() {
-		if (m_World.Materials().empty())
-			m_World.AddMaterial(CreateDefaultPrincipled());
-		if (m_World.Materials().IndexOf(m_NewObjectMaterial) < 0)
-			m_NewObjectMaterial = m_World.Materials()[0].Id;
+		if (m_Assets.Materials().empty())
+			m_Assets.AddMaterial(CreateDefaultPrincipled());
+		if (m_Assets.Materials().IndexOf(m_NewObjectMaterial) < 0)
+			m_NewObjectMaterial = m_Assets.Materials()[0].Id;
 		return m_NewObjectMaterial;
 	}
 
@@ -878,7 +879,7 @@ namespace Lucerna {
 			Sphere sphere;
 			sphere.Position = glm::vec4(spawn, 0.5f); // la w e' il raggio
 			sphere.Material = material;
-			m_Selection = Select(SelectionType::Sphere, m_World.AddSphere(sphere));
+			m_Selection = Select(SelectionType::Sphere, m_Scene.AddSphere(sphere));
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
 		}
 
@@ -889,9 +890,9 @@ namespace Lucerna {
 			// CreateBox appende i suoi 6 quad in coda, quindi i Box::index gia' esistenti
 			// restano validi e in ordine crescente, come si aspetta il loop dei Cubes
 			// nello shader (che li scorre in parallelo ai quad).
-			m_World.CreateBox(spawn - glm::vec3(0.5f), spawn + glm::vec3(0.5f), material);
+			m_Scene.CreateBox(spawn - glm::vec3(0.5f), spawn + glm::vec3(0.5f), material);
 
-			m_Selection = Select(SelectionType::Box, (int)m_World.Boxes().size() - 1);
+			m_Selection = Select(SelectionType::Box, (int)m_Scene.Boxes().size() - 1);
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
 		}
 
@@ -906,7 +907,7 @@ namespace Lucerna {
 			quad.Width = 1.0f;
 			quad.Height = 1.0f;
 			quad.Material = material;
-			m_Selection = Select(SelectionType::Quad, m_World.AddQuad(quad));
+			m_Selection = Select(SelectionType::Quad, m_Scene.AddQuad(quad));
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
 		}
 
@@ -916,7 +917,7 @@ namespace Lucerna {
 				PunctualLight light;
 				light.Spot = spot == 1;
 				light.Position = spawn;
-				m_Selection = Select(SelectionType::Light, m_World.AddLight(light, spot ? "Spot light" : "Point light"));
+				m_Selection = Select(SelectionType::Light, m_Scene.AddLight(light, spot ? "Spot light" : "Point light"));
 				m_GizmoOperation = ImGuizmo::TRANSLATE;
 			}
 			if (spot == 0)
@@ -929,7 +930,7 @@ namespace Lucerna {
 			const auto selection = pfd::open_file("Add model", "models", FileFilters()).result();
 			if (!selection.empty()) {
 				const ObjectId material = EnsureMaterialExists();
-				const int mesh = m_World.Add(selection[0], glm::translate(glm::mat4(1.0f), spawn), material);
+				const int mesh = AddFile(selection[0], m_Scene, m_Assets, glm::translate(glm::mat4(1.0f), spawn), material);
 				if (mesh >= 0) {
 					m_Selection = Select(SelectionType::Mesh, mesh);
 					m_GizmoOperation = ImGuizmo::TRANSLATE;
@@ -947,11 +948,11 @@ namespace Lucerna {
 	// Quanti elementi ha la collezione a cui punta una selezione di questo tipo.
 	int Application::SelectionCollectionSize(SelectionType type) const {
 		switch (type) {
-		case SelectionType::Sphere: return static_cast<int>(m_World.Spheres().size());
-		case SelectionType::Quad:   return static_cast<int>(m_World.Quads().size());
-		case SelectionType::Box:    return static_cast<int>(m_World.Boxes().size());
-		case SelectionType::Mesh:   return static_cast<int>(m_World.Meshes().size());
-		case SelectionType::Light:  return static_cast<int>(m_World.PunctualLights().size());
+		case SelectionType::Sphere: return static_cast<int>(m_Scene.Spheres().size());
+		case SelectionType::Quad:   return static_cast<int>(m_Scene.Quads().size());
+		case SelectionType::Box:    return static_cast<int>(m_Scene.Boxes().size());
+		case SelectionType::Mesh:   return static_cast<int>(m_Scene.Meshes().size());
+		case SelectionType::Light:  return static_cast<int>(m_Scene.PunctualLights().size());
 		default:                    return 0;
 		}
 	}
@@ -961,7 +962,7 @@ namespace Lucerna {
 	}
 
 	// Ogni rimozione fa scalare gli indici successivi della sua collezione: la selezione
-	// corrente diventa insensata comunque vada, quindi si azzera PRIMA di toccare il World
+	// corrente diventa insensata comunque vada, quindi si azzera PRIMA di toccare la scena
 	// (la finestra "Viewport" la userebbe piu' avanti in questo stesso frame).
 	void Application::DeleteSelection() {
 		if (!CanDeleteSelection()) return;
@@ -970,11 +971,11 @@ namespace Lucerna {
 		m_Selection = {};
 
 		switch (sel.Type) {
-		case SelectionType::Sphere: m_World.RemoveSphere(IndexOf(sel)); break;
-		case SelectionType::Quad:   m_World.RemoveQuad(IndexOf(sel));   break;
-		case SelectionType::Box:    m_World.RemoveBox(IndexOf(sel));    break;
-		case SelectionType::Mesh:   m_World.RemoveMesh(IndexOf(sel));   break;
-		case SelectionType::Light:  m_World.RemoveLight(IndexOf(sel));  break;
+		case SelectionType::Sphere: m_Scene.RemoveSphere(IndexOf(sel)); break;
+		case SelectionType::Quad:   m_Scene.RemoveQuad(IndexOf(sel));   break;
+		case SelectionType::Box:    m_Scene.RemoveBox(IndexOf(sel));    break;
+		case SelectionType::Mesh:   m_Scene.RemoveMesh(IndexOf(sel));   break;
+		case SelectionType::Light:  m_Scene.RemoveLight(IndexOf(sel));  break;
 		default: break;
 		}
 	}
@@ -1011,7 +1012,7 @@ namespace Lucerna {
 			switch (m_Selection.Type) {
 			case SelectionType::Mesh:
 				ImGui::TextDisabled("instance of %d triangles - the mesh asset stays loaded",
-					m_World.AssetOf(m_World.Meshes()[SelectedIndex()]) ? static_cast<int>(m_World.AssetOf(m_World.Meshes()[SelectedIndex()])->Triangles.size()) : 0);
+					m_Assets.FindMesh(m_Scene.Meshes()[SelectedIndex()].Asset) ? static_cast<int>(m_Assets.FindMesh(m_Scene.Meshes()[SelectedIndex()].Asset)->Triangles.size()) : 0);
 				break;
 			case SelectionType::Box:
 				ImGui::TextDisabled("also removes its 6 faces");
@@ -1051,8 +1052,8 @@ namespace Lucerna {
 		// raw dello struct, che restano il contratto con lo shader. Le "probabilita'" di
 		// importance sampling non compaiono: le derivo qui. Cosi' non possono piu' sommare
 		// a un valore che sopprime il diffuso, che era il footgun della UI precedente.
-		if (index >= 0 && index < (int)m_World.Materials().size())
-			NameField(m_World.Materials()[index].Id, m_World.Materials()[index].Name);
+		if (index >= 0 && index < (int)m_Assets.Materials().size())
+			NameField(m_Assets.Materials()[index].Id, m_Assets.Materials()[index].Name);
 
 		bool edited = false;
 		bool changed = false;
@@ -1218,7 +1219,7 @@ namespace Lucerna {
 
 		// L'indice puo' essere diventato invalido (cambio scena): e' esattamente la classe
 		// di bug che ha fatto crashare la selezione, quindi stesso trattamento.
-		if (m_MaterialEditorIndex < 0 || m_MaterialEditorIndex >= (int)m_World.Materials().size()) {
+		if (m_MaterialEditorIndex < 0 || m_MaterialEditorIndex >= (int)m_Assets.Materials().size()) {
 			m_ShowMaterialEditor = false;
 			return;
 		}
@@ -1230,9 +1231,9 @@ namespace Lucerna {
 
 		if (ImGui::Begin(title.c_str(), &m_ShowMaterialEditor)) {
 			ImGui::PushItemWidth(170.0f);
-			Material material = m_World.Materials()[m_MaterialEditorIndex];
+			Material material = m_Assets.Materials()[m_MaterialEditorIndex];
 			if (DrawMaterialEditor(material, m_MaterialEditorIndex))
-				m_World.Set(m_World.Materials()[m_MaterialEditorIndex].Id, material);
+				m_Assets.Set(m_Assets.Materials()[m_MaterialEditorIndex].Id, material);
 			ImGui::PopItemWidth();
 		}
 
@@ -1244,13 +1245,13 @@ namespace Lucerna {
 	void Application::DrawTextureManager() {
 		ImGui::SeparatorText("Textures");
 
-		if (m_World.Textures().empty())
+		if (m_Assets.Textures().empty())
 			ImGui::TextDisabled("no textures loaded");
 
 		ObjectId remove;
-		for (const auto& texture : m_World.Textures()) {
+		for (const auto& texture : m_Assets.Textures()) {
 			ImGui::PushID(texture.Name.c_str());
-			const bool used = m_World.Assets().IsTextureUsed(texture.Id);
+			const bool used = m_Assets.IsTextureUsed(texture.Id);
 			ImGui::BeginDisabled(used);
 			if (ImGui::SmallButton("x"))
 				remove = texture.Id;
@@ -1262,7 +1263,7 @@ namespace Lucerna {
 			ImGui::PopID();
 		}
 		if (!remove.IsNil())
-			m_World.RemoveTexture(remove);
+			m_Assets.RemoveTexture(remove);
 
 		// elenco dei file disponibili, letto una volta sola. EnvironmentMap e' un'altra cosa:
 		// finisce nella cubemap, non nel sampler2DArray degli albedo.
@@ -1302,10 +1303,10 @@ namespace Lucerna {
 		// Una stessa immagine puo' servire come colore e come dato: sono due asset (sRGB e UNORM)
 		const std::string& selected = m_TextureFiles[m_SelectedTextureFile];
 		if (ImGui::Button("+ Color"))
-			m_World.AddTexture(selected, TextureKind::Color); // gia' caricata = nessun doppione
+			m_Assets.RegisterTexture(selected, TextureKind::Color); // gia' caricata = nessun doppione
 		ImGui::SameLine();
 		if (ImGui::Button("+ Data"))
-			m_World.AddTexture(selected, TextureKind::Data);
+			m_Assets.RegisterTexture(selected, TextureKind::Data);
 		ImGui::TextDisabled("color = albedo (sRGB), data = normal map or alpha mask");
 	}
 
@@ -1316,10 +1317,10 @@ namespace Lucerna {
 		ImGui::Spacing();
 
 		if (ImGui::Button("+ Add material")) {
-			OpenMaterialEditor(m_World.AddMaterial(CreateDefaultPrincipled()));
+			OpenMaterialEditor(m_Assets.Materials().IndexOf(m_Assets.AddMaterial(CreateDefaultPrincipled())));
 		}
 
-		if (m_World.Materials().empty()) {
+		if (m_Assets.Materials().empty()) {
 			ImGui::TextDisabled("no materials in this scene");
 			return;
 		}
@@ -1327,8 +1328,8 @@ namespace Lucerna {
 		ImGui::Spacing();
 		ImGui::PushItemWidth(200.0f);
 
-		for (size_t i = 0; i < m_World.Materials().size(); i++) {
-			Material material = m_World.Materials().at(i);
+		for (size_t i = 0; i < m_Assets.Materials().size(); i++) {
+			Material material = m_Assets.Materials().at(i);
 
 			ImGui::PushID((int)i);
 
@@ -1337,9 +1338,9 @@ namespace Lucerna {
 				ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop, ImVec2(14.0f, 14.0f));
 			ImGui::SameLine();
 
-			if (ImGui::TreeNode(m_World.Materials()[i].Name.c_str())) {
+			if (ImGui::TreeNode(m_Assets.Materials()[i].Name.c_str())) {
 				if (DrawMaterialEditor(material, (int)i))
-					m_World.Set(m_World.Materials()[i].Id, material);
+					m_Assets.Set(m_Assets.Materials()[i].Id, material);
 				ImGui::TreePop();
 			}
 
@@ -1356,8 +1357,8 @@ namespace Lucerna {
 	// vista la raggiunge. L'obiettivo e' sempre quello dell'inquadratura.
 	void Application::SyncCameras(bool viewMoved) {
 		if (m_Renderer.View.LockViewToCamera && viewMoved)
-			m_World.MoveCamera(m_Camera.GetPosition(), m_Camera.GetDirection());
-		const SceneCamera& shot = m_World.Camera();
+			m_Scene.MoveCamera(m_Camera.GetPosition(), m_Camera.GetDirection());
+		const SceneCamera& shot = m_Scene.Camera();
 		if (!shot.SamePose(m_LastShot))
 			m_Camera.SetView(shot.Position, shot.Direction);
 		if (m_Camera.m_VerticalFOV != shot.VerticalFOV) {
@@ -1437,17 +1438,17 @@ namespace Lucerna {
 		ImGui::SeparatorText("Camera");
 		// riagganciare la vista la riporta sull'inquadratura: il renderer lo vede e riparte
 		if (ImGui::Checkbox("Lock view to camera", &m_Renderer.View.LockViewToCamera) && m_Renderer.View.LockViewToCamera)
-			m_Camera.SetView(m_World.Camera().Position, m_World.Camera().Direction); // torna all'inquadratura
+			m_Camera.SetView(m_Scene.Camera().Position, m_Scene.Camera().Direction); // torna all'inquadratura
 		ImGui::BeginDisabled(m_Renderer.View.LockViewToCamera);
 		if (ImGui::Button("Align camera to view")) // la vista e' gia' li': l'immagine non cambia
-			m_World.MoveCamera(m_Camera.GetPosition(), m_Camera.GetDirection());
+			m_Scene.MoveCamera(m_Camera.GetPosition(), m_Camera.GetDirection());
 		ImGui::EndDisabled();
 		ImGui::TextDisabled(m_Renderer.View.LockViewToCamera ? "navigating moves the scene camera"
 		                                                      : "free view: the scene camera stays put");
 
 		// L'obiettivo cambia i raggi primari, quindi si riconsegna con SetCamera: l'accumulo
 		// riparte (esposizione e tonemap invece agiscono dopo l'accumulo).
-		SceneCamera camera = m_World.Camera();
+		SceneCamera camera = m_Scene.Camera();
 		bool cameraChanged = ImGui::SliderFloat("Vertical FOV", &camera.VerticalFOV, 30.0f, 140.0f);
 		if (ImGui::Button("Reset camera")) {
 			const SceneCamera defaults;
@@ -1470,7 +1471,7 @@ namespace Lucerna {
 			cameraChanged = true;
 		}
 		if (cameraChanged)
-			m_World.SetCamera(camera);
+			m_Scene.SetCamera(camera);
 
 		// pick del punto di fuoco: arma la modalita', il prossimo click nel viewport
 		// mette a fuoco esattamente li'
@@ -1571,23 +1572,23 @@ namespace Lucerna {
 	glm::vec3 Application::GetSelectionPivot() const {
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere:
-			return glm::vec3(m_World.Spheres().at(SelectedIndex()).Position);
+			return glm::vec3(m_Scene.Spheres().at(SelectedIndex()).Position);
 		case SelectionType::Quad: {
-			const Quad& q = m_World.Quads().at(SelectedIndex());
+			const Quad& q = m_Scene.Quads().at(SelectedIndex());
 			return glm::vec3(q.PositionLLC)
 				 + glm::vec3(q.U) * (q.Width * 0.5f)
 				 + glm::vec3(q.V) * (q.Height * 0.5f);
 		}
 		case SelectionType::Box: {
-			const Box& b = m_World.Boxes().at(SelectedIndex());
+			const Box& b = m_Scene.Boxes().at(SelectedIndex());
 			return 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
 		}
 		case SelectionType::Mesh: {
-			const AABB bounds = m_World.WorldBounds(m_World.Meshes().at(SelectedIndex()));
+			const AABB bounds = WorldBounds(m_Scene.Meshes().at(SelectedIndex()), m_Assets);
 			return 0.5f * (bounds.min + bounds.max);
 		}
 		case SelectionType::Light:
-			return m_World.PunctualLights().at(SelectedIndex()).Position;
+			return m_Scene.PunctualLights().at(SelectedIndex()).Position;
 		default:
 			return glm::vec3(0.0f);
 		}
@@ -1600,14 +1601,14 @@ namespace Lucerna {
 
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: {
-			const Sphere& s = m_World.Spheres().at(SelectedIndex());
+			const Sphere& s = m_Scene.Spheres().at(SelectedIndex());
 			glm::vec3 center(s.Position);
 			outMin = center - glm::vec3(s.Position.w);
 			outMax = center + glm::vec3(s.Position.w);
 			break;
 		}
 		case SelectionType::Quad: {
-			const Quad& q = m_World.Quads().at(SelectedIndex());
+			const Quad& q = m_Scene.Quads().at(SelectedIndex());
 			glm::vec3 llc(q.PositionLLC);
 			glm::vec3 edgeU = glm::vec3(q.U) * q.Width;
 			glm::vec3 edgeV = glm::vec3(q.V) * q.Height;
@@ -1621,20 +1622,20 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Box: {
-			const Box& b = m_World.Boxes().at(SelectedIndex());
+			const Box& b = m_Scene.Boxes().at(SelectedIndex());
 			outMin = glm::vec3(b.Min);
 			outMax = glm::vec3(b.Max);
 			break;
 		}
 		case SelectionType::Mesh: {
-			const AABB bounds = m_World.WorldBounds(m_World.Meshes().at(SelectedIndex()));
+			const AABB bounds = WorldBounds(m_Scene.Meshes().at(SelectedIndex()), m_Assets);
 			outMin = bounds.min;
 			outMax = bounds.max;
 			break;
 		}
 		case SelectionType::Light: {
 			// una luce non ha estensione: un piccolo cubo attorno alla posizione per vederla
-			const glm::vec3 p = m_World.PunctualLights().at(SelectedIndex()).Position;
+			const glm::vec3 p = m_Scene.PunctualLights().at(SelectedIndex()).Position;
 			outMin = p - glm::vec3(0.1f);
 			outMax = p + glm::vec3(0.1f);
 			break;
@@ -1659,11 +1660,11 @@ namespace Lucerna {
 		const int i = IndexOf(selection);
 		if (i < 0) return {};
 		switch (selection.Type) {
-		case SelectionType::Sphere: return m_World.Spheres()[i].Name;
-		case SelectionType::Quad:   return m_World.Quads()[i].Name;
-		case SelectionType::Box:    return m_World.Boxes()[i].Name;
-		case SelectionType::Mesh:   return m_World.Meshes()[i].Name;
-		case SelectionType::Light:  return m_World.PunctualLights()[i].Name;
+		case SelectionType::Sphere: return m_Scene.Spheres()[i].Name;
+		case SelectionType::Quad:   return m_Scene.Quads()[i].Name;
+		case SelectionType::Box:    return m_Scene.Boxes()[i].Name;
+		case SelectionType::Mesh:   return m_Scene.Meshes()[i].Name;
+		case SelectionType::Light:  return m_Scene.PunctualLights()[i].Name;
 		default:                    return {};
 		}
 	}
@@ -1675,7 +1676,7 @@ namespace Lucerna {
 		case SelectionType::Quad:   name = "Quad";   break;
 		case SelectionType::Box:    name = "Box";    break;
 		case SelectionType::Light:
-			name = m_World.PunctualLights().at(SelectedIndex()).Spot ? "Spot light" : "Point light";
+			name = m_Scene.PunctualLights().at(SelectedIndex()).Spot ? "Spot light" : "Point light";
 			break;
 		case SelectionType::Mesh:   name = "Mesh";   break;
 		default: return "?";
@@ -1743,7 +1744,7 @@ namespace Lucerna {
 
 		// uno spot non si vede: una linea mostra dove punta
 		if (m_Selection.Type == SelectionType::Light) {
-			const PunctualLight& light = m_World.PunctualLights().at(SelectedIndex());
+			const PunctualLight& light = m_Scene.PunctualLights().at(SelectedIndex());
 			ImVec2 tip;
 			if (light.Spot && WorldToScreen(viewProjection, light.Position + light.Direction * 0.75f, m_ViewportPos, m_ViewportSize, tip)
 			    && WorldToScreen(viewProjection, light.Position, m_ViewportPos, m_ViewportSize, pivot))
@@ -1762,17 +1763,17 @@ namespace Lucerna {
 
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: {
-			Sphere s = m_World.Spheres().at(SelectedIndex());
+			Sphere s = m_Scene.Spheres().at(SelectedIndex());
 			glm::vec3 center = glm::vec3(delta * glm::vec4(glm::vec3(s.Position), 1.0f));
 
 			// una sfera ha un solo raggio: la scala puo' essere solo uniforme
 			float uniformScale = (axisScale.x + axisScale.y + axisScale.z) / 3.0f;
 			s.Position = glm::vec4(center, glm::max(s.Position.w * uniformScale, 1e-4f));
-			m_World.Set(m_Selection.Id, s);
+			m_Scene.Set(m_Selection.Id, s);
 			break;
 		}
 		case SelectionType::Quad: {
-			Quad q = m_World.Quads().at(SelectedIndex());
+			Quad q = m_Scene.Quads().at(SelectedIndex());
 
 			// i lati del quad sono U*Width e V*Height: si trasformano come direzioni
 			glm::vec3 edgeU = linear * (glm::vec3(q.U) * q.Width);
@@ -1788,11 +1789,11 @@ namespace Lucerna {
 			q.Height = height;
 			q.U = glm::vec4(edgeU / width, 0.0f);
 			q.V = glm::vec4(edgeV / height, 0.0f);
-			m_World.Set(m_Selection.Id, q);
+			m_Scene.Set(m_Selection.Id, q);
 			break;
 		}
 		case SelectionType::Box: {
-			Box b = m_World.Boxes().at(SelectedIndex());
+			Box b = m_Scene.Boxes().at(SelectedIndex());
 			glm::vec3 center = 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
 			glm::vec3 size = glm::vec3(b.Max) - glm::vec3(b.Min);
 
@@ -1803,24 +1804,24 @@ namespace Lucerna {
 
 			b.Min = glm::vec4(center - size * 0.5f, 0.0f);
 			b.Max = glm::vec4(center + size * 0.5f, 0.0f);
-			m_World.Set(m_Selection.Id, b); // riscrive i 6 quad che compongono il box
+			m_Scene.Set(m_Selection.Id, b); // riscrive i 6 quad che compongono il box
 			break;
 		}
 		case SelectionType::Mesh: {
 			// nessuna ricostruzione dei BLAS: cambia solo la trasformazione dell'istanza
-			Mesh mesh = m_World.Meshes().at(SelectedIndex());
+			Mesh mesh = m_Scene.Meshes().at(SelectedIndex());
 			mesh.Transform = delta * mesh.Transform;
-			m_World.Set(m_Selection.Id, mesh);
+			m_Scene.Set(m_Selection.Id, mesh);
 			break;
 		}
 		case SelectionType::Light: {
 			// la scala non ha senso su una luce delta: contano posizione e direzione
-			PunctualLight light = m_World.PunctualLights().at(SelectedIndex());
+			PunctualLight light = m_Scene.PunctualLights().at(SelectedIndex());
 			light.Position = glm::vec3(delta * glm::vec4(light.Position, 1.0f));
 			const glm::vec3 dir = linear * light.Direction;
 			if (glm::length(dir) > 1e-6f)
 				light.Direction = glm::normalize(dir);
-			m_World.Set(m_Selection.Id, light);
+			m_Scene.Set(m_Selection.Id, light);
 			break;
 		}
 		default:
@@ -1843,11 +1844,11 @@ namespace Lucerna {
 	ObjectId Application::IdOf(SelectionType type, int index) const {
 		auto idAt = [index](const auto& list) { return index >= 0 && index < (int)list.size() ? list[index].Id : ObjectId{}; };
 		switch (type) {
-		case SelectionType::Sphere: return idAt(m_World.Spheres());
-		case SelectionType::Quad:   return idAt(m_World.Quads());
-		case SelectionType::Box:    return idAt(m_World.Boxes());
-		case SelectionType::Mesh:   return idAt(m_World.Meshes());
-		case SelectionType::Light:  return idAt(m_World.PunctualLights());
+		case SelectionType::Sphere: return idAt(m_Scene.Spheres());
+		case SelectionType::Quad:   return idAt(m_Scene.Quads());
+		case SelectionType::Box:    return idAt(m_Scene.Boxes());
+		case SelectionType::Mesh:   return idAt(m_Scene.Meshes());
+		case SelectionType::Light:  return idAt(m_Scene.PunctualLights());
 		default:                    return {};
 		}
 	}
@@ -1857,11 +1858,11 @@ namespace Lucerna {
 		if (!selection.IsValid())
 			return -1;
 		switch (selection.Type) {
-		case SelectionType::Sphere: return m_World.Spheres().IndexOf(selection.Id);
-		case SelectionType::Quad:   return m_World.Quads().IndexOf(selection.Id);
-		case SelectionType::Box:    return m_World.Boxes().IndexOf(selection.Id);
-		case SelectionType::Mesh:   return m_World.Meshes().IndexOf(selection.Id);
-		case SelectionType::Light:  return m_World.PunctualLights().IndexOf(selection.Id);
+		case SelectionType::Sphere: return m_Scene.Spheres().IndexOf(selection.Id);
+		case SelectionType::Quad:   return m_Scene.Quads().IndexOf(selection.Id);
+		case SelectionType::Box:    return m_Scene.Boxes().IndexOf(selection.Id);
+		case SelectionType::Mesh:   return m_Scene.Meshes().IndexOf(selection.Id);
+		case SelectionType::Light:  return m_Scene.PunctualLights().IndexOf(selection.Id);
 		default:                    return -1;
 		}
 	}
@@ -1874,7 +1875,7 @@ namespace Lucerna {
 			snprintf(buffer.data(), buffer.size(), "%s", name.c_str());
 		ImGui::InputText("Name", buffer.data(), buffer.size());
 		if (ImGui::IsItemDeactivatedAfterEdit())
-			m_World.Rename(id, buffer.data()); // unico nella lista: puo' diventare "nome.001"
+			m_Scene.Rename(id, buffer.data()) || m_Assets.Rename(id, buffer.data()); // unico nella lista: puo' diventare "nome.001"
 		if (!ImGui::IsItemActive())
 			snprintf(buffer.data(), buffer.size(), "%s", name.c_str());
 	}
@@ -1888,8 +1889,8 @@ namespace Lucerna {
 		// lo shader non conosce i box: riporta l'indice del quad colpito, e i 6 quad
 		// consecutivi a partire da Box::index appartengono a quel box
 		if (objectType == static_cast<int>(SelectionType::Quad)) {
-			for (size_t b = 0; b < m_World.Boxes().size(); b++) {
-				int firstQuad = static_cast<int>(m_World.Boxes()[b].index);
+			for (size_t b = 0; b < m_Scene.Boxes().size(); b++) {
+				int firstQuad = static_cast<int>(m_Scene.Boxes()[b].index);
 				if (objectIndex >= firstQuad && objectIndex < firstQuad + 6) {
 					m_Selection = Select(SelectionType::Box, static_cast<int>(b));
 					return;
@@ -1962,9 +1963,9 @@ namespace Lucerna {
 				m_PickForFocus = false;
 				// distanza < 0 = il raggio ha mancato tutto (sfondo): non spostare il fuoco
 				if (pickedDistance > 0.0f) {
-					SceneCamera camera = m_World.Camera();
+					SceneCamera camera = m_Scene.Camera();
 					camera.FocusDistance = pickedDistance;
-					m_World.SetCamera(camera); // il fuoco cambia i raggi primari
+					m_Scene.SetCamera(camera); // il fuoco cambia i raggi primari
 				}
 			}
 			else {
@@ -2003,7 +2004,7 @@ namespace Lucerna {
 		if (ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection),
 								 operation, ImGuizmo::WORLD,
 								 glm::value_ptr(m_GizmoMatrix), glm::value_ptr(delta))) {
-			ApplyDelta(delta); // passa dal World: l'accumulo riparte da solo
+			ApplyDelta(delta); // passa dalla Scene: l'accumulo riparte da solo
 		}
 	}
 
@@ -2015,6 +2016,6 @@ namespace Lucerna {
 
 		m_Camera.OnResize(m_ViewportWidth, m_ViewportHeight);
 		m_Renderer.OnResize(m_ViewportWidth, m_ViewportHeight);
-		m_Renderer.Render(m_Camera.GetRenderView(), m_World);
+		m_Renderer.Render(m_Camera.GetRenderView(), m_Scene, m_Assets);
 	}
 }

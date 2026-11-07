@@ -4,7 +4,7 @@
 #define RENDER_RENDERSCENE_H
 
 #include "ptpch.h"
-#include "Legacy/World.h"
+#include "Scene/Scene.h"
 #include "Render/GpuTypes.h"
 #include "Render/SceneAccel.h"
 #include "Vulkan/TextureArray.h"
@@ -14,11 +14,11 @@ namespace Lucerna {
 	/*
 	* La scena come la consuma la GPU (issue #24): buffer di triangoli, materiali, primitive e
 	* mesh, light list, strutture di accelerazione, texture array e cubemap dell'ambiente.
-	* Si costruisce dal World ed e' l'unica cosa che il path tracer legge; il World non contiene
-	* niente di questa forma. E' la divisione descrizione/rappresentazione di Hydra o dell'FScene
+	* Si costruisce dalla Scene e dalla AssetLibrary ed e' l'unica cosa che il path tracer legge;
+	* scena e asset non contengono niente di questa forma. E' la divisione descrizione/rappresentazione di Hydra o dell'FScene
 	* di Unreal.
 	*
-	* Si aggiorna solo cio' che il World segnala come cambiato (issue #25): spostare una mesh
+	* Si aggiorna solo cio' che scena e asset segnalano come cambiato (issue #25): spostare una mesh
 	* rifa' la TLAS, un materiale ricarica i materiali e la light list, e triangoli e BLAS (decine
 	* di MB su Sponza) si toccano solo quando cambia la geometria.
 	*/
@@ -29,8 +29,8 @@ namespace Lucerna {
 		RenderScene(const RenderScene&) = delete;
 		RenderScene& operator=(const RenderScene&) = delete;
 
-		// Prima del frame, con i cambiamenti del World (SceneChange) dall'ultima volta.
-		void Sync(const World& world, uint32_t changes);
+		// Prima del frame, con i cambiamenti di scena e asset (SceneChange) dall'ultima volta.
+		void Sync(const Scene& scene, const AssetLibrary& assets, uint32_t changes);
 
 		const GpuBuffer& Spheres() const { return m_Spheres; }
 		const GpuBuffer& Materials() const { return m_Materials; }
@@ -56,9 +56,9 @@ namespace Lucerna {
 		const glm::vec4& SunRadiance() const { return m_SunRadiance; }   // rgb, w = angolo solido; zero se spento
 
 	private:
-		void BuildGeometry(const World& world);
-		void BuildMeshInfos(const World& world);
-		void BuildLights(const World& world);
+		void BuildGeometry(const Scene& scene, const AssetLibrary& assets);
+		void BuildMeshInfos(const Scene& scene, const AssetLibrary& assets);
+		void BuildLights(const Scene& scene, const AssetLibrary& assets);
 		float MaterialIndexOf(const ObjectId& id) const; // -1 = nessun materiale
 		void Upload(GpuBuffer& buffer, const void* data, size_t bytes);
 		void LoadEnvironment();

@@ -295,7 +295,7 @@ namespace Lucerna {
 					m.AlbedoTexture = assets.RegisterTexture(baseTex, TextureKind::Color);
 					m.Color = glm::vec4(1.0f); // la texture porta il colore, non tingerla due volte
 				}
-				materialIds[&gm] = assets.Materials.Add(m, gm.name ? gm.name : "").Id;
+				materialIds[&gm] = assets.AddMaterial(m, gm.name ? gm.name : "");
 			}
 
 			size_t triTotal = 0;
@@ -327,7 +327,7 @@ namespace Lucerna {
 						if (!ReadPrimitive(prim, geometry))
 							continue;
 						triTotal += geometry.Triangles.size();
-						asset = assets.Meshes.Add(geometry, name).Id;
+						asset = assets.AddMesh(geometry, name);
 					}
 
 					const auto material = prim.material ? materialIds.find(prim.material) : materialIds.end();
@@ -342,7 +342,7 @@ namespace Lucerna {
 			cgltf_free(data);
 
 			std::cout << "glTF caricato: " << path << " -> " << scene.Instances.size() << " istanze, "
-				<< triTotal << " triangoli nuovi, " << assets.Materials.size() << " materiali" << std::endl;
+				<< triTotal << " triangoli nuovi, " << assets.Materials().size() << " materiali" << std::endl;
 			return true;
 		}
 

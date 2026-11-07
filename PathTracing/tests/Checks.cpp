@@ -2,7 +2,8 @@
 // che fallisce. Ne aggiungo uno quando una logica ha casi limite che un render non mostra.
 #include "Core/ObjectId.h"
 #include "Core/SceneObject.h"
-#include "Legacy/World.h"
+#include "Scene/Scene.h"
+#include "Import/SceneFiles.h"
 #include "Import/Importer.h"
 #include "Serialization/BuiltinScenes.h"
 
@@ -51,60 +52,63 @@ int main() {
 	CHECK(list[2].Id == third && list[2].Value == 42 && list[2].Name == "stone.001");
 	CHECK(list.Pack().size() == list.size());
 
-	std::printf(failures ? "%d checks failed\n" : "all checks passed\n", failures);
-	// Change tracking (issue #25): ogni modifica dice cosa ha toccato, e solo quello
-	World world;
-	CHECK(world.TakeChanges() == AllChanged);           // una scena nuova e' tutta da caricare
-	CHECK(world.TakeChanges() == NoChange);             // e i cambiamenti si consumano
-	const int m = world.AddMaterial(Material{});
-	CHECK(world.TakeChanges() == MaterialsChanged);
-	const int s = world.AddSphere(Sphere{});
-	CHECK(world.TakeChanges() == PrimitivesChanged);
-	const ObjectId sphereId = world.Spheres()[s].Id;
-	Sphere moved = world.Spheres()[s];
+	// Change tracking (issue #25, #29): ogni modifica dice cosa ha toccato, e solo quello.
+	// Scene e AssetLibrary hanno ciascuna i suoi flag.
+	Scene scene;
+	AssetLibrary library;
+	CHECK(scene.TakeChanges() == SceneChanges && library.TakeChanges() == AssetChanges); // tutto da caricare
+	CHECK(scene.TakeChanges() == NoChange && library.TakeChanges() == NoChange);         // e si consumano
+	const ObjectId materialId = library.AddMaterial(Material{});
+	CHECK(library.TakeChanges() == MaterialsChanged && scene.TakeChanges() == NoChange);
+	const int s = scene.AddSphere(Sphere{});
+	CHECK(scene.TakeChanges() == PrimitivesChanged);
+	const ObjectId sphereId = scene.Spheres()[s].Id;
+	Sphere moved = scene.Spheres()[s];
 	moved.Position.x = 3.0f;
-	world.Set(sphereId, moved);
-	CHECK(world.TakeChanges() == PrimitivesChanged && world.Spheres()[s].Position.x == 3.0f);
-	CHECK(world.Spheres()[s].Id == sphereId);           // Set cambia i dati, non l'identita'
-	world.Set(world.Materials()[m].Id, Material{});
-	CHECK(world.TakeChanges() == MaterialsChanged);
-	world.Rename(sphereId, "ball");                     // il nome non cambia l'immagine
-	CHECK(world.TakeChanges() == NoChange && world.Spheres()[s].Name == "ball");
-	world.MoveCamera(glm::vec3(1.0f), glm::vec3(0.0f, 0.0f, -1.0f)); // la vista che naviga
-	CHECK(world.TakeChanges() == NoChange && world.Camera().Position == glm::vec3(1.0f));
-	world.SetCamera(world.Camera());
-	CHECK(world.TakeChanges() == CameraChanged);
-	world.Set(ObjectId::Generate(), moved);             // un id che non c'e' non fa niente
-	CHECK(world.TakeChanges() == NoChange);
-	world.CreateBox(glm::vec3(0.0f), glm::vec3(1.0f), ObjectId{});
-	CHECK(world.TakeChanges() == PrimitivesChanged);
-	Box box = world.Boxes()[0];
-	const std::vector<Quad> facesBefore = world.Quads().Pack();
+	scene.Set(sphereId, moved);
+	CHECK(scene.TakeChanges() == PrimitivesChanged && scene.Spheres()[s].Position.x == 3.0f);
+	CHECK(scene.Spheres()[s].Id == sphereId);           // Set cambia i dati, non l'identita'
+	library.Set(materialId, Material{});
+	CHECK(library.TakeChanges() == MaterialsChanged);
+	CHECK(scene.Rename(sphereId, "ball") && !library.Rename(sphereId, "ball")); // il nome non cambia l'immagine
+	CHECK(scene.TakeChanges() == NoChange && scene.Spheres()[s].Name == "ball");
+	CHECK(library.Rename(materialId, "clay") && library.TakeChanges() == NoChange);
+	scene.MoveCamera(glm::vec3(1.0f), glm::vec3(0.0f, 0.0f, -1.0f)); // la vista che naviga
+	CHECK(scene.TakeChanges() == NoChange && scene.Camera().Position == glm::vec3(1.0f));
+	scene.SetCamera(scene.Camera());
+	CHECK(scene.TakeChanges() == CameraChanged);
+	scene.Set(ObjectId::Generate(), moved);             // un id che non c'e' non fa niente
+	CHECK(scene.TakeChanges() == NoChange);
+	scene.CreateBox(glm::vec3(0.0f), glm::vec3(1.0f), ObjectId{});
+	CHECK(scene.TakeChanges() == PrimitivesChanged);
+	Box box = scene.Boxes()[0];
+	const std::vector<Quad> facesBefore = scene.Quads().Pack();
 	box.Max = glm::vec4(2.0f, 1.0f, 1.0f, 0.0f);
-	world.Set(world.Boxes()[0].Id, box);
-	CHECK(world.TakeChanges() == PrimitivesChanged);
-	const std::vector<Quad> facesAfter = world.Quads().Pack();
+	scene.Set(scene.Boxes()[0].Id, box);
+	CHECK(scene.TakeChanges() == PrimitivesChanged);
+	const std::vector<Quad> facesAfter = scene.Quads().Pack();
 	bool facesMoved = false;                            // il box riscrive le sue 6 facce
 	for (size_t i = 0; i < facesAfter.size(); i++)
 		facesMoved |= facesAfter[i].Width != facesBefore[i].Width || facesAfter[i].Height != facesBefore[i].Height
 		              || facesAfter[i].PositionLLC != facesBefore[i].PositionLLC;
 	CHECK(facesAfter.size() == 6 && facesMoved);
-	world.RemoveSphere(s);
-	CHECK(world.TakeChanges() == PrimitivesChanged && world.Spheres().empty());
+	scene.RemoveSphere(s);
+	CHECK(scene.TakeChanges() == PrimitivesChanged && scene.Spheres().empty());
 
 	// Asset (issue #26): lo stesso OBJ piazzato due volte si carica una volta sola
-	World assets;
-	const int first = assets.Add("res/models/pawn.obj", glm::mat4(1.0f), ObjectId{});
-	const int second = assets.Add("res/models/pawn.obj", glm::mat4(2.0f), ObjectId{});
-	CHECK(first == 0 && second == 1 && assets.Meshes().size() == 2);
-	CHECK(assets.Assets().Meshes.size() == 1 && assets.Meshes()[0].Asset == assets.Meshes()[1].Asset);
-	CHECK(assets.AssetOf(assets.Meshes()[1]) != nullptr && !assets.AssetOf(assets.Meshes()[1])->Triangles.empty());
+	Scene placed;
+	AssetLibrary assets;
+	const int first = AddFile("res/models/pawn.obj", placed, assets, glm::mat4(1.0f), ObjectId{});
+	const int second = AddFile("res/models/pawn.obj", placed, assets, glm::mat4(2.0f), ObjectId{});
+	CHECK(first == 0 && second == 1 && placed.Meshes().size() == 2);
+	CHECK(assets.Meshes().size() == 1 && placed.Meshes()[0].Asset == placed.Meshes()[1].Asset);
+	CHECK(assets.FindMesh(placed.Meshes()[1].Asset) != nullptr && !assets.FindMesh(placed.Meshes()[1].Asset)->Triangles.empty());
 
 	// Una texture usata da un materiale non si toglie; una inutilizzata si', e libera il suo posto
 	assets.TakeChanges();
-	assets.AddTexture("textures/a.png", TextureKind::Color);
-	assets.AddTexture("textures/a.png", TextureKind::Color);          // stessa immagine e tipo: una sola
-	assets.AddTexture("textures/a.png", TextureKind::Data);           // come dato e' un altro asset
+	assets.RegisterTexture("textures/a.png", TextureKind::Color);
+	assets.RegisterTexture("textures/a.png", TextureKind::Color);     // stessa immagine e tipo: una sola
+	assets.RegisterTexture("textures/a.png", TextureKind::Data);      // come dato e' un altro asset
 	CHECK(assets.Textures().size() == 2 && assets.TakeChanges() == TexturesChanged);
 	Material textured;
 	textured.AlbedoTexture = assets.Textures()[0].Id;
@@ -116,12 +120,14 @@ int main() {
 	CHECK(FindImporter("a/b/model.OBJ") != nullptr && std::string(FindImporter("a/b/model.OBJ")->Name()) == "Wavefront OBJ");
 	CHECK(FindImporter("scene.gltf") != nullptr && FindImporter("scene.glb") == FindImporter("scene.gltf"));
 	CHECK(FindImporter("scene.fbx") == nullptr && FindImporter("noextension") == nullptr);
-	// Un file che non si apre lascia la scena com'era
-	const size_t instancesBefore = assets.Meshes().size();
-	CHECK(!assets.Open("res/models/missing.gltf") && !assets.Open("res/models/scene.fbx"));
-	CHECK(assets.Meshes().size() == instancesBefore && assets.Add("res/models/missing.obj", glm::mat4(1.0f), ObjectId{}) == -1);
-	// Open di un OBJ: la scena diventa il modello, con i suoi asset e basta
-	CHECK(assets.Open("res/models/pawn.obj") && assets.Meshes().size() == 1 && assets.Assets().Meshes.size() == 1);
+	// Un file che non si apre lascia scena e asset come erano
+	const size_t instancesBefore = placed.Meshes().size(), materialsBefore = assets.Materials().size();
+	CHECK(!OpenFile("res/models/missing.gltf", placed, assets) && !OpenFile("res/models/scene.fbx", placed, assets));
+	CHECK(placed.Meshes().size() == instancesBefore && assets.Materials().size() == materialsBefore);
+	CHECK(AddFile("res/models/missing.obj", placed, assets, glm::mat4(1.0f), ObjectId{}) == -1);
+	// Open di un OBJ: la scena diventa il modello, con i suoi asset e un materiale di default
+	CHECK(OpenFile("res/models/pawn.obj", placed, assets) && placed.Meshes().size() == 1 && assets.Meshes().size() == 1);
+	CHECK(assets.Materials().size() == 1 && placed.Meshes()[0].Material == assets.Materials()[0].Id);
 
 	// Scene integrate (issue #28): i file di res/scenes/builtin, per numero o per nome
 	const std::vector<BuiltinScene> builtin = ListBuiltinScenes("res/scenes/builtin");
@@ -131,5 +137,6 @@ int main() {
 	CHECK(FindBuiltinScene(builtin, "4") != nullptr && FindBuiltinScene(builtin, "4")->DisplayName == "Cornell Box Meshes");
 	CHECK(FindBuiltinScene(builtin, "1") == nullptr && FindBuiltinScene(builtin, "") == nullptr);  // le scene casuali non ci sono piu'
 
+	std::printf(failures ? "%d checks failed\n" : "all checks passed\n", failures);
 	return failures ? 1 : 0;
 }

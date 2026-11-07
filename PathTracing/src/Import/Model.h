@@ -11,7 +11,7 @@ namespace Lucerna {
 
 	// Descrittore di un materiale letto dal .mtl. Contiene SOLO i campi che il nostro
 	// Material sa rappresentare; il resto del MTL (Ka, map_Bump, ...) viene ignorato.
-	// World lo traduce in un Material dell'engine e registra la texture.
+	// L'importer OBJ lo traduce in un Material dell'engine e registra la texture.
 	struct MtlMaterial {
 		std::string Name;
 		glm::vec3 Kd{ 0.8f };   // diffuse color

@@ -6,6 +6,7 @@
 #include "ptpch.h"
 #include "Assets/Material.h"
 #include "Core/SceneObject.h"
+#include "Core/SceneChange.h"
 
 namespace Lucerna {
 
@@ -71,41 +72,44 @@ namespace Lucerna {
 		return std::make_tuple(Field("source", &MeshAsset::Source), Field("materialSlots", &MeshAsset::MaterialSlots));
 	}
 
+	// Gli asset con la loro API di modifica: come la Scene, ogni modifica registra cosa ha
+	// toccato, e chi legge ha solo accesso const (issue #29).
 	class AssetLibrary {
 	public:
-		ObjectList<Material> Materials{ "Material" };
-		ObjectList<Texture> Textures{ "Texture" };
-		ObjectList<MeshAsset> Meshes{ "Mesh" };
+		const ObjectList<Material>& Materials() const { return m_Materials; }
+		const ObjectList<Texture>& Textures() const { return m_Textures; }
+		const ObjectList<MeshAsset>& Meshes() const { return m_Meshes; }
 
-		// L'asset con quella sorgente, se e' gia' caricato
-		const SceneObject<MeshAsset>* FindMesh(const MeshSource& source) const {
-			for (const auto& mesh : Meshes)
-				if (mesh.Source == source)
-					return &mesh;
-			return nullptr;
-		}
-
-		// Una texture per path e tipo: due materiali con la stessa immagine la condividono
-		ObjectId RegisterTexture(const std::string& path, TextureKind kind) {
-			for (const auto& texture : Textures)
-				if (texture.Path == path && texture.Kind == kind)
-					return texture.Id;
-			return Textures.Add({ path, kind }, std::filesystem::path(path).stem().string()).Id;
-		}
-
+		const SceneObject<MeshAsset>* FindMesh(const MeshSource& source) const; // gia' caricato?
+		const SceneObject<MeshAsset>* FindMesh(const ObjectId& id) const;
 		// Usata = citata da un materiale: solo una texture inutilizzata si puo' togliere
-		bool IsTextureUsed(const ObjectId& id) const {
-			for (const Material& m : Materials)
-				if (m.AlbedoTexture == id || m.NormalTexture == id || m.AlphaTexture == id)
-					return true;
-			return false;
-		}
+		bool IsTextureUsed(const ObjectId& id) const;
 
-		void Clear() {
-			Materials.clear();
-			Textures.clear();
-			Meshes.clear();
-		}
+		// ---- modifica
+		ObjectId AddMaterial(const Material& material, const std::string& name = {});
+		void Set(const ObjectId& id, const Material& material);
+		// Una texture per path e tipo: due materiali con la stessa immagine la condividono
+		ObjectId RegisterTexture(const std::string& path, TextureKind kind);
+		bool RemoveTexture(const ObjectId& id); // solo se inutilizzata: libera il suo layer
+		ObjectId AddMesh(const MeshAsset& mesh, const std::string& name);
+		// Gli asset di geometria ancora senza triangoli (letti da un file di scena), da riempire
+		std::vector<MeshAsset*> MeshesWithoutGeometry();
+		bool Rename(const ObjectId& id, const std::string& name); // false = non e' un asset
+
+		void Clear();
+		// Rimpiazza tutto con un'altra libreria (un file aperto): tutto risulta cambiato
+		void Replace(AssetLibrary&& other);
+
+		// I cambiamenti accumulati dall'ultima chiamata; li consuma il renderer
+		uint32_t TakeChanges() { const uint32_t c = m_Changes; m_Changes = NoChange; return c; }
+
+	private:
+		friend class SceneSerializer; // legge e rimpiazza la libreria intera
+
+		ObjectList<Material> m_Materials{ "Material" };
+		ObjectList<Texture> m_Textures{ "Texture" };
+		ObjectList<MeshAsset> m_Meshes{ "Mesh" };
+		uint32_t m_Changes = AssetChanges;
 	};
 }
 
