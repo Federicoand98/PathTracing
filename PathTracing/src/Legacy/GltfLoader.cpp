@@ -120,20 +120,20 @@ namespace Lucerna {
 			const glm::vec3 color = glm::make_vec3(gl.color);
 
 			if (gl.type == cgltf_light_type_directional) {
-				if (Sun.Enabled) {
+				if (m_Sun.Enabled) {
 					std::cout << "glTF: piu' di una luce direzionale, ignorata: "
 						<< (gl.name ? gl.name : "") << std::endl;
 					continue;
 				}
 				// Direction() del Sole punta verso la luce: il contrario di dove va la luce
 				const glm::vec3 toSun = -forward;
-				Sun.Enabled = true;
-				Sun.Elevation = glm::degrees(std::asin(glm::clamp(toSun.y, -1.0f, 1.0f)));
-				Sun.Azimuth = glm::degrees(std::atan2(toSun.x, toSun.z));
-				if (Sun.Azimuth < 0.0f)
-					Sun.Azimuth += 360.0f;
-				Sun.Color = color;
-				Sun.Irradiance = gl.intensity / LUMENS_PER_WATT;
+				m_Sun.Enabled = true;
+				m_Sun.Elevation = glm::degrees(std::asin(glm::clamp(toSun.y, -1.0f, 1.0f)));
+				m_Sun.Azimuth = glm::degrees(std::atan2(toSun.x, toSun.z));
+				if (m_Sun.Azimuth < 0.0f)
+					m_Sun.Azimuth += 360.0f;
+				m_Sun.Color = color;
+				m_Sun.Irradiance = gl.intensity / LUMENS_PER_WATT;
 				any = true;
 			}
 			else if (gl.type == cgltf_light_type_point || gl.type == cgltf_light_type_spot) {
@@ -147,14 +147,14 @@ namespace Lucerna {
 					p.InnerAngle = glm::degrees(gl.spot_inner_cone_angle);
 					p.OuterAngle = glm::degrees(gl.spot_outer_cone_angle);
 				}
-				PunctualLights.Add(p, gl.name ? gl.name : (node.name ? node.name : (p.Spot ? "Spot light" : "Point light")));
+				m_PunctualLights.Add(p, gl.name ? gl.name : (node.name ? node.name : (p.Spot ? "Spot light" : "Point light")));
 				any = true;
 			}
 		}
 
 		if (any)
-			std::cout << "glTF: " << PunctualLights.size() << " luci punto/spot"
-				<< (Sun.Enabled ? ", Sole dalla luce direzionale" : "") << std::endl;
+			std::cout << "glTF: " << m_PunctualLights.size() << " luci punto/spot"
+				<< (m_Sun.Enabled ? ", Sole dalla luce direzionale" : "") << std::endl;
 		return any;
 	}
 
@@ -169,9 +169,9 @@ namespace Lucerna {
 			float world[16];
 			cgltf_node_transform_world(&node, world);
 			const glm::mat4 m = glm::make_mat4(world);
-			Camera.Position = glm::vec3(m[3]);
-			Camera.Direction = glm::normalize(-glm::vec3(m[2])); // una camera glTF guarda lungo -Z
-			Camera.VerticalFOV = glm::degrees(node.camera->data.perspective.yfov);
+			m_Camera.Position = glm::vec3(m[3]);
+			m_Camera.Direction = glm::normalize(-glm::vec3(m[2])); // una camera glTF guarda lungo -Z
+			m_Camera.VerticalFOV = glm::degrees(node.camera->data.perspective.yfov);
 			std::cout << "glTF: camera " << (node.camera->name ? node.camera->name : "") << std::endl;
 			return;
 		}
@@ -194,15 +194,15 @@ namespace Lucerna {
 
 		// da qui in poi si rimpiazza la scena: prima di toccare il World, tutto e' andato a buon fine.
 		// Un glTF senza camera tiene l'inquadratura corrente (ADR 0011): DestroyScene la azzererebbe.
-		const SceneCamera previousCamera = Camera;
+		const SceneCamera previousCamera = m_Camera;
 		DestroyScene();
-		Camera = previousCamera;
+		m_Camera = previousCamera;
 		ImportCamera(data);
 
 		// I raggi che mancano la geometria ritornano BackgroundColor come radianza. Senza luci
 		// nel file e' la sola illuminazione, quindi un cielo azzurro; con le luci si usa il grigio
 		// scuro del World di default di Blender, che altrimenti sovrasterebbe le lampade.
-		BackgroundColor = ImportLights(data) ? glm::vec3(0.05f) : glm::vec3(0.6f, 0.7f, 0.9f);
+		m_BackgroundColor = ImportLights(data) ? glm::vec3(0.05f) : glm::vec3(0.6f, 0.7f, 0.9f);
 
 		const std::string gltfDir = std::filesystem::path(path).parent_path().string();
 
@@ -210,7 +210,7 @@ namespace Lucerna {
 		std::unordered_map<const cgltf_material*, int> matIndex;
 		for (size_t i = 0; i < data->materials_count; i++) {
 			const cgltf_material& gm = data->materials[i];
-			matIndex[&gm] = static_cast<int>(Materials.size());
+			matIndex[&gm] = static_cast<int>(m_Materials.size());
 			std::string baseTex, normalTex;
 			Material m = MaterialFromGltf(gm, gltfDir, baseTex, normalTex);
 			if (!normalTex.empty())
@@ -219,7 +219,7 @@ namespace Lucerna {
 				m.AlbedoTexture = static_cast<float>(RegisterTexture(baseTex));
 				m.Color = glm::vec4(1.0f); // la texture porta il colore, non tingerla due volte
 			}
-			Materials.Add(m, gm.name ? gm.name : "");
+			m_Materials.Add(m, gm.name ? gm.name : "");
 		}
 
 		size_t triTotal = 0;
@@ -276,7 +276,7 @@ namespace Lucerna {
 					? matIndex[prim.material] : -1;
 
 				Mesh mesh;
-				mesh.FirstTriangle = static_cast<int>(Triangles.size());
+				mesh.FirstTriangle = static_cast<int>(m_Triangles.size());
 				mesh.MaterialIndex = static_cast<float>(meshMat); // una primitive = un materiale
 
 				glm::vec4 localMin(1e30f), localMax(-1e30f);
@@ -306,7 +306,7 @@ namespace Lucerna {
 					localMin = glm::min(localMin, glm::min(tri.A, glm::min(tri.B, tri.C)));
 					localMax = glm::max(localMax, glm::max(tri.A, glm::max(tri.B, tri.C)));
 
-					Triangles.push_back(tri);
+					m_Triangles.push_back(tri);
 					triCount++;
 				}
 
@@ -317,20 +317,20 @@ namespace Lucerna {
 				mesh.LocalMin = localMin;
 				mesh.LocalMax = localMax;
 
-				Meshes.Add(mesh, node.mesh->name ? node.mesh->name : (node.name ? node.name : ""));
-				MeshPaths.push_back(path);
-				Meshes.at(static_cast<int>(Meshes.size()) - 1).Transform = transform;
+				m_Meshes.Add(mesh, node.mesh->name ? node.mesh->name : (node.name ? node.name : ""));
+				m_MeshPaths.push_back(path);
+				m_Meshes.at(static_cast<int>(m_Meshes.size()) - 1).Transform = transform;
 				triTotal += triCount;
 			}
 		}
 
 		cgltf_free(data);
 
-		std::cout << "glTF caricato: " << path << " -> " << Meshes.size() << " mesh, "
-			<< triTotal << " triangoli, " << Materials.size() << " materiali, "
-			<< TexturePaths.size() << " texture" << std::endl;
+		std::cout << "glTF caricato: " << path << " -> " << m_Meshes.size() << " mesh, "
+			<< triTotal << " triangoli, " << m_Materials.size() << " materiali, "
+			<< m_TexturePaths.size() << " texture" << std::endl;
 
-		GeometryVersion++;
+		m_Changes = AllChanged;
 		return true;
 	}
 

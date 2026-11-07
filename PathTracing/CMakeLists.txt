@@ -99,7 +99,7 @@ add_executable(${PROJECT_NAME} "${SRC_DIR}/Main.cpp")
 
 # Controlli della logica senza GPU (tests/Checks.cpp): ./build/LucernaChecks
 add_executable(LucernaChecks "${CMAKE_CURRENT_SOURCE_DIR}/tests/Checks.cpp")
-target_link_libraries(LucernaChecks PRIVATE LucernaScene)
+target_link_libraries(LucernaChecks PRIVATE LucernaScene LucernaLegacy)
 set_target_properties(LucernaChecks PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 target_link_libraries(${PROJECT_NAME} PRIVATE LucernaEditor)
 

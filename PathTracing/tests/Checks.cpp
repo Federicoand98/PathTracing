@@ -2,6 +2,7 @@
 // che fallisce. Ne aggiungo uno quando una logica ha casi limite che un render non mostra.
 #include "Core/ObjectId.h"
 #include "Scene/SceneObject.h"
+#include "Legacy/World.h"
 
 #include <cstdio>
 #include <unordered_set>
@@ -49,5 +50,45 @@ int main() {
 	CHECK(list.Pack().size() == list.size());
 
 	std::printf(failures ? "%d checks failed\n" : "all checks passed\n", failures);
+	// Change tracking (issue #25): ogni modifica dice cosa ha toccato, e solo quello
+	World world;
+	CHECK(world.TakeChanges() == AllChanged);           // una scena nuova e' tutta da caricare
+	CHECK(world.TakeChanges() == NoChange);             // e i cambiamenti si consumano
+	const int m = world.AddMaterial(Material{});
+	CHECK(world.TakeChanges() == MaterialsChanged);
+	const int s = world.AddSphere(Sphere{});
+	CHECK(world.TakeChanges() == PrimitivesChanged);
+	const ObjectId sphereId = world.Spheres()[s].Id;
+	Sphere moved = world.Spheres()[s];
+	moved.Position.x = 3.0f;
+	world.Set(sphereId, moved);
+	CHECK(world.TakeChanges() == PrimitivesChanged && world.Spheres()[s].Position.x == 3.0f);
+	CHECK(world.Spheres()[s].Id == sphereId);           // Set cambia i dati, non l'identita'
+	world.Set(world.Materials()[m].Id, Material{});
+	CHECK(world.TakeChanges() == MaterialsChanged);
+	world.Rename(sphereId, "ball");                     // il nome non cambia l'immagine
+	CHECK(world.TakeChanges() == NoChange && world.Spheres()[s].Name == "ball");
+	world.MoveCamera(glm::vec3(1.0f), glm::vec3(0.0f, 0.0f, -1.0f)); // la vista che naviga
+	CHECK(world.TakeChanges() == NoChange && world.Camera().Position == glm::vec3(1.0f));
+	world.SetCamera(world.Camera());
+	CHECK(world.TakeChanges() == CameraChanged);
+	world.Set(ObjectId::Generate(), moved);             // un id che non c'e' non fa niente
+	CHECK(world.TakeChanges() == NoChange);
+	world.CreateBox(glm::vec3(0.0f), glm::vec3(1.0f), 0.0f);
+	CHECK(world.TakeChanges() == PrimitivesChanged);
+	Box box = world.Boxes()[0];
+	const std::vector<Quad> facesBefore = world.Quads().Pack();
+	box.Max = glm::vec4(2.0f, 1.0f, 1.0f, 0.0f);
+	world.Set(world.Boxes()[0].Id, box);
+	CHECK(world.TakeChanges() == PrimitivesChanged);
+	const std::vector<Quad> facesAfter = world.Quads().Pack();
+	bool facesMoved = false;                            // il box riscrive le sue 6 facce
+	for (size_t i = 0; i < facesAfter.size(); i++)
+		facesMoved |= facesAfter[i].Width != facesBefore[i].Width || facesAfter[i].Height != facesBefore[i].Height
+		              || facesAfter[i].PositionLLC != facesBefore[i].PositionLLC;
+	CHECK(facesAfter.size() == 6 && facesMoved);
+	world.RemoveSphere(s);
+	CHECK(world.TakeChanges() == PrimitivesChanged && world.Spheres().empty());
+
 	return failures ? 1 : 0;
 }

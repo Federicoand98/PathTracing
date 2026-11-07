@@ -18,9 +18,9 @@ namespace Lucerna {
 	* niente di questa forma. E' la divisione descrizione/rappresentazione di Hydra o dell'FScene
 	* di Unreal.
 	*
-	* Per ora si ricostruisce tutta a ogni reset; triangoli e BLAS solo quando cambia
-	* World::GeometryVersion, perche' su Sponza sono decine di MB. Il change tracking (#25)
-	* sostituira' entrambi con aggiornamenti mirati.
+	* Si aggiorna solo cio' che il World segnala come cambiato (issue #25): spostare una mesh
+	* rifa' la TLAS, un materiale ricarica i materiali e la light list, e triangoli e BLAS (decine
+	* di MB su Sponza) si toccano solo quando cambia la geometria.
 	*/
 	class RenderScene {
 	public:
@@ -29,9 +29,8 @@ namespace Lucerna {
 		RenderScene(const RenderScene&) = delete;
 		RenderScene& operator=(const RenderScene&) = delete;
 
-		// Prima del frame. reset = la scena e' cambiata: si ricostruisce. Le texture si
-		// ricaricano a parte, solo quando cambia l'elenco delle immagini.
-		void Sync(const World& world, bool reset);
+		// Prima del frame, con i cambiamenti del World (SceneChange) dall'ultima volta.
+		void Sync(const World& world, uint32_t changes);
 
 		const GpuBuffer& Spheres() const { return m_Spheres; }
 		const GpuBuffer& Materials() const { return m_Materials; }
@@ -57,8 +56,9 @@ namespace Lucerna {
 		const glm::vec4& SunRadiance() const { return m_SunRadiance; }   // rgb, w = angolo solido; zero se spento
 
 	private:
-		void Build(const World& world);
 		void BuildGeometry(const World& world);
+		void BuildMeshInfos(const World& world);
+		void BuildLights(const World& world);
 		void Upload(GpuBuffer& buffer, const void* data, size_t bytes);
 		void LoadEnvironment();
 
@@ -69,13 +69,11 @@ namespace Lucerna {
 
 		TextureArray m_AlbedoTextures;
 		TextureArray m_DataTextures;
-		std::vector<std::string> m_LoadedTexturePaths;
-		std::vector<std::string> m_LoadedDataTexturePaths;
 		GpuImage m_Environment;
 		VkSampler m_EnvironmentSampler = VK_NULL_HANDLE;
 
-		int m_GeometryVersion = -1;      // versione di triangoli e BLAS gia' sulla GPU
 		std::vector<float> m_NumOpaque;  // per mesh: la partizione si rifa' solo con la geometria
+		std::vector<MeshInfo> m_MeshInfos; // l'ingresso della TLAS, che si rifa' anche per le primitive
 
 		int m_NumLights = 0, m_NumSpheres = 0, m_NumMaterials = 0;
 		glm::vec3 m_BackgroundColor{ 0.0f };

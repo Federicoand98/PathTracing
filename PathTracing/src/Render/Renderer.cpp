@@ -81,9 +81,17 @@ namespace Lucerna {
 		m_RenderH = height;
 	}
 
-	void Renderer::Initialize(World& world) {
+	namespace {
+		// I campi che cambiano i campioni accumulati. Esposizione, tonemap e denoiser agiscono
+		// dopo l'accumulo; render scale e history cap valgono solo mentre ci si muove. La vista
+		// AOV scrive nell'immagine dell'accumulatore, e riagganciare la vista la sposta.
+		auto AccumulationKey(const RenderSettings& s, const ViewSettings& v) {
+			return std::tie(s.SamplesPerPixel, s.RayDepth, s.NEE, s.FireflyClamp, s.Reproject, v.AOVView, v.LockViewToCamera);
+		}
+	}
+
+	void Renderer::Initialize() {
 		VulkanContext& vk = VulkanContext::Get();
-		m_World = &world;
 
 		m_Scene = std::make_unique<RenderScene>();
 		m_PathTracer = std::make_unique<PathTracer>();
@@ -113,7 +121,7 @@ namespace Lucerna {
 		m_DenoiseMs = m_DenoiseWritten ? static_cast<float>(ticks[3] - ticks[2]) * toMs : 0.0f;
 	}
 
-	void Renderer::Render(const RenderView& view, const World& world) {
+	void Renderer::Render(const RenderView& view, World& world) {
 		m_View = view;
 		if (m_Width == 0 || m_Height == 0)
 			return;
@@ -128,6 +136,15 @@ namespace Lucerna {
 			m_PickPending = false;
 			m_PickAvailable = true;
 		}
+
+		// La scena per la GPU segue il World; qualunque cambiamento della scena, o delle impostazioni
+		// che toccano l'integratore, invalida i campioni accumulati.
+		const uint32_t changes = world.TakeChanges();
+		m_Scene->Sync(world, changes);
+		if (changes != NoChange || AccumulationKey(Settings, View) != AccumulationKey(m_LastSettings, m_LastView))
+			RestartAccumulation();
+		m_LastSettings = Settings;
+		m_LastView = View;
 
 		// Render scale: mentre la camera si muove si renderizza a risoluzione ridotta (meno
 		// raggi -> piu' fluido), poi da fermi si torna a piena risoluzione e riparte l'accumulo.
@@ -144,7 +161,7 @@ namespace Lucerna {
 			m_RenderW = rw;
 			m_RenderH = rh;
 			ResizeRenderTargets(rw, rh); // cambio risoluzione: l'accumulo precedente non e' piu' valido
-			ResetPathTracingCounter();
+			RestartAccumulation();
 		}
 
 		// Ping-pong: si scrive nell'indice corrente e si legge la storia dall'altro. Alla fine
@@ -157,7 +174,7 @@ namespace Lucerna {
 		// l'accumulo e si riparte da capo. E' esattamente cio' che la riproiezione evita, quindi
 		// il toggle serve solo come termine di paragone.
 		if (!Settings.Reproject && m_Interacting)
-			ResetPathTracingCounter();
+			RestartAccumulation();
 
 		// La storia non e' valida al primo frame dopo un reset (cambio scena/materiale/risoluzione):
 		// m_PTCounter torna a 1 e i buffer contengono ancora il mondo precedente. Da fermo la
@@ -170,12 +187,9 @@ namespace Lucerna {
 		// da tastiera, ma la rotazione col mouse cambia comunque la vista e lascerebbe AOV
 		// stantii. Da fermo questo risparmia un raggio primario per pixel.
 		glm::mat4 viewProjection = view.Projection * view.View;
-		bool aovNeedsUpdate = (viewProjection != m_PrevViewProjection) || m_PTCounter <= 1 || m_sceneReset;
+		bool aovNeedsUpdate = (viewProjection != m_PrevViewProjection) || m_PTCounter <= 1;
 
-		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(Settings.SamplesPerPixel), static_cast<uint32_t>(Settings.RayDepth), Settings.FireflyClamp, m_World->Camera.Aperture, m_World->Camera.FocusDistance, View.AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, Settings.HistoryCap, Settings.NEE, pickPixel, *m_Scene, m_View };
-
-		// Un reset (m_PTCounter torna a 1) vuol dire che la scena e' cambiata: si ricostruisce.
-		m_Scene->Sync(world, m_sceneReset || m_PTCounter == 1);
+		ComputeUniformContainer container = { static_cast<uint32_t>(m_PTCounter), static_cast<uint32_t>(Settings.SamplesPerPixel), static_cast<uint32_t>(Settings.RayDepth), Settings.FireflyClamp, world.Camera().Aperture, world.Camera().FocusDistance, View.AOVView, m_PrevViewProjection, m_PrevCameraPosition, aovNeedsUpdate, hasHistory, cameraMoved, Settings.HistoryCap, Settings.NEE, pickPixel, *m_Scene, m_View };
 
 		// Le scritture del frame scorso diventano visibili a questo, e il tonemap non deve
 		// sovrascrivere il display mentre ImGui lo sta ancora leggendo.
@@ -261,9 +275,6 @@ namespace Lucerna {
 			m_PTCounter++;
 		else
 			m_PTCounter = 1;
-
-		if (m_sceneReset)
-			m_sceneReset = false;
 	}
 
 	void Renderer::ReadImage(const GpuImage& image, void* pixels, size_t bytes) {

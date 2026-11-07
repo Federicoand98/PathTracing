@@ -80,7 +80,7 @@ namespace Lucerna {
 		void DrawSelectionProperties();
 		void DrawGizmoToolbar();
 		void DrawAddObjectMenu();
-		void DrawMaterialEditor(Material& material, int index);
+		bool DrawMaterialEditor(Material& material, int index); // true = la copia e' cambiata
 		void DrawMaterialEditorWindow();
 		void DrawTextureManager();
 		void DrawDeletePopup();
@@ -185,7 +185,7 @@ namespace Lucerna {
 		int SelectedIndex() const { return IndexOf(m_Selection); }
 		std::string ObjectName(const Selection& selection) const;
 		// Campo "Name": rinomina all'uscita dal campo, con il nome reso unico dalla lista
-		template<class T> void NameField(ObjectList<T>& list, SceneObject<T>& object);
+		void NameField(const ObjectId& id, const std::string& name);
 		std::unordered_map<ObjectId, std::array<char, 128>> m_NameBuffers; // l'inquadratura del frame scorso: se cambia da fuori, la vista la segue
 		void SyncCameras(bool viewMoved);
 		bool m_Vsync = true; // effettivo: PT_NOVSYNC lo spegne per la sessione senza toccare le preferenze

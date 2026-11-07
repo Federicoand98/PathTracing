@@ -12,9 +12,9 @@ namespace Lucerna {
 			std::vector<GPULight> lights;
 
 			auto radianceOf = [&](int matIndex, glm::vec3& outRadiance) -> bool {
-				if (matIndex < 0 || matIndex >= static_cast<int>(world.Materials.size()))
+				if (matIndex < 0 || matIndex >= static_cast<int>(world.Materials().size()))
 					return false;
-				const Material& m = world.Materials[matIndex];
+				const Material& m = world.Materials()[matIndex];
 				glm::vec3 rad = glm::vec3(m.EmissiveColor) * m.EmissiveStrenght;
 				// luminanza Rec.709: scarta gli emissivi neri o a strength nulla
 				float lum = glm::dot(rad, glm::vec3(0.2126f, 0.7152f, 0.0722f));
@@ -25,14 +25,14 @@ namespace Lucerna {
 			};
 
 			// Sfere emissive: campionate via cono (solid angle). Meta = (tipo=0, objType=0, indice).
-			for (size_t i = 0; i < world.Spheres.size(); i++) {
+			for (size_t i = 0; i < world.Spheres().size(); i++) {
 				glm::vec3 rad;
-				if (!radianceOf(static_cast<int>(world.Spheres[i].MaterialIndex), rad))
+				if (!radianceOf(static_cast<int>(world.Spheres()[i].MaterialIndex), rad))
 					continue;
-				float r = world.Spheres[i].Position.w;
+				float r = world.Spheres()[i].Position.w;
 				GPULight L;
 				L.Emission = glm::vec4(rad, 4.0f * 3.14159265f * r * r); // area (non usata dal cono)
-				L.P = glm::vec4(glm::vec3(world.Spheres[i].Position), r);
+				L.P = glm::vec4(glm::vec3(world.Spheres()[i].Position), r);
 				L.Meta = glm::ivec4(0, 0, static_cast<int>(i), 0);
 				lights.push_back(L);
 			}
@@ -40,23 +40,23 @@ namespace Lucerna {
 			// Quad emissivi: campionati per area. Nel formato dello shader gli spigoli FISICI sono
 			// E1 = U*(Width/k), E2 = V*(Height/k) con k = |U x V|, e area = Width*Height/k. Cosi'
 			// il campionamento nello shader e' q = LLC + s*E1 + t*E2 con s,t in [0,1].
-			for (size_t i = 0; i < world.Quads.size(); i++) {
+			for (size_t i = 0; i < world.Quads().size(); i++) {
 				glm::vec3 rad;
-				if (!radianceOf(static_cast<int>(world.Quads[i].MaterialIndex), rad))
+				if (!radianceOf(static_cast<int>(world.Quads()[i].MaterialIndex), rad))
 					continue;
-				glm::vec3 u = glm::vec3(world.Quads[i].U);
-				glm::vec3 v = glm::vec3(world.Quads[i].V);
+				glm::vec3 u = glm::vec3(world.Quads()[i].U);
+				glm::vec3 v = glm::vec3(world.Quads()[i].V);
 				glm::vec3 cr = glm::cross(u, v);
 				float k = glm::length(cr);
 				if (k < 1e-8f)
 					continue; // quad degenere
 				glm::vec3 n = cr / k;
-				glm::vec3 e1 = u * (world.Quads[i].Width / k);
-				glm::vec3 e2 = v * (world.Quads[i].Height / k);
-				float area = (world.Quads[i].Width * world.Quads[i].Height) / k;
+				glm::vec3 e1 = u * (world.Quads()[i].Width / k);
+				glm::vec3 e2 = v * (world.Quads()[i].Height / k);
+				float area = (world.Quads()[i].Width * world.Quads()[i].Height) / k;
 				GPULight L;
 				L.Emission = glm::vec4(rad, area);
-				L.P = glm::vec4(glm::vec3(world.Quads[i].PositionLLC), 0.0f);
+				L.P = glm::vec4(glm::vec3(world.Quads()[i].PositionLLC), 0.0f);
 				L.U = glm::vec4(e1, 0.0f);
 				L.V = glm::vec4(e2, 0.0f);
 				L.Normal = glm::vec4(n, 0.0f);
@@ -66,12 +66,12 @@ namespace Lucerna {
 
 			// Il Sole: P = direzione verso la luce + cos(raggio angolare), Emission.a = angolo solido
 			// del disco. Meta.y = -1: nessun oggetto in scena lo rappresenta.
-			if (world.Sun.Enabled) {
-				const glm::vec3 rad = world.Sun.Radiance();
+			if (world.Sun().Enabled) {
+				const glm::vec3 rad = world.Sun().Radiance();
 				if (glm::dot(rad, glm::vec3(0.2126f, 0.7152f, 0.0722f)) > 1e-4f) {
 					GPULight L;
-					L.Emission = glm::vec4(rad, world.Sun.SolidAngle());
-					L.P = glm::vec4(world.Sun.Direction(), world.Sun.CosMax());
+					L.Emission = glm::vec4(rad, world.Sun().SolidAngle());
+					L.P = glm::vec4(world.Sun().Direction(), world.Sun().CosMax());
 					L.Meta = glm::ivec4(2, -1, -1, 0);
 					lights.push_back(L);
 				}
@@ -79,7 +79,7 @@ namespace Lucerna {
 
 			// Luci punto e spot: Emission.rgb = intensita', P = posizione, U = direzione dello spot
 			// con cos(OuterAngle) in w, V.x = cos(InnerAngle). Nessun oggetto le rappresenta.
-			for (const PunctualLight& p : world.PunctualLights) {
+			for (const PunctualLight& p : world.PunctualLights()) {
 				const glm::vec3 intensity = p.Color * p.Intensity;
 				if (glm::dot(intensity, glm::vec3(0.2126f, 0.7152f, 0.0722f)) <= 1e-6f)
 					continue;
@@ -101,15 +101,15 @@ namespace Lucerna {
 
 		// AABB world di tutte le primitive analitiche: prima le sfere, poi i quad.
 		std::vector<AABB> PrimitiveBounds(const World& world) {
-			const int nSpheres = static_cast<int>(world.Spheres.size());
-			const int nQuads = static_cast<int>(world.Quads.size());
+			const int nSpheres = static_cast<int>(world.Spheres().size());
+			const int nQuads = static_cast<int>(world.Quads().size());
 
 			std::vector<AABB> boxes;
 			boxes.reserve(nSpheres + nQuads);
 
 			for (int i = 0; i < nSpheres; i++) {
-				const glm::vec3 c = glm::vec3(world.Spheres[i].Position);
-				const float r = world.Spheres[i].Position.w;
+				const glm::vec3 c = glm::vec3(world.Spheres()[i].Position);
+				const float r = world.Spheres()[i].Position.w;
 				AABB b;
 				b.expand(c - glm::vec3(r));
 				b.expand(c + glm::vec3(r));
@@ -119,16 +119,16 @@ namespace Lucerna {
 			for (int i = 0; i < nQuads; i++) {
 				// Il quad si estende per Width/|UxV| lungo U e Height/|UxV| lungo V (vedi la
 				// parametrizzazione in HitQuad): gli spigoli fisici sono quelli, non U*Width.
-				const glm::vec3 u = glm::vec3(world.Quads[i].U);
-				const glm::vec3 v = glm::vec3(world.Quads[i].V);
-				const glm::vec3 llc = glm::vec3(world.Quads[i].PositionLLC);
+				const glm::vec3 u = glm::vec3(world.Quads()[i].U);
+				const glm::vec3 v = glm::vec3(world.Quads()[i].V);
+				const glm::vec3 llc = glm::vec3(world.Quads()[i].PositionLLC);
 				const float k = glm::length(glm::cross(u, v));
 				AABB b;
 				if (k < 1e-8f) {
 					b.expand(llc); // quad degenere: AABB puntiforme, verra' comunque gonfiata sotto
 				} else {
-					const glm::vec3 e1 = u * (world.Quads[i].Width / k);
-					const glm::vec3 e2 = v * (world.Quads[i].Height / k);
+					const glm::vec3 e1 = u * (world.Quads()[i].Width / k);
+					const glm::vec3 e2 = v * (world.Quads()[i].Height / k);
 					b.expand(llc);
 					b.expand(llc + e1);
 					b.expand(llc + e2);
@@ -244,38 +244,65 @@ namespace Lucerna {
 			vk.UploadBuffer(buffer, data, bytes);
 	}
 
-	void RenderScene::Sync(const World& world, bool reset) {
-		// il decode delle immagini e' costoso: si ricarica solo se la scena le ha cambiate
-		if (world.TexturePaths != m_LoadedTexturePaths) {
-			m_AlbedoTextures.Load(world.TexturePaths);
-			m_LoadedTexturePaths = world.TexturePaths;
-		}
-		if (world.DataTexturePaths != m_LoadedDataTexturePaths) {
-			m_DataTextures.Load(world.DataTexturePaths, 1024, VK_FORMAT_R8G8B8A8_UNORM);
-			m_LoadedDataTexturePaths = world.DataTexturePaths;
+	void RenderScene::Sync(const World& world, uint32_t changes) {
+		// il decode delle immagini e' costoso: si ricarica solo se l'elenco e' cambiato
+		if (changes & TexturesChanged) {
+			m_AlbedoTextures.Load(world.TexturePaths());
+			m_DataTextures.Load(world.DataTexturePaths(), 1024, VK_FORMAT_R8G8B8A8_UNORM);
 		}
 
-		if (reset)
-			Build(world);
+		if (changes & GeometryChanged)
+			BuildGeometry(world);
+		if (changes & (GeometryChanged | MeshesChanged))
+			BuildMeshInfos(world);
+		if (changes & GeometryChanged)
+			m_Accel.BuildMeshes(m_MeshInfos, m_TriPositions);
+
+		if (changes & PrimitivesChanged) {
+			// Gli oggetti portano anche id e nome: sulla GPU vanno i soli dati (issue #23)
+			const std::vector<Sphere> spheres = world.Spheres().Pack();
+			const std::vector<Quad> quads = world.Quads().Pack();
+			Upload(m_Spheres, spheres.data(), sizeof(Sphere) * spheres.size());
+			Upload(m_Quads, quads.data(), sizeof(Quad) * quads.size());
+			m_NumSpheres = static_cast<int>(spheres.size());
+			m_Accel.BuildPrimitives(PrimitiveBounds(world));
+		}
+		if (changes & (GeometryChanged | MeshesChanged | PrimitivesChanged))
+			m_Accel.BuildTopLevel(m_MeshInfos);
+
+		if (changes & MaterialsChanged) {
+			const std::vector<Material> materials = world.Materials().Pack();
+			Upload(m_Materials, materials.data(), sizeof(Material) * materials.size());
+			m_NumMaterials = static_cast<int>(materials.size());
+		}
+
+		// la light list dipende dalle primitive emissive, dai loro materiali, dal Sole e dalle luci
+		if (changes & (PrimitivesChanged | MaterialsChanged | LightsChanged))
+			BuildLights(world);
+
+		if (changes & EnvironmentChanged) {
+			m_BackgroundColor = world.BackgroundColor();
+			m_EnvironmentMapping = world.EnvironmentMapping();
+		}
 	}
 
 	// Separa posizioni, normali e UV nei buffer dei triangoli (local space) e ricostruisce i BLAS.
 	// Dentro ogni mesh i triangoli mascherati vanno in coda: diventano la seconda geometria del
 	// BLAS, l'unica senza il flag opaco (ADR 0008). Il World tiene l'ordine in cui li ha caricati.
 	void RenderScene::BuildGeometry(const World& world) {
-		const std::vector<Triangle>& triangles = world.Triangles;
+		const std::vector<Triangle>& triangles = world.Triangles();
 		std::vector<uint32_t> order(triangles.size());
 		for (uint32_t i = 0; i < order.size(); i++)
 			order[i] = i;
 
-		m_NumOpaque.assign(world.Meshes.size(), 0.0f);
-		for (size_t m = 0; m < world.Meshes.size(); m++) {
-			const Mesh& mesh = world.Meshes[m];
+		m_NumOpaque.assign(world.Meshes().size(), 0.0f);
+		for (size_t m = 0; m < world.Meshes().size(); m++) {
+			const Mesh& mesh = world.Meshes()[m];
 			auto first = order.begin() + mesh.FirstTriangle;
 			auto opaqueEnd = std::stable_partition(first, first + mesh.NumTriangles, [&](uint32_t t) {
 				const float own = triangles[t].MaterialIndex;
 				const int mi = own >= 0.0f ? static_cast<int>(own) : static_cast<int>(mesh.MaterialIndex);
-				return mi < 0 || mi >= static_cast<int>(world.Materials.size()) || world.Materials[mi].AlphaCutoff <= 0.0f;
+				return mi < 0 || mi >= static_cast<int>(world.Materials().size()) || world.Materials()[mi].AlphaCutoff <= 0.0f;
 			});
 			m_NumOpaque[m] = static_cast<float>(opaqueEnd - first);
 		}
@@ -297,16 +324,11 @@ namespace Lucerna {
 		Upload(m_TriUVs, uvs.data(), sizeof(TriangleUV) * uvs.size());
 	}
 
-	void RenderScene::Build(const World& world) {
-		const bool geometryChanged = world.GeometryVersion != m_GeometryVersion;
-		m_GeometryVersion = world.GeometryVersion;
-		if (geometryChanged)
-			BuildGeometry(world);
-
-		std::vector<MeshInfo> meshes;
-		meshes.reserve(world.Meshes.size());
-		for (size_t m = 0; m < world.Meshes.size(); m++) {
-			const Mesh& mesh = world.Meshes[m];
+	void RenderScene::BuildMeshInfos(const World& world) {
+		m_MeshInfos.clear();
+		m_MeshInfos.reserve(world.Meshes().size());
+		for (size_t m = 0; m < world.Meshes().size(); m++) {
+			const Mesh& mesh = world.Meshes()[m];
 			const AABB bounds = mesh.WorldBounds();
 			MeshInfo info;
 			info.Transform = mesh.Transform;
@@ -319,37 +341,23 @@ namespace Lucerna {
 			info.NumTriangles = static_cast<float>(mesh.NumTriangles);
 			info.MaterialIndex = mesh.MaterialIndex;
 			info.NumOpaque = m_NumOpaque[m];
-			meshes.push_back(info);
+			m_MeshInfos.push_back(info);
 		}
+		Upload(m_Meshes, m_MeshInfos.data(), sizeof(MeshInfo) * m_MeshInfos.size());
+	}
 
-		// Gli oggetti portano anche id e nome: sulla GPU vanno i soli dati, impacchettati (issue #23)
-		const std::vector<Sphere> spheres = world.Spheres.Pack();
-		const std::vector<Material> materials = world.Materials.Pack();
-		const std::vector<Quad> quads = world.Quads.Pack();
-		Upload(m_Spheres, spheres.data(), sizeof(Sphere) * spheres.size());
-		Upload(m_Materials, materials.data(), sizeof(Material) * materials.size());
-		Upload(m_Quads, quads.data(), sizeof(Quad) * quads.size());
-		Upload(m_Meshes, meshes.data(), sizeof(MeshInfo) * meshes.size());
-
+	void RenderScene::BuildLights(const World& world) {
 		const std::vector<GPULight> lights = CollectLights(world);
 		m_NumLights = static_cast<int>(lights.size());
 		if (getenv("PT_LIGHTS"))
-			std::cout << "PTLIGHTS " << m_NumLights << " spheres=" << world.Spheres.size()
-			          << " quads=" << world.Quads.size() << std::endl;
+			std::cout << "PTLIGHTS " << m_NumLights << " spheres=" << world.Spheres().size()
+			          << " quads=" << world.Quads().size() << std::endl;
 		Upload(m_Lights, lights.data(), sizeof(GPULight) * lights.size());
 
-		if (geometryChanged)
-			m_Accel.BuildMeshes(meshes, m_TriPositions);
-		m_Accel.BuildTopLevel(meshes, PrimitiveBounds(world));
-
-		m_NumSpheres = static_cast<int>(world.Spheres.size());
-		m_NumMaterials = static_cast<int>(world.Materials.size());
-		m_BackgroundColor = world.BackgroundColor;
-		m_EnvironmentMapping = world.EnvironmentMapping;
 		m_SunDirection = m_SunRadiance = glm::vec4(0.0f);
-		if (world.Sun.Enabled) {
-			m_SunDirection = glm::vec4(world.Sun.Direction(), world.Sun.CosMax());
-			m_SunRadiance = glm::vec4(world.Sun.Radiance(), world.Sun.SolidAngle());
+		if (world.Sun().Enabled) {
+			m_SunDirection = glm::vec4(world.Sun().Direction(), world.Sun().CosMax());
+			m_SunRadiance = glm::vec4(world.Sun().Radiance(), world.Sun().SolidAngle());
 		}
 	}
 }

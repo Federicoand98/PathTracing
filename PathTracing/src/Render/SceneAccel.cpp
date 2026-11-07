@@ -182,10 +182,10 @@ namespace Lucerna {
 		});
 	}
 
-	void SceneAccel::BuildTopLevel(const std::vector<MeshInfo>& meshes, const std::vector<AABB>& bounds) {
+	void SceneAccel::BuildPrimitives(const std::vector<AABB>& bounds) {
 		VulkanContext& vk = VulkanContext::Get();
 
-		// ---- BLAS procedurale: sfere e quad si muovono dalla UI, quindi si rifa' a ogni reset ----
+		// ---- BLAS procedurale: sfere e quad si muovono dalla UI, si rifa' a ogni loro modifica ----
 		if (m_ProceduralBlas != VK_NULL_HANDLE) {
 			Fn().Destroy(vk.Device(), m_ProceduralBlas, nullptr);
 			m_ProceduralBlas = VK_NULL_HANDLE;
@@ -232,7 +232,11 @@ namespace Lucerna {
 			vk.Immediate([&](VkCommandBuffer cmd) { Fn().CmdBuild(cmd, 1, &info, &rangePointer); });
 		}
 
-		// ---- TLAS ----
+	}
+
+	void SceneAccel::BuildTopLevel(const std::vector<MeshInfo>& meshes) {
+		VulkanContext& vk = VulkanContext::Get();
+
 		std::vector<VkAccelerationStructureInstanceKHR> instances;
 		instances.reserve(m_MeshBlas.size() + 1);
 

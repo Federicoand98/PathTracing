@@ -66,8 +66,7 @@ namespace Lucerna {
 		if (const char* c = getenv("PT_CAM")) {
 			glm::vec3 pos, dir;
 			if (sscanf(c, "%f,%f,%f,%f,%f,%f", &pos.x, &pos.y, &pos.z, &dir.x, &dir.y, &dir.z) == 6) {
-				m_World.Camera.Position = pos; // e' l'inquadratura: la vista la segue in SyncCameras
-				m_World.Camera.Direction = glm::normalize(dir);
+				m_World.MoveCamera(pos, glm::normalize(dir)); // e' l'inquadratura: la vista la segue in SyncCameras
 			}
 		}
 
@@ -171,7 +170,7 @@ namespace Lucerna {
 
 		m_Camera.OnResize(m_Width, m_Height);
 		m_Renderer.OnResize(m_Width, m_Height);
-		m_Renderer.Initialize(m_World);
+		m_Renderer.Initialize();
 
 		while (!glfwWindowShouldClose(m_Window) && m_IsRunning) {
 			glfwPollEvents();
@@ -285,7 +284,6 @@ namespace Lucerna {
 	// viene armato. Al successo salva path e mtime: da qui in poi PollGltfWatch la sorveglia.
 	bool Application::LoadGltfScene(const std::string& path) {
 		m_Selection = {};
-		m_Renderer.ResetPathTracingCounter(true);
 		if (!m_World.LoadGltf(path))
 			return false;
 
@@ -311,7 +309,6 @@ namespace Lucerna {
 		// stesso timestamp; ci riprovera' al prossimo cambio di mtime (Blender riscrive).
 		m_GltfMtime = mtime;
 		std::cout << "Live-link: rilevato cambio, ricarico " << m_GltfPath << std::endl;
-		m_Renderer.ResetPathTracingCounter(true);
 		m_World.LoadGltf(m_GltfPath);
 	}
 
@@ -436,7 +433,6 @@ namespace Lucerna {
 			m_Selection = {};
 
 			m_World.DestroyScene();
-			m_Renderer.ResetPathTracingCounter(true);
 			m_World.LoadScene(); // la scena imposta anche la sua inquadratura
 		}
 
@@ -469,17 +465,19 @@ namespace Lucerna {
 			ImGui::TextDisabled("watch: %s", m_GltfPath.c_str());
 		}
 
-		if (ImGui::Checkbox("Environment Mapping", &m_World.EnvironmentMapping))
-			m_Renderer.ResetPathTracingCounter();
-
-		if (!m_World.EnvironmentMapping)
-			if (ImGui::ColorEdit3("Background", glm::value_ptr(m_World.BackgroundColor)))
-				m_Renderer.ResetPathTracingCounter();
+		{
+			bool environment = m_World.EnvironmentMapping();
+			glm::vec3 background = m_World.BackgroundColor();
+			bool changed = ImGui::Checkbox("Environment Mapping", &environment);
+			if (!environment)
+				changed |= ImGui::ColorEdit3("Background", glm::value_ptr(background));
+			if (changed)
+				m_World.SetBackground(background, environment);
+		}
 
 		ImGui::SeparatorText("Sun");
 		{
-			// Ogni parametro del Sole cambia l'immagine e la light list: tutti azzerano l'accumulo.
-			SunParams& sun = m_World.Sun;
+			SunParams sun = m_World.Sun();
 			bool changed = ImGui::Checkbox("Sun enabled", &sun.Enabled);
 			if (sun.Enabled) {
 				changed |= ImGui::SliderFloat("Elevation", &sun.Elevation, -90.0f, 90.0f, "%.1f deg");
@@ -489,7 +487,7 @@ namespace Lucerna {
 				changed |= ImGui::DragFloat("Irradiance", &sun.Irradiance, 0.05f, 0.0f, 1000.0f, "%.2f");
 			}
 			if (changed)
-				m_Renderer.ResetPathTracingCounter();
+				m_World.SetSun(sun);
 		}
 
 		ImGui::SeparatorText("Scene file");
@@ -504,12 +502,9 @@ namespace Lucerna {
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Load")) {
-			// Deserialize riscrive i vettori del world ma non i buffer GPU: il re-upload
-			// lo fa ResetPathTracingCounter(true), esattamente come un cambio scena.
-			if (SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(scenePath)) {
+			// la scena caricata si segna tutta cambiata: il renderer la ricarica come un cambio scena
+			if (SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(scenePath))
 				m_Selection = {};
-				m_Renderer.ResetPathTracingCounter(true);
-			}
 		}
 		ImGui::SameLine();
 		ImGui::TextDisabled("%s", scenePath.c_str());
@@ -528,54 +523,54 @@ namespace Lucerna {
 		// I 6 quad che compongono un box vivono ANCHE in Quads: elencarli entrambi
 		// riempirebbe l'outliner di duplicati (Random Boxes ha 121 box = 726 quad).
 		// Le facce si selezionano tramite il box che le possiede.
-		std::vector<bool> quadOwnedByBox(m_World.Quads.size(), false);
-		for (const Box& box : m_World.Boxes) {
+		std::vector<bool> quadOwnedByBox(m_World.Quads().size(), false);
+		for (const Box& box : m_World.Boxes()) {
 			int first = static_cast<int>(box.index);
-			for (int q = first; q < first + 6 && q < (int)m_World.Quads.size(); q++)
+			for (int q = first; q < first + 6 && q < (int)m_World.Quads().size(); q++)
 				quadOwnedByBox[q] = true;
 		}
 
 		const size_t standaloneQuads = std::count(quadOwnedByBox.begin(), quadOwnedByBox.end(), false);
-		const bool empty = m_World.Spheres.empty() && m_World.Boxes.empty()
-						&& standaloneQuads == 0 && m_World.Meshes.empty() && m_World.PunctualLights.empty();
+		const bool empty = m_World.Spheres().empty() && m_World.Boxes().empty()
+						&& standaloneQuads == 0 && m_World.Meshes().empty() && m_World.PunctualLights().empty();
 
 		ImGui::BeginChild("OutlinerList", ImVec2(0.0f, 190.0f), true);
 
 		if (empty)
 			ImGui::TextDisabled("empty scene");
 
-		if (!m_World.Spheres.empty() && ImGui::TreeNodeEx("spheres", ImGuiTreeNodeFlags_DefaultOpen, "Spheres (%zu)", m_World.Spheres.size())) {
-			for (size_t i = 0; i < m_World.Spheres.size(); i++)
-				SelectableObjectRow(m_World.Spheres[i].Name.c_str(), SelectionType::Sphere, (int)i, m_World.Spheres[i].MaterialIndex);
+		if (!m_World.Spheres().empty() && ImGui::TreeNodeEx("spheres", ImGuiTreeNodeFlags_DefaultOpen, "Spheres (%zu)", m_World.Spheres().size())) {
+			for (size_t i = 0; i < m_World.Spheres().size(); i++)
+				SelectableObjectRow(m_World.Spheres()[i].Name.c_str(), SelectionType::Sphere, (int)i, m_World.Spheres()[i].MaterialIndex);
 			ImGui::TreePop();
 		}
 
-		if (!m_World.Boxes.empty() && ImGui::TreeNodeEx("boxes", ImGuiTreeNodeFlags_DefaultOpen, "Boxes (%zu)", m_World.Boxes.size())) {
-			for (size_t i = 0; i < m_World.Boxes.size(); i++)
-				SelectableObjectRow(m_World.Boxes[i].Name.c_str(), SelectionType::Box, (int)i, m_World.Boxes[i].MaterialIndex);
+		if (!m_World.Boxes().empty() && ImGui::TreeNodeEx("boxes", ImGuiTreeNodeFlags_DefaultOpen, "Boxes (%zu)", m_World.Boxes().size())) {
+			for (size_t i = 0; i < m_World.Boxes().size(); i++)
+				SelectableObjectRow(m_World.Boxes()[i].Name.c_str(), SelectionType::Box, (int)i, m_World.Boxes()[i].MaterialIndex);
 			ImGui::TreePop();
 		}
 
 		if (standaloneQuads > 0 && ImGui::TreeNodeEx("quads", ImGuiTreeNodeFlags_DefaultOpen, "Quads (%zu)", standaloneQuads)) {
-			for (size_t i = 0; i < m_World.Quads.size(); i++) {
+			for (size_t i = 0; i < m_World.Quads().size(); i++) {
 				if (quadOwnedByBox[i])
 					continue; // faccia di un box
 
-				SelectableObjectRow(m_World.Quads[i].Name.c_str(), SelectionType::Quad, (int)i, m_World.Quads[i].MaterialIndex);
+				SelectableObjectRow(m_World.Quads()[i].Name.c_str(), SelectionType::Quad, (int)i, m_World.Quads()[i].MaterialIndex);
 			}
 			ImGui::TreePop();
 		}
 
-		if (!m_World.Meshes.empty() && ImGui::TreeNodeEx("meshes", ImGuiTreeNodeFlags_DefaultOpen, "Meshes (%zu)", m_World.Meshes.size())) {
-			for (size_t i = 0; i < m_World.Meshes.size(); i++) {
-				SelectableObjectRow(m_World.Meshes[i].Name.c_str(), SelectionType::Mesh, (int)i, m_World.Meshes[i].MaterialIndex);
+		if (!m_World.Meshes().empty() && ImGui::TreeNodeEx("meshes", ImGuiTreeNodeFlags_DefaultOpen, "Meshes (%zu)", m_World.Meshes().size())) {
+			for (size_t i = 0; i < m_World.Meshes().size(); i++) {
+				SelectableObjectRow(m_World.Meshes()[i].Name.c_str(), SelectionType::Mesh, (int)i, m_World.Meshes()[i].MaterialIndex);
 			}
 			ImGui::TreePop();
 		}
 
-		if (!m_World.PunctualLights.empty() && ImGui::TreeNodeEx("lights", ImGuiTreeNodeFlags_DefaultOpen, "Lights (%zu)", m_World.PunctualLights.size())) {
-			for (size_t i = 0; i < m_World.PunctualLights.size(); i++)
-				SelectableObjectRow(m_World.PunctualLights[i].Name.c_str(), SelectionType::Light, (int)i, -1.0f);
+		if (!m_World.PunctualLights().empty() && ImGui::TreeNodeEx("lights", ImGuiTreeNodeFlags_DefaultOpen, "Lights (%zu)", m_World.PunctualLights().size())) {
+			for (size_t i = 0; i < m_World.PunctualLights().size(); i++)
+				SelectableObjectRow(m_World.PunctualLights()[i].Name.c_str(), SelectionType::Light, (int)i, -1.0f);
 			ImGui::TreePop();
 		}
 
@@ -647,73 +642,64 @@ namespace Lucerna {
 
 		// il nome si rinomina qui; e' unico nella lista del suo tipo (issue #23)
 		{
-			const int i = SelectedIndex();
-			switch (m_Selection.Type) {
-			case SelectionType::Sphere: NameField(m_World.Spheres, m_World.Spheres[i]); break;
-			case SelectionType::Quad:   NameField(m_World.Quads, m_World.Quads[i]); break;
-			case SelectionType::Box:    NameField(m_World.Boxes, m_World.Boxes[i]); break;
-			case SelectionType::Mesh:   NameField(m_World.Meshes, m_World.Meshes[i]); break;
-			case SelectionType::Light:  NameField(m_World.PunctualLights, m_World.PunctualLights[i]); break;
-			default: break;
-			}
+			NameField(m_Selection.Id, ObjectName(m_Selection));
 		}
 
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: {
-			Sphere& sphere = m_World.Spheres.at(SelectedIndex());
-			if (ImGui::DragFloat3("Center", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.05f, 0.001f, 1000.0f)) m_Renderer.ResetPathTracingCounter();
-			if (MaterialCombo("Material", sphere.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
+			Sphere sphere = m_World.Spheres().at(SelectedIndex());
+			bool changed = ImGui::DragFloat3("Center", glm::value_ptr(sphere.Position), 0.1f);
+			changed |= ImGui::DragFloat("Radius", &sphere.Position.w, 0.05f, 0.001f, 1000.0f);
+			changed |= MaterialCombo("Material", sphere.MaterialIndex);
+			if (changed)
+				m_World.Set(m_Selection.Id, sphere);
 			break;
 		}
 		case SelectionType::Quad: {
-			Quad& quad = m_World.Quads.at(SelectedIndex());
-			if (ImGui::DragFloat3("Corner", glm::value_ptr(quad.PositionLLC), 0.1f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat3("U axis", glm::value_ptr(quad.U), 0.05f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat3("V axis", glm::value_ptr(quad.V), 0.05f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Width", &quad.Width, 0.1f, 0.001f, 1000.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::DragFloat("Height", &quad.Height, 0.1f, 0.001f, 1000.0f)) m_Renderer.ResetPathTracingCounter();
-			if (MaterialCombo("Material", quad.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
+			Quad quad = m_World.Quads().at(SelectedIndex());
+			bool changed = ImGui::DragFloat3("Corner", glm::value_ptr(quad.PositionLLC), 0.1f);
+			changed |= ImGui::DragFloat3("U axis", glm::value_ptr(quad.U), 0.05f);
+			changed |= ImGui::DragFloat3("V axis", glm::value_ptr(quad.V), 0.05f);
+			changed |= ImGui::DragFloat("Width", &quad.Width, 0.1f, 0.001f, 1000.0f);
+			changed |= ImGui::DragFloat("Height", &quad.Height, 0.1f, 0.001f, 1000.0f);
+			changed |= MaterialCombo("Material", quad.MaterialIndex);
+			if (changed)
+				m_World.Set(m_Selection.Id, quad);
 			ImGui::TextDisabled("pivot = lower-left corner");
 			break;
 		}
 		case SelectionType::Box: {
-			Box& box = m_World.Boxes.at(SelectedIndex());
+			Box box = m_World.Boxes().at(SelectedIndex());
 
 			bool changed = false;
 			changed |= ImGui::DragFloat3("Min", glm::value_ptr(box.Min), 0.1f);
 			changed |= ImGui::DragFloat3("Max", glm::value_ptr(box.Max), 0.1f);
 			changed |= MaterialCombo("Material", box.MaterialIndex);
 
-			if (changed) {
-				box.UpdateBox(m_World.Quads); // un box e' 6 quad: vanno riscritti
-				m_Renderer.ResetPathTracingCounter();
-			}
+			if (changed)
+				m_World.Set(m_Selection.Id, box); // riscrive anche i suoi 6 quad
 			ImGui::TextDisabled("axis-aligned: cannot be rotated");
 			break;
 		}
 		case SelectionType::Mesh: {
-			Mesh& mesh = m_World.Meshes.at(SelectedIndex());
+			Mesh mesh = m_World.Meshes().at(SelectedIndex());
 			ImGui::Text("Triangles: %d", static_cast<int>(mesh.NumTriangles));
 
 			glm::vec3 position = glm::vec3(mesh.Transform[3]); // la traslazione e' l'ultima colonna
-			if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f)) {
-				glm::mat4 transform = mesh.Transform;
-				transform[3] = glm::vec4(position, 1.0f);
-				m_World.Meshes.at(SelectedIndex()).Transform = transform;
-				m_Renderer.ResetPathTracingCounter();
-			}
-
-			if (MaterialCombo("Material", mesh.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
-
+			bool changed = ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f);
+			if (changed)
+				mesh.Transform[3] = glm::vec4(position, 1.0f);
+			changed |= MaterialCombo("Material", mesh.MaterialIndex);
 			if (ImGui::Button("Reset transform")) {
-				m_World.Meshes.at(SelectedIndex()).Transform = glm::mat4(1.0f);
-				m_Renderer.ResetPathTracingCounter();
+				mesh.Transform = glm::mat4(1.0f);
+				changed = true;
 			}
+			if (changed)
+				m_World.Set(m_Selection.Id, mesh);
 			break;
 		}
 		case SelectionType::Light: {
-			PunctualLight& light = m_World.PunctualLights.at(SelectedIndex());
+			PunctualLight light = m_World.PunctualLights().at(SelectedIndex());
 			bool changed = false;
 			int type = light.Spot ? 1 : 0;
 			if (ImGui::Combo("Type", &type, "Point\0Spot\0\0")) {
@@ -736,7 +722,7 @@ namespace Lucerna {
 				light.InnerAngle = glm::min(light.InnerAngle, light.OuterAngle);
 			}
 			if (changed)
-				m_Renderer.ResetPathTracingCounter();
+				m_World.Set(m_Selection.Id, light);
 			break;
 		}
 		default:
@@ -757,25 +743,25 @@ namespace Lucerna {
 	// Un DragFloat sull'indice del materiale non dice niente su cosa si sta scegliendo:
 	// qui ogni voce mostra la pastiglia col colore del materiale.
 	bool Application::MaterialCombo(const char* label, float& materialIndex) {
-		if (m_World.Materials.empty())
+		if (m_World.Materials().empty())
 			return false;
 
-		const int count = static_cast<int>(m_World.Materials.size());
+		const int count = static_cast<int>(m_World.Materials().size());
 		const int current = std::clamp(static_cast<int>(materialIndex), 0, count - 1);
 
-		const std::string preview = m_World.Materials[current].Name;
+		const std::string preview = m_World.Materials()[current].Name;
 		bool changed = false;
 
 		if (ImGui::BeginCombo(label, preview.c_str())) {
 			for (int i = 0; i < count; i++) {
 				ImGui::PushID(i);
 
-				const glm::vec4& color = m_World.Materials[i].Color;
+				const glm::vec4& color = m_World.Materials()[i].Color;
 				ImGui::ColorButton("##swatch", ImVec4(color.r, color.g, color.b, 1.0f),
 					ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop, ImVec2(14.0f, 14.0f));
 				ImGui::SameLine();
 
-				const std::string& item = m_World.Materials[i].Name;
+				const std::string& item = m_World.Materials()[i].Name;
 				if (ImGui::Selectable(item.c_str(), i == current)) {
 					materialIndex = static_cast<float>(i);
 					changed = true;
@@ -806,10 +792,10 @@ namespace Lucerna {
 	// Un oggetto con un MaterialIndex senza corrispondenza indicizzerebbe fuori dal
 	// buffer dei materiali nello shader.
 	int Application::EnsureMaterialExists() {
-		if (m_World.Materials.empty())
-			m_World.Materials.Add(CreateDefaultPrincipled());
+		if (m_World.Materials().empty())
+			m_World.AddMaterial(CreateDefaultPrincipled());
 
-		return std::clamp(static_cast<int>(m_NewObjectMaterial), 0, (int)m_World.Materials.size() - 1);
+		return std::clamp(static_cast<int>(m_NewObjectMaterial), 0, (int)m_World.Materials().size() - 1);
 	}
 
 	void Application::DrawAddObjectMenu() {
@@ -821,11 +807,8 @@ namespace Lucerna {
 			Sphere sphere;
 			sphere.Position = glm::vec4(spawn, 0.5f); // la w e' il raggio
 			sphere.MaterialIndex = static_cast<float>(material);
-			m_World.Spheres.Add(sphere);
-
-			m_Selection = Select(SelectionType::Sphere, (int)m_World.Spheres.size() - 1);
+			m_Selection = Select(SelectionType::Sphere, m_World.AddSphere(sphere));
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
-			m_Renderer.ResetPathTracingCounter();
 		}
 
 		ImGui::SameLine();
@@ -837,9 +820,8 @@ namespace Lucerna {
 			// nello shader (che li scorre in parallelo ai quad).
 			m_World.CreateBox(spawn - glm::vec3(0.5f), spawn + glm::vec3(0.5f), (float)material);
 
-			m_Selection = Select(SelectionType::Box, (int)m_World.Boxes.size() - 1);
+			m_Selection = Select(SelectionType::Box, (int)m_World.Boxes().size() - 1);
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
-			m_Renderer.ResetPathTracingCounter();
 		}
 
 		ImGui::SameLine();
@@ -853,11 +835,8 @@ namespace Lucerna {
 			quad.Width = 1.0f;
 			quad.Height = 1.0f;
 			quad.MaterialIndex = static_cast<float>(material);
-			m_World.Quads.Add(quad);
-
-			m_Selection = Select(SelectionType::Quad, (int)m_World.Quads.size() - 1);
+			m_Selection = Select(SelectionType::Quad, m_World.AddQuad(quad));
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
-			m_Renderer.ResetPathTracingCounter();
 		}
 
 		// luci punto e spot (ADR 0009): lo spot nasce rivolto in basso
@@ -866,11 +845,8 @@ namespace Lucerna {
 				PunctualLight light;
 				light.Spot = spot == 1;
 				light.Position = spawn;
-				m_World.PunctualLights.Add(light, spot ? "Spot light" : "Point light");
-
-				m_Selection = Select(SelectionType::Light, (int)m_World.PunctualLights.size() - 1);
+				m_Selection = Select(SelectionType::Light, m_World.AddLight(light, spot ? "Spot light" : "Point light"));
 				m_GizmoOperation = ImGuizmo::TRANSLATE;
-				m_Renderer.ResetPathTracingCounter();
 			}
 			if (spot == 0)
 				ImGui::SameLine();
@@ -909,8 +885,6 @@ namespace Lucerna {
 					m_Selection = Select(SelectionType::Mesh, mesh);
 					m_GizmoOperation = ImGuizmo::TRANSLATE;
 				}
-
-				m_Renderer.ResetPathTracingCounter();
 			}
 		}
 
@@ -924,11 +898,11 @@ namespace Lucerna {
 	// Quanti elementi ha la collezione a cui punta una selezione di questo tipo.
 	int Application::SelectionCollectionSize(SelectionType type) const {
 		switch (type) {
-		case SelectionType::Sphere: return static_cast<int>(m_World.Spheres.size());
-		case SelectionType::Quad:   return static_cast<int>(m_World.Quads.size());
-		case SelectionType::Box:    return static_cast<int>(m_World.Boxes.size());
-		case SelectionType::Mesh:   return static_cast<int>(m_World.Meshes.size());
-		case SelectionType::Light:  return static_cast<int>(m_World.PunctualLights.size());
+		case SelectionType::Sphere: return static_cast<int>(m_World.Spheres().size());
+		case SelectionType::Quad:   return static_cast<int>(m_World.Quads().size());
+		case SelectionType::Box:    return static_cast<int>(m_World.Boxes().size());
+		case SelectionType::Mesh:   return static_cast<int>(m_World.Meshes().size());
+		case SelectionType::Light:  return static_cast<int>(m_World.PunctualLights().size());
 		default:                    return 0;
 		}
 	}
@@ -946,21 +920,14 @@ namespace Lucerna {
 		const Selection sel = m_Selection;
 		m_Selection = {};
 
-		bool removed = false;
 		switch (sel.Type) {
-		case SelectionType::Sphere: removed = m_World.RemoveSphere(IndexOf(sel)); break;
-		case SelectionType::Quad:   removed = m_World.RemoveQuad(IndexOf(sel));   break;
-		case SelectionType::Box:    removed = m_World.RemoveBox(IndexOf(sel));    break;
-		case SelectionType::Mesh:   removed = m_World.RemoveMesh(IndexOf(sel));   break;
-		case SelectionType::Light:
-			m_World.PunctualLights.erase(m_World.PunctualLights.begin() + IndexOf(sel));
-			removed = true;
-			break;
+		case SelectionType::Sphere: m_World.RemoveSphere(IndexOf(sel)); break;
+		case SelectionType::Quad:   m_World.RemoveQuad(IndexOf(sel));   break;
+		case SelectionType::Box:    m_World.RemoveBox(IndexOf(sel));    break;
+		case SelectionType::Mesh:   m_World.RemoveMesh(IndexOf(sel));   break;
+		case SelectionType::Light:  m_World.RemoveLight(IndexOf(sel));  break;
 		default: break;
 		}
-
-		if (removed)
-			m_Renderer.ResetPathTracingCounter();
 	}
 
 	// Modale: va aperta fuori dal Begin/End di qualsiasi finestra.
@@ -995,7 +962,7 @@ namespace Lucerna {
 			switch (m_Selection.Type) {
 			case SelectionType::Mesh:
 				ImGui::TextDisabled("%d triangles - BLASes will be rebuilt",
-					static_cast<int>(m_World.Meshes[SelectedIndex()].NumTriangles));
+					static_cast<int>(m_World.Meshes()[SelectedIndex()].NumTriangles));
 				break;
 			case SelectionType::Box:
 				ImGui::TextDisabled("also removes its 6 faces");
@@ -1030,14 +997,15 @@ namespace Lucerna {
 
 	// Corpo dell'editor, condiviso fra il tab Materials e la finestra flottante:
 	// due copie divergerebbero al primo campo aggiunto.
-	void Application::DrawMaterialEditor(Material& material, int index) {
+	bool Application::DrawMaterialEditor(Material& material, int index) {
 		// Editor in stile Principled (Blender): mostra concetti da artista e scrive nei campi
 		// raw dello struct, che restano il contratto con lo shader. Le "probabilita'" di
 		// importance sampling non compaiono: le derivo qui. Cosi' non possono piu' sommare
 		// a un valore che sopprime il diffuso, che era il footgun della UI precedente.
-		if (index >= 0 && index < (int)m_World.Materials.size())
-			NameField(m_World.Materials, m_World.Materials[index]);
+		if (index >= 0 && index < (int)m_World.Materials().size())
+			NameField(m_World.Materials()[index].Id, m_World.Materials()[index].Name);
 
+		bool edited = false;
 		bool changed = false;
 		const bool isMetal = material.Metalness > 0.001f;
 
@@ -1099,36 +1067,36 @@ namespace Lucerna {
 		if (changed) {
 			material.SpecularColor = glm::vec4(1.0f);
 			material.RefractionColor = material.Color;
-			m_Renderer.ResetPathTracingCounter();
+			edited = true;
 		}
 
 		ImGui::SeparatorText("Emission");
-		if (ImGui::DragFloat("Emissive Strength", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) m_Renderer.ResetPathTracingCounter();
-		if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) m_Renderer.ResetPathTracingCounter();
+		if (ImGui::DragFloat("Emissive Strength", &material.EmissiveStrenght, 0.1f, 0.0f, FLT_MAX)) edited = true;
+		if (ImGui::ColorEdit3("Emissive Color", glm::value_ptr(material.EmissiveColor))) edited = true;
 
 		ImGui::SeparatorText("Base Color texture");
 		int checkerMode = static_cast<int>(material.Checker + 0.5f);
 		if (ImGui::Combo("Checker", &checkerMode, "Off\0UV (debug)\0World space\0\0")) {
 			material.Checker = static_cast<float>(checkerMode);
-			m_Renderer.ResetPathTracingCounter();
+			edited = true;
 		}
 		if (checkerMode != 0) {
 			if (ImGui::DragFloat("Checker scale", &material.CheckerScale, 0.1f, 0.01f, 64.0f))
-				m_Renderer.ResetPathTracingCounter();
+				edited = true;
 		}
 
 		// Nello shader checker e texture sono in catena else-if: il checker vince e la texture
 		// non viene mai letta. Invece di mostrarli come se si combinassero, la disabilito e lo
 		// dico, cosi' l'esclusione non e' piu' silenziosa.
 		const bool checkerWins = checkerMode != 0;
-		const int layerCount = static_cast<int>(m_World.TexturePaths.size());
+		const int layerCount = static_cast<int>(m_World.TexturePaths().size());
 		ImGui::BeginDisabled(checkerWins);
 		if (layerCount > 0) {
 			// -1 = nessuna texture; gli altri valori indicizzano i layer di TexturePaths.
 			// Con min == max ImGui disattiva il clamping, quindi senza texture
 			// il drag va nascosto del tutto invece che lasciato libero di sforare.
 			if (ImGui::DragFloat("Albedo texture layer", &material.AlbedoTexture, 1.0f, -1.0f, (float)(layerCount - 1)))
-				m_Renderer.ResetPathTracingCounter();
+				edited = true;
 		}
 		else {
 			material.AlbedoTexture = -1.0f;
@@ -1140,17 +1108,17 @@ namespace Lucerna {
 
 		// Normal map (ADR 0007): solo le mesh hanno le UV e i triangoli da cui si ricava la tangente
 		ImGui::SeparatorText("Normal map");
-		const int normalCount = static_cast<int>(m_World.DataTexturePaths.size());
+		const int normalCount = static_cast<int>(m_World.DataTexturePaths().size());
 		if (normalCount > 0) {
 			if (ImGui::DragFloat("Normal map layer", &material.NormalTexture, 1.0f, -1.0f, (float)(normalCount - 1)))
-				m_Renderer.ResetPathTracingCounter();
+				edited = true;
 			if (material.NormalTexture >= 0.0f) {
 				if (ImGui::SliderFloat("Normal strength", &material.NormalStrength, 0.0f, 2.0f))
-					m_Renderer.ResetPathTracingCounter();
+					edited = true;
 				bool flipY = material.NormalFlipY > 0.5f;
 				if (ImGui::Checkbox("Flip green (DirectX)", &flipY)) {
 					material.NormalFlipY = flipY ? 1.0f : 0.0f;
-					m_Renderer.ResetPathTracingCounter();
+					edited = true;
 				}
 				ImGui::TextDisabled("applies to meshes only");
 			}
@@ -1165,18 +1133,18 @@ namespace Lucerna {
 		if (material.AlphaCutoff > 0.0f) {
 			ImGui::SeparatorText("Alpha mask");
 			if (ImGui::SliderFloat("Alpha cutoff", &material.AlphaCutoff, 0.01f, 1.0f))
-				m_Renderer.ResetPathTracingCounter();
+				edited = true;
 		}
 
 		ImGui::SeparatorText("Procedural noise");
 		int noiseMode = static_cast<int>(material.NoiseType + 0.5f);
 		if (ImGui::Combo("Noise", &noiseMode, "Off\0Perlin\0Turbulence\0Marble\0\0")) {
 			material.NoiseType = static_cast<float>(noiseMode);
-			m_Renderer.ResetPathTracingCounter();
+			edited = true;
 		}
 		if (noiseMode != 0) {
-			if (ImGui::DragFloat("Noise scale", &material.NoiseScale, 0.05f, 0.01f, 64.0f)) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::SliderFloat("Noise blend", &material.NoiseBlend, 0.0f, 1.0f)) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::DragFloat("Noise scale", &material.NoiseScale, 0.05f, 0.01f, 64.0f)) edited = true;
+			if (ImGui::SliderFloat("Noise blend", &material.NoiseBlend, 0.0f, 1.0f)) edited = true;
 
 			// Turbulence e Marble sommano ottave: il costo per raggio e' lineare in questo
 			// valore, e viene pagato a ogni rimbalzo su questo materiale.
@@ -1184,23 +1152,24 @@ namespace Lucerna {
 				int octaves = static_cast<int>(material.NoiseOctaves + 0.5f);
 				if (ImGui::SliderInt("Octaves", &octaves, 1, 8)) {
 					material.NoiseOctaves = static_cast<float>(octaves);
-					m_Renderer.ResetPathTracingCounter();
+					edited = true;
 				}
 			}
 			// La fase e' quello che trasforma il rumore in venature: senza, il marmo e' nebbia.
 			if (noiseMode == 3) {
 				if (ImGui::DragFloat("Turbulence phase", &material.NoiseTurbulence, 0.1f, 0.0f, 40.0f))
-					m_Renderer.ResetPathTracingCounter();
+					edited = true;
 			}
 
-			if (ImGui::ColorEdit3("Noise color A", glm::value_ptr(material.NoiseColorA))) m_Renderer.ResetPathTracingCounter();
-			if (ImGui::ColorEdit3("Noise color B", glm::value_ptr(material.NoiseColorB))) m_Renderer.ResetPathTracingCounter();
+			if (ImGui::ColorEdit3("Noise color A", glm::value_ptr(material.NoiseColorA))) edited = true;
+			if (ImGui::ColorEdit3("Noise color B", glm::value_ptr(material.NoiseColorB))) edited = true;
 
 			ImGui::TextDisabled("Evaluated in world space: the object \"slides\" through the noise if you move it");
 		}
 
 		ImGui::Spacing();
 		ImGui::TextDisabled("Material %d", index);
+		return edited;
 	}
 
 	void Application::OpenMaterialEditor(int index) {
@@ -1215,7 +1184,7 @@ namespace Lucerna {
 
 		// L'indice puo' essere diventato invalido (cambio scena): e' esattamente la classe
 		// di bug che ha fatto crashare la selezione, quindi stesso trattamento.
-		if (m_MaterialEditorIndex < 0 || m_MaterialEditorIndex >= (int)m_World.Materials.size()) {
+		if (m_MaterialEditorIndex < 0 || m_MaterialEditorIndex >= (int)m_World.Materials().size()) {
 			m_ShowMaterialEditor = false;
 			return;
 		}
@@ -1227,7 +1196,9 @@ namespace Lucerna {
 
 		if (ImGui::Begin(title.c_str(), &m_ShowMaterialEditor)) {
 			ImGui::PushItemWidth(170.0f);
-			DrawMaterialEditor(m_World.Materials[m_MaterialEditorIndex], m_MaterialEditorIndex);
+			Material material = m_World.Materials()[m_MaterialEditorIndex];
+			if (DrawMaterialEditor(material, m_MaterialEditorIndex))
+				m_World.Set(m_World.Materials()[m_MaterialEditorIndex].Id, material);
 			ImGui::PopItemWidth();
 		}
 
@@ -1240,11 +1211,11 @@ namespace Lucerna {
 	void Application::DrawTextureManager() {
 		ImGui::SeparatorText("Textures");
 
-		if (m_World.TexturePaths.empty())
+		if (m_World.TexturePaths().empty())
 			ImGui::TextDisabled("no textures loaded");
 
-		for (size_t i = 0; i < m_World.TexturePaths.size(); i++)
-			ImGui::BulletText("layer %d  -  %s", (int)i, m_World.TexturePaths[i].c_str());
+		for (size_t i = 0; i < m_World.TexturePaths().size(); i++)
+			ImGui::BulletText("layer %d  -  %s", (int)i, m_World.TexturePaths()[i].c_str());
 
 		// elenco dei file disponibili, letto una volta sola. EnvironmentMap e' un'altra cosa:
 		// finisce nella cubemap, non nel sampler2DArray degli albedo.
@@ -1282,14 +1253,12 @@ namespace Lucerna {
 		ImGui::SameLine();
 
 		const std::string& selected = m_TextureFiles[m_SelectedTextureFile];
-		const bool alreadyLoaded = std::find(m_World.TexturePaths.begin(), m_World.TexturePaths.end(),
-			selected) != m_World.TexturePaths.end();
+		const bool alreadyLoaded = std::find(m_World.TexturePaths().begin(), m_World.TexturePaths().end(),
+			selected) != m_World.TexturePaths().end();
 
 		ImGui::BeginDisabled(alreadyLoaded);
 		if (ImGui::Button("+ Texture")) {
-			// PathTracer confronta TexturePaths con quelle caricate e ricarica da solo
-			m_World.TexturePaths.push_back(selected);
-			m_Renderer.ResetPathTracingCounter();
+			m_World.AddTexture(selected); // il RenderScene ricarica l'array al frame dopo
 		}
 		ImGui::EndDisabled();
 
@@ -1308,12 +1277,10 @@ namespace Lucerna {
 		ImGui::Spacing();
 
 		if (ImGui::Button("+ Add material")) {
-			m_World.Materials.Add(CreateDefaultPrincipled());
-			OpenMaterialEditor((int)m_World.Materials.size() - 1);
-			m_Renderer.ResetPathTracingCounter();
+			OpenMaterialEditor(m_World.AddMaterial(CreateDefaultPrincipled()));
 		}
 
-		if (m_World.Materials.empty()) {
+		if (m_World.Materials().empty()) {
 			ImGui::TextDisabled("no materials in this scene");
 			return;
 		}
@@ -1321,8 +1288,8 @@ namespace Lucerna {
 		ImGui::Spacing();
 		ImGui::PushItemWidth(200.0f);
 
-		for (size_t i = 0; i < m_World.Materials.size(); i++) {
-			Material& material = m_World.Materials.at(i);
+		for (size_t i = 0; i < m_World.Materials().size(); i++) {
+			Material material = m_World.Materials().at(i);
 
 			ImGui::PushID((int)i);
 
@@ -1331,8 +1298,9 @@ namespace Lucerna {
 				ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop, ImVec2(14.0f, 14.0f));
 			ImGui::SameLine();
 
-			if (ImGui::TreeNode(m_World.Materials[i].Name.c_str())) {
-				DrawMaterialEditor(material, (int)i);
+			if (ImGui::TreeNode(m_World.Materials()[i].Name.c_str())) {
+				if (DrawMaterialEditor(material, (int)i))
+					m_World.Set(m_World.Materials()[i].Id, material);
 				ImGui::TreePop();
 			}
 
@@ -1348,11 +1316,9 @@ namespace Lucerna {
 	// in entrambe le modalita', se l'inquadratura cambia da fuori (un load, "Align", PT_CAM) la
 	// vista la raggiunge. L'obiettivo e' sempre quello dell'inquadratura.
 	void Application::SyncCameras(bool viewMoved) {
-		SceneCamera& shot = m_World.Camera;
-		if (m_Renderer.View.LockViewToCamera && viewMoved) {
-			shot.Position = m_Camera.GetPosition();
-			shot.Direction = m_Camera.GetDirection();
-		}
+		if (m_Renderer.View.LockViewToCamera && viewMoved)
+			m_World.MoveCamera(m_Camera.GetPosition(), m_Camera.GetDirection());
+		const SceneCamera& shot = m_World.Camera();
 		if (!shot.SamePose(m_LastShot))
 			m_Camera.SetView(shot.Position, shot.Direction);
 		if (m_Camera.m_VerticalFOV != shot.VerticalFOV) {
@@ -1387,17 +1353,16 @@ namespace Lucerna {
 			{ "Draft", &RenderSettings::Draft }, { "Preview", &RenderSettings::Preview }, { "Final", &RenderSettings::Final } };
 		for (size_t i = 0; i < std::size(presets); i++) {
 			if (i > 0) ImGui::SameLine();
-			if (ImGui::Button(presets[i].first)) {
+			if (ImGui::Button(presets[i].first))
 				m_Renderer.Settings = presets[i].second();
-				m_Renderer.ResetPathTracingCounter();
-			}
 		}
 
 		ImGui::SeparatorText("Path tracing");
 		ImGui::Checkbox("Enable Path Tracing", &m_Renderer.View.PathTracing);
-		if (ImGui::SliderInt("Samples per pixel", &m_Renderer.Settings.SamplesPerPixel, 1, 16)) m_Renderer.ResetPathTracingCounter();
-		if (ImGui::SliderInt("Ray depth", &m_Renderer.Settings.RayDepth, 1, 50)) m_Renderer.ResetPathTracingCounter();
-		if (ImGui::Button("Reset Accumulation")) m_Renderer.ResetPathTracingCounter();
+		// le impostazioni dell'integratore fanno ripartire l'accumulo da sole (il Renderer le confronta)
+		ImGui::SliderInt("Samples per pixel", &m_Renderer.Settings.SamplesPerPixel, 1, 16);
+		ImGui::SliderInt("Ray depth", &m_Renderer.Settings.RayDepth, 1, 50);
+		if (ImGui::Button("Reset Accumulation")) m_Renderer.RestartAccumulation();
 
 		// Render scale: risoluzione ridotta SOLO mentre la camera si muove (piu' fluido),
 		// piena risoluzione + accumulo da fermi. Nessun reset qui: agisce al prossimo movimento.
@@ -1418,57 +1383,55 @@ namespace Lucerna {
 		}
 
 		// Esposizione e tonemap agiscono DOPO l'accumulo (fragment di post): cambiarli non
-		// invalida i campioni gia' accumulati, quindi niente ResetPathTracingCounter.
+		// invalida i campioni gia' accumulati, e il Renderer non li conta fra le impostazioni che ripartono.
 		ImGui::Checkbox("ACES tonemap", &m_Renderer.Settings.Tonemap);
 		ImGui::DragFloat("Exposure", &m_Renderer.Settings.Exposure, 0.01f, 0.0f, 10.0f);
 
 		// Il firefly clamp invece vive nel path tracer e cambia i campioni: va resettato.
 		// Etichetta come luminanza massima; 0 = off. Sotto ~2 inizia a mangiare i riflessi.
-		if (ImGui::DragFloat("Firefly clamp", &m_Renderer.Settings.FireflyClamp, 0.1f, 0.0f, 50.0f, "%.1f")) {
-			if (m_Renderer.Settings.FireflyClamp < 0.0f) m_Renderer.Settings.FireflyClamp = 0.0f;
-			m_Renderer.ResetPathTracingCounter();
-		}
+		if (ImGui::DragFloat("Firefly clamp", &m_Renderer.Settings.FireflyClamp, 0.1f, 0.0f, 50.0f, "%.1f"))
+			m_Renderer.Settings.FireflyClamp = std::max(m_Renderer.Settings.FireflyClamp, 0.0f);
 		if (m_Renderer.Settings.FireflyClamp <= 0.0f)
 			ImGui::TextDisabled("firefly clamp off");
 
 		// La camera della scena e' l'inquadratura; la vista la segue o naviga libera (ADR 0011)
 		ImGui::SeparatorText("Camera");
-		if (ImGui::Checkbox("Lock view to camera", &m_Renderer.View.LockViewToCamera) && m_Renderer.View.LockViewToCamera) {
-			m_Camera.SetView(m_World.Camera.Position, m_World.Camera.Direction); // torna all'inquadratura
-			m_Renderer.ResetPathTracingCounter();
-		}
+		// riagganciare la vista la riporta sull'inquadratura: il renderer lo vede e riparte
+		if (ImGui::Checkbox("Lock view to camera", &m_Renderer.View.LockViewToCamera) && m_Renderer.View.LockViewToCamera)
+			m_Camera.SetView(m_World.Camera().Position, m_World.Camera().Direction); // torna all'inquadratura
 		ImGui::BeginDisabled(m_Renderer.View.LockViewToCamera);
-		if (ImGui::Button("Align camera to view")) {
-			m_World.Camera.Position = m_Camera.GetPosition();
-			m_World.Camera.Direction = m_Camera.GetDirection();
-		}
+		if (ImGui::Button("Align camera to view")) // la vista e' gia' li': l'immagine non cambia
+			m_World.MoveCamera(m_Camera.GetPosition(), m_Camera.GetDirection());
 		ImGui::EndDisabled();
 		ImGui::TextDisabled(m_Renderer.View.LockViewToCamera ? "navigating moves the scene camera"
 		                                                      : "free view: the scene camera stays put");
-		if (ImGui::SliderFloat("Vertical FOV", &m_World.Camera.VerticalFOV, 30.0f, 140.0f))
-			m_Renderer.ResetPathTracingCounter();
+
+		// L'obiettivo cambia i raggi primari, quindi si riconsegna con SetCamera: l'accumulo
+		// riparte (esposizione e tonemap invece agiscono dopo l'accumulo).
+		SceneCamera camera = m_World.Camera();
+		bool cameraChanged = ImGui::SliderFloat("Vertical FOV", &camera.VerticalFOV, 30.0f, 140.0f);
 		if (ImGui::Button("Reset camera")) {
 			const SceneCamera defaults;
-			m_World.Camera.Position = defaults.Position;
-			m_World.Camera.Direction = defaults.Direction;
-			m_Renderer.ResetPathTracingCounter();
+			camera.Position = defaults.Position;
+			camera.Direction = defaults.Direction;
+			cameraChanged = true;
 		}
 		ImGui::TextDisabled("right mouse + WASD to navigate");
 
 		ImGui::SeparatorText("Depth of field");
-		// Apertura e fuoco cambiano i raggi PRIMARI: vanno resettati (a differenza
-		// di esposizione/tonemap, che agiscono dopo l'accumulo).
-		if (ImGui::SliderFloat("Aperture", &m_World.Camera.Aperture, 0.0f, 0.5f, "%.3f")) {
-			if (m_World.Camera.Aperture < 0.0f) m_World.Camera.Aperture = 0.0f;
-			m_Renderer.ResetPathTracingCounter();
+		if (ImGui::SliderFloat("Aperture", &camera.Aperture, 0.0f, 0.5f, "%.3f")) {
+			camera.Aperture = std::max(camera.Aperture, 0.0f);
+			cameraChanged = true;
 		}
 
-		const bool dofOff = m_World.Camera.Aperture <= 0.0f;
+		const bool dofOff = camera.Aperture <= 0.0f;
 		ImGui::BeginDisabled(dofOff);
-		if (ImGui::DragFloat("Focus distance", &m_World.Camera.FocusDistance, 0.05f, 0.01f, 1000.0f, "%.2f")) {
-			if (m_World.Camera.FocusDistance < 0.01f) m_World.Camera.FocusDistance = 0.01f;
-			m_Renderer.ResetPathTracingCounter();
+		if (ImGui::DragFloat("Focus distance", &camera.FocusDistance, 0.05f, 0.01f, 1000.0f, "%.2f")) {
+			camera.FocusDistance = std::max(camera.FocusDistance, 0.01f);
+			cameraChanged = true;
 		}
+		if (cameraChanged)
+			m_World.SetCamera(camera);
 
 		// pick del punto di fuoco: arma la modalita', il prossimo click nel viewport
 		// mette a fuoco esattamente li'
@@ -1501,8 +1464,7 @@ namespace Lucerna {
 		// normale; gli altri mostrano l'AOV crudo (senza esposizione/ACES).
 		// reset dell'accumulo al cambio vista: le viste AOV scrivono in imgOutput (condiviso
 		// con l'accumulatore del colore), quindi tornando a Beauty il colore va ripartito da capo.
-		if (ImGui::Combo("View", &m_Renderer.View.AOVView, "Beauty\0Albedo\0Normal\0Depth\0History\0\0"))
-			m_Renderer.ResetPathTracingCounter();
+		ImGui::Combo("View", &m_Renderer.View.AOVView, "Beauty\0Albedo\0Normal\0Depth\0History\0\0");
 		if (m_Renderer.View.AOVView == 4)
 			ImGui::TextDisabled("green = mature history, red = restarted (disocclusion)");
 		else if (m_Renderer.View.AOVView != 0)
@@ -1510,8 +1472,7 @@ namespace Lucerna {
 
 		// Riproiezione temporale (ADR 0002)
 		ImGui::Spacing();
-		if (ImGui::Checkbox("Temporal reprojection", &m_Renderer.Settings.Reproject))
-			m_Renderer.ResetPathTracingCounter();
+		ImGui::Checkbox("Temporal reprojection", &m_Renderer.Settings.Reproject);
 		if (m_Renderer.Settings.Reproject) {
 			ImGui::SliderInt("History cap", &m_Renderer.Settings.HistoryCap, 1, 128);
 			ImGui::TextDisabled("cap solo in movimento; da fermo N cresce libero");
@@ -1523,8 +1484,7 @@ namespace Lucerna {
 		// Next Event Estimation: cambia l'integratore -> reset dell'accumulo per non
 		// mischiare campioni con e senza NEE.
 		ImGui::Spacing();
-		if (ImGui::Checkbox("Next Event Estimation", &m_Renderer.Settings.NEE))
-			m_Renderer.ResetPathTracingCounter();
+		ImGui::Checkbox("Next Event Estimation", &m_Renderer.Settings.NEE);
 		ImGui::TextDisabled(m_Renderer.Settings.NEE
 			? "samples lights directly (needs an emitter: emissive geometry or the sun)"
 			: "off: lights are found only by random bounces (more noise)");
@@ -1572,23 +1532,23 @@ namespace Lucerna {
 	glm::vec3 Application::GetSelectionPivot() const {
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere:
-			return glm::vec3(m_World.Spheres.at(SelectedIndex()).Position);
+			return glm::vec3(m_World.Spheres().at(SelectedIndex()).Position);
 		case SelectionType::Quad: {
-			const Quad& q = m_World.Quads.at(SelectedIndex());
+			const Quad& q = m_World.Quads().at(SelectedIndex());
 			return glm::vec3(q.PositionLLC)
 				 + glm::vec3(q.U) * (q.Width * 0.5f)
 				 + glm::vec3(q.V) * (q.Height * 0.5f);
 		}
 		case SelectionType::Box: {
-			const Box& b = m_World.Boxes.at(SelectedIndex());
+			const Box& b = m_World.Boxes().at(SelectedIndex());
 			return 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
 		}
 		case SelectionType::Mesh: {
-			const AABB bounds = m_World.Meshes.at(SelectedIndex()).WorldBounds();
+			const AABB bounds = m_World.Meshes().at(SelectedIndex()).WorldBounds();
 			return 0.5f * (bounds.min + bounds.max);
 		}
 		case SelectionType::Light:
-			return m_World.PunctualLights.at(SelectedIndex()).Position;
+			return m_World.PunctualLights().at(SelectedIndex()).Position;
 		default:
 			return glm::vec3(0.0f);
 		}
@@ -1601,14 +1561,14 @@ namespace Lucerna {
 
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: {
-			const Sphere& s = m_World.Spheres.at(SelectedIndex());
+			const Sphere& s = m_World.Spheres().at(SelectedIndex());
 			glm::vec3 center(s.Position);
 			outMin = center - glm::vec3(s.Position.w);
 			outMax = center + glm::vec3(s.Position.w);
 			break;
 		}
 		case SelectionType::Quad: {
-			const Quad& q = m_World.Quads.at(SelectedIndex());
+			const Quad& q = m_World.Quads().at(SelectedIndex());
 			glm::vec3 llc(q.PositionLLC);
 			glm::vec3 edgeU = glm::vec3(q.U) * q.Width;
 			glm::vec3 edgeV = glm::vec3(q.V) * q.Height;
@@ -1622,20 +1582,20 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Box: {
-			const Box& b = m_World.Boxes.at(SelectedIndex());
+			const Box& b = m_World.Boxes().at(SelectedIndex());
 			outMin = glm::vec3(b.Min);
 			outMax = glm::vec3(b.Max);
 			break;
 		}
 		case SelectionType::Mesh: {
-			const AABB bounds = m_World.Meshes.at(SelectedIndex()).WorldBounds();
+			const AABB bounds = m_World.Meshes().at(SelectedIndex()).WorldBounds();
 			outMin = bounds.min;
 			outMax = bounds.max;
 			break;
 		}
 		case SelectionType::Light: {
 			// una luce non ha estensione: un piccolo cubo attorno alla posizione per vederla
-			const glm::vec3 p = m_World.PunctualLights.at(SelectedIndex()).Position;
+			const glm::vec3 p = m_World.PunctualLights().at(SelectedIndex()).Position;
 			outMin = p - glm::vec3(0.1f);
 			outMax = p + glm::vec3(0.1f);
 			break;
@@ -1660,11 +1620,11 @@ namespace Lucerna {
 		const int i = IndexOf(selection);
 		if (i < 0) return {};
 		switch (selection.Type) {
-		case SelectionType::Sphere: return m_World.Spheres[i].Name;
-		case SelectionType::Quad:   return m_World.Quads[i].Name;
-		case SelectionType::Box:    return m_World.Boxes[i].Name;
-		case SelectionType::Mesh:   return m_World.Meshes[i].Name;
-		case SelectionType::Light:  return m_World.PunctualLights[i].Name;
+		case SelectionType::Sphere: return m_World.Spheres()[i].Name;
+		case SelectionType::Quad:   return m_World.Quads()[i].Name;
+		case SelectionType::Box:    return m_World.Boxes()[i].Name;
+		case SelectionType::Mesh:   return m_World.Meshes()[i].Name;
+		case SelectionType::Light:  return m_World.PunctualLights()[i].Name;
 		default:                    return {};
 		}
 	}
@@ -1676,7 +1636,7 @@ namespace Lucerna {
 		case SelectionType::Quad:   name = "Quad";   break;
 		case SelectionType::Box:    name = "Box";    break;
 		case SelectionType::Light:
-			name = m_World.PunctualLights.at(SelectedIndex()).Spot ? "Spot light" : "Point light";
+			name = m_World.PunctualLights().at(SelectedIndex()).Spot ? "Spot light" : "Point light";
 			break;
 		case SelectionType::Mesh:   name = "Mesh";   break;
 		default: return "?";
@@ -1744,7 +1704,7 @@ namespace Lucerna {
 
 		// uno spot non si vede: una linea mostra dove punta
 		if (m_Selection.Type == SelectionType::Light) {
-			const PunctualLight& light = m_World.PunctualLights.at(SelectedIndex());
+			const PunctualLight& light = m_World.PunctualLights().at(SelectedIndex());
 			ImVec2 tip;
 			if (light.Spot && WorldToScreen(viewProjection, light.Position + light.Direction * 0.75f, m_ViewportPos, m_ViewportSize, tip)
 			    && WorldToScreen(viewProjection, light.Position, m_ViewportPos, m_ViewportSize, pivot))
@@ -1763,16 +1723,17 @@ namespace Lucerna {
 
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: {
-			Sphere& s = m_World.Spheres.at(SelectedIndex());
+			Sphere s = m_World.Spheres().at(SelectedIndex());
 			glm::vec3 center = glm::vec3(delta * glm::vec4(glm::vec3(s.Position), 1.0f));
 
 			// una sfera ha un solo raggio: la scala puo' essere solo uniforme
 			float uniformScale = (axisScale.x + axisScale.y + axisScale.z) / 3.0f;
 			s.Position = glm::vec4(center, glm::max(s.Position.w * uniformScale, 1e-4f));
+			m_World.Set(m_Selection.Id, s);
 			break;
 		}
 		case SelectionType::Quad: {
-			Quad& q = m_World.Quads.at(SelectedIndex());
+			Quad q = m_World.Quads().at(SelectedIndex());
 
 			// i lati del quad sono U*Width e V*Height: si trasformano come direzioni
 			glm::vec3 edgeU = linear * (glm::vec3(q.U) * q.Width);
@@ -1788,10 +1749,11 @@ namespace Lucerna {
 			q.Height = height;
 			q.U = glm::vec4(edgeU / width, 0.0f);
 			q.V = glm::vec4(edgeV / height, 0.0f);
+			m_World.Set(m_Selection.Id, q);
 			break;
 		}
 		case SelectionType::Box: {
-			Box& b = m_World.Boxes.at(SelectedIndex());
+			Box b = m_World.Boxes().at(SelectedIndex());
 			glm::vec3 center = 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
 			glm::vec3 size = glm::vec3(b.Max) - glm::vec3(b.Min);
 
@@ -1802,22 +1764,24 @@ namespace Lucerna {
 
 			b.Min = glm::vec4(center - size * 0.5f, 0.0f);
 			b.Max = glm::vec4(center + size * 0.5f, 0.0f);
-			b.UpdateBox(m_World.Quads); // riscrive i 6 quad che compongono il box
+			m_World.Set(m_Selection.Id, b); // riscrive i 6 quad che compongono il box
 			break;
 		}
 		case SelectionType::Mesh: {
 			// nessuna ricostruzione dei BLAS: cambia solo la trasformazione dell'istanza
-			const Mesh& mesh = m_World.Meshes.at(SelectedIndex());
-			m_World.Meshes.at(SelectedIndex()).Transform = delta * mesh.Transform;
+			Mesh mesh = m_World.Meshes().at(SelectedIndex());
+			mesh.Transform = delta * mesh.Transform;
+			m_World.Set(m_Selection.Id, mesh);
 			break;
 		}
 		case SelectionType::Light: {
 			// la scala non ha senso su una luce delta: contano posizione e direzione
-			PunctualLight& light = m_World.PunctualLights.at(SelectedIndex());
+			PunctualLight light = m_World.PunctualLights().at(SelectedIndex());
 			light.Position = glm::vec3(delta * glm::vec4(light.Position, 1.0f));
 			const glm::vec3 dir = linear * light.Direction;
 			if (glm::length(dir) > 1e-6f)
 				light.Direction = glm::normalize(dir);
+			m_World.Set(m_Selection.Id, light);
 			break;
 		}
 		default:
@@ -1840,11 +1804,11 @@ namespace Lucerna {
 	ObjectId Application::IdOf(SelectionType type, int index) const {
 		auto idAt = [index](const auto& list) { return index >= 0 && index < (int)list.size() ? list[index].Id : ObjectId{}; };
 		switch (type) {
-		case SelectionType::Sphere: return idAt(m_World.Spheres);
-		case SelectionType::Quad:   return idAt(m_World.Quads);
-		case SelectionType::Box:    return idAt(m_World.Boxes);
-		case SelectionType::Mesh:   return idAt(m_World.Meshes);
-		case SelectionType::Light:  return idAt(m_World.PunctualLights);
+		case SelectionType::Sphere: return idAt(m_World.Spheres());
+		case SelectionType::Quad:   return idAt(m_World.Quads());
+		case SelectionType::Box:    return idAt(m_World.Boxes());
+		case SelectionType::Mesh:   return idAt(m_World.Meshes());
+		case SelectionType::Light:  return idAt(m_World.PunctualLights());
 		default:                    return {};
 		}
 	}
@@ -1854,27 +1818,26 @@ namespace Lucerna {
 		if (!selection.IsValid())
 			return -1;
 		switch (selection.Type) {
-		case SelectionType::Sphere: return m_World.Spheres.IndexOf(selection.Id);
-		case SelectionType::Quad:   return m_World.Quads.IndexOf(selection.Id);
-		case SelectionType::Box:    return m_World.Boxes.IndexOf(selection.Id);
-		case SelectionType::Mesh:   return m_World.Meshes.IndexOf(selection.Id);
-		case SelectionType::Light:  return m_World.PunctualLights.IndexOf(selection.Id);
+		case SelectionType::Sphere: return m_World.Spheres().IndexOf(selection.Id);
+		case SelectionType::Quad:   return m_World.Quads().IndexOf(selection.Id);
+		case SelectionType::Box:    return m_World.Boxes().IndexOf(selection.Id);
+		case SelectionType::Mesh:   return m_World.Meshes().IndexOf(selection.Id);
+		case SelectionType::Light:  return m_World.PunctualLights().IndexOf(selection.Id);
 		default:                    return -1;
 		}
 	}
 
 	// Il buffer di ogni oggetto vive tra un frame e l'altro: mentre si scrive ImGui lo modifica,
 	// quando il campo e' fermo si riallinea al nome (che puo' cambiare da fuori, es. un load).
-	template<class T>
-	void Application::NameField(ObjectList<T>& list, SceneObject<T>& object) {
-		std::array<char, 128>& buffer = m_NameBuffers[object.Id];
-		if (buffer[0] == '\0' && !object.Name.empty())
-			snprintf(buffer.data(), buffer.size(), "%s", object.Name.c_str());
+	void Application::NameField(const ObjectId& id, const std::string& name) {
+		std::array<char, 128>& buffer = m_NameBuffers[id];
+		if (buffer[0] == '\0' && !name.empty())
+			snprintf(buffer.data(), buffer.size(), "%s", name.c_str());
 		ImGui::InputText("Name", buffer.data(), buffer.size());
 		if (ImGui::IsItemDeactivatedAfterEdit())
-			list.Rename(object, buffer.data()); // unico nella lista: puo' diventare "nome.001"
+			m_World.Rename(id, buffer.data()); // unico nella lista: puo' diventare "nome.001"
 		if (!ImGui::IsItemActive())
-			snprintf(buffer.data(), buffer.size(), "%s", object.Name.c_str());
+			snprintf(buffer.data(), buffer.size(), "%s", name.c_str());
 	}
 
 	void Application::SetSelectionFromPick(int objectType, int objectIndex) {
@@ -1886,8 +1849,8 @@ namespace Lucerna {
 		// lo shader non conosce i box: riporta l'indice del quad colpito, e i 6 quad
 		// consecutivi a partire da Box::index appartengono a quel box
 		if (objectType == static_cast<int>(SelectionType::Quad)) {
-			for (size_t b = 0; b < m_World.Boxes.size(); b++) {
-				int firstQuad = static_cast<int>(m_World.Boxes[b].index);
+			for (size_t b = 0; b < m_World.Boxes().size(); b++) {
+				int firstQuad = static_cast<int>(m_World.Boxes()[b].index);
 				if (objectIndex >= firstQuad && objectIndex < firstQuad + 6) {
 					m_Selection = Select(SelectionType::Box, static_cast<int>(b));
 					return;
@@ -1960,8 +1923,9 @@ namespace Lucerna {
 				m_PickForFocus = false;
 				// distanza < 0 = il raggio ha mancato tutto (sfondo): non spostare il fuoco
 				if (pickedDistance > 0.0f) {
-					m_World.Camera.FocusDistance = pickedDistance;
-					m_Renderer.ResetPathTracingCounter(); // il fuoco cambia i raggi primari
+					SceneCamera camera = m_World.Camera();
+					camera.FocusDistance = pickedDistance;
+					m_World.SetCamera(camera); // il fuoco cambia i raggi primari
 				}
 			}
 			else {
@@ -2000,8 +1964,7 @@ namespace Lucerna {
 		if (ImGuizmo::Manipulate(glm::value_ptr(view), glm::value_ptr(projection),
 								 operation, ImGuizmo::WORLD,
 								 glm::value_ptr(m_GizmoMatrix), glm::value_ptr(delta))) {
-			ApplyDelta(delta);
-			m_Renderer.ResetPathTracingCounter(); // la scena e' cambiata: riparte l'accumulo
+			ApplyDelta(delta); // passa dal World: l'accumulo riparte da solo
 		}
 	}
 

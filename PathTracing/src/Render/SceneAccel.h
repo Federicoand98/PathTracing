@@ -14,8 +14,8 @@ namespace Lucerna {
 	*
 	* - Un BLAS per mesh, in spazio locale: cambia solo con la geometria.
 	* - Un BLAS procedurale di AABB per sfere e quad, che stanno gia' in world space.
-	* - Una TLAS con un'istanza per mesh e una per le primitive analitiche. Si ricostruisce a
-	*   ogni reset: e' cosi' che i transform delle mesh restano modificabili a costo basso.
+	* - Una TLAS con un'istanza per mesh e una per le primitive analitiche. Si ricostruisce quando
+	*   cambia una delle due: e' cosi' che i transform delle mesh restano modificabili a costo basso.
 	*
 	* I BLAS delle mesh dividono un solo buffer: con migliaia di mesh, un'allocazione a testa
 	* sforerebbe il limite di allocazioni del driver.
@@ -27,7 +27,9 @@ namespace Lucerna {
 
 		void BuildMeshes(const std::vector<MeshInfo>& meshes, const GpuBuffer& positions);
 		// primitives = le AABB di sfere e quad, in quest'ordine: l'indice di primitiva dello shader
-		void BuildTopLevel(const std::vector<MeshInfo>& meshes, const std::vector<AABB>& primitives);
+		void BuildPrimitives(const std::vector<AABB>& primitives);
+		// La TLAS: un'istanza per mesh, piu' quella delle primitive. Va rifatta dopo ognuno dei due build.
+		void BuildTopLevel(const std::vector<MeshInfo>& meshes);
 
 		const VkAccelerationStructureKHR& TopLevel() const { return m_Tlas; }
 

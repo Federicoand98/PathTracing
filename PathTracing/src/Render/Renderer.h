@@ -18,10 +18,14 @@ namespace Lucerna {
 	public:
 		Renderer() = default;
 
-		void Initialize(World& world);
-		void Render(const RenderView& view, const World& world);
+		void Initialize();
+		// Consuma i cambiamenti del World: la scena per la GPU si aggiorna e, se qualcosa che
+		// cambia l'immagine e' cambiato, l'accumulo riparte da solo (issue #25).
+		void Render(const RenderView& view, World& world);
 		void OnResize(uint32_t width, uint32_t height);
-		void ResetPathTracingCounter(bool sceneReset = false) { m_PTCounter = 1; m_sceneReset = sceneReset; }
+		// Solo per chi lo chiede esplicitamente (il bottone "Reset Accumulation"): ogni modifica
+		// della scena o delle impostazioni che cambia l'immagine fa gia' ripartire l'accumulo.
+		void RestartAccumulation() { m_PTCounter = 1; }
 
 		// L'app segnala se la camera si sta muovendo: con RenderScale < 1 questo abbassa
 		// la risoluzione di render mentre ci si muove (piu' fluido), tornando a piena
@@ -59,7 +63,6 @@ namespace Lucerna {
 		void ReadTimestamps();
 	private:
 		RenderView m_View;
-		const World* m_World = nullptr;
 		std::unique_ptr<RenderScene> m_Scene;  // la scena per la GPU, ricostruita dal World a ogni reset
 		std::unique_ptr<PathTracer> m_PathTracer;
 		std::unique_ptr<Denoiser> m_Denoiser;
@@ -100,7 +103,9 @@ namespace Lucerna {
 		uint32_t m_RenderW = 0, m_RenderH = 0;  // risoluzione effettiva dell'ultimo dispatch
 		bool m_Interacting = false;
 		int m_PTCounter = 1;
-		bool m_sceneReset = false;
+		// Le impostazioni del frame scorso: un cambio di quelle che toccano l'integratore riparte
+		RenderSettings m_LastSettings;
+		ViewSettings m_LastView;
 		bool m_PickRequested = false;
 		bool m_PickAvailable = false;
 		int m_PickX = -1, m_PickY = -1;
