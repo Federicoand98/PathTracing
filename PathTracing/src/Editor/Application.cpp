@@ -546,13 +546,13 @@ namespace Lucerna {
 
 		if (!m_World.Spheres.empty() && ImGui::TreeNodeEx("spheres", ImGuiTreeNodeFlags_DefaultOpen, "Spheres (%zu)", m_World.Spheres.size())) {
 			for (size_t i = 0; i < m_World.Spheres.size(); i++)
-				SelectableObjectRow("Sphere", SelectionType::Sphere, (int)i, m_World.Spheres[i].MaterialIndex);
+				SelectableObjectRow(m_World.Spheres[i].Name.c_str(), SelectionType::Sphere, (int)i, m_World.Spheres[i].MaterialIndex);
 			ImGui::TreePop();
 		}
 
 		if (!m_World.Boxes.empty() && ImGui::TreeNodeEx("boxes", ImGuiTreeNodeFlags_DefaultOpen, "Boxes (%zu)", m_World.Boxes.size())) {
 			for (size_t i = 0; i < m_World.Boxes.size(); i++)
-				SelectableObjectRow("Box", SelectionType::Box, (int)i, m_World.Boxes[i].MaterialIndex);
+				SelectableObjectRow(m_World.Boxes[i].Name.c_str(), SelectionType::Box, (int)i, m_World.Boxes[i].MaterialIndex);
 			ImGui::TreePop();
 		}
 
@@ -561,22 +561,21 @@ namespace Lucerna {
 				if (quadOwnedByBox[i])
 					continue; // faccia di un box
 
-				SelectableObjectRow("Quad", SelectionType::Quad, (int)i, m_World.Quads[i].MaterialIndex);
+				SelectableObjectRow(m_World.Quads[i].Name.c_str(), SelectionType::Quad, (int)i, m_World.Quads[i].MaterialIndex);
 			}
 			ImGui::TreePop();
 		}
 
 		if (!m_World.Meshes.empty() && ImGui::TreeNodeEx("meshes", ImGuiTreeNodeFlags_DefaultOpen, "Meshes (%zu)", m_World.Meshes.size())) {
 			for (size_t i = 0; i < m_World.Meshes.size(); i++) {
-				const char* name = i < m_World.MeshNames.size() ? m_World.MeshNames[i].c_str() : "Mesh";
-				SelectableObjectRow(name, SelectionType::Mesh, (int)i, m_World.Meshes[i].MaterialIndex);
+				SelectableObjectRow(m_World.Meshes[i].Name.c_str(), SelectionType::Mesh, (int)i, m_World.Meshes[i].MaterialIndex);
 			}
 			ImGui::TreePop();
 		}
 
 		if (!m_World.PunctualLights.empty() && ImGui::TreeNodeEx("lights", ImGuiTreeNodeFlags_DefaultOpen, "Lights (%zu)", m_World.PunctualLights.size())) {
 			for (size_t i = 0; i < m_World.PunctualLights.size(); i++)
-				SelectableObjectRow(m_World.PunctualLights[i].Spot ? "Spot light" : "Point light", SelectionType::Light, (int)i, -1.0f);
+				SelectableObjectRow(m_World.PunctualLights[i].Name.c_str(), SelectionType::Light, (int)i, -1.0f);
 			ImGui::TreePop();
 		}
 
@@ -588,10 +587,10 @@ namespace Lucerna {
 	bool Application::SelectableObjectRow(const char* label, SelectionType type, int index, float materialIndex) {
 		ImGui::PushID(static_cast<int>(type) * 100000 + index);
 
-		const bool selected = (m_Selection.Type == type && m_Selection.Index == index);
+		const bool selected = (m_Selection.Type == type && SelectedIndex() == index);
 
 		char row[160];
-		snprintf(row, sizeof(row), "%s #%d", label, index);
+		snprintf(row, sizeof(row), "%s", label);
 
 		const bool clicked = ImGui::Selectable(row, selected);
 
@@ -601,7 +600,7 @@ namespace Lucerna {
 		}
 
 		if (clicked) {
-			m_Selection = { type, index };
+			m_Selection = Select(type, index);
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
 		}
 
@@ -646,16 +645,29 @@ namespace Lucerna {
 
 		ImGui::PushItemWidth(200.0f);
 
+		// il nome si rinomina qui; e' unico nella lista del suo tipo (issue #23)
+		{
+			const int i = SelectedIndex();
+			switch (m_Selection.Type) {
+			case SelectionType::Sphere: NameField(m_World.Spheres, m_World.Spheres[i]); break;
+			case SelectionType::Quad:   NameField(m_World.Quads, m_World.Quads[i]); break;
+			case SelectionType::Box:    NameField(m_World.Boxes, m_World.Boxes[i]); break;
+			case SelectionType::Mesh:   NameField(m_World.Meshes, m_World.Meshes[i]); break;
+			case SelectionType::Light:  NameField(m_World.PunctualLights, m_World.PunctualLights[i]); break;
+			default: break;
+			}
+		}
+
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: {
-			Sphere& sphere = m_World.Spheres.at(m_Selection.Index);
+			Sphere& sphere = m_World.Spheres.at(SelectedIndex());
 			if (ImGui::DragFloat3("Center", glm::value_ptr(sphere.Position), 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat("Radius", &sphere.Position.w, 0.05f, 0.001f, 1000.0f)) m_Renderer.ResetPathTracingCounter();
 			if (MaterialCombo("Material", sphere.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
 			break;
 		}
 		case SelectionType::Quad: {
-			Quad& quad = m_World.Quads.at(m_Selection.Index);
+			Quad& quad = m_World.Quads.at(SelectedIndex());
 			if (ImGui::DragFloat3("Corner", glm::value_ptr(quad.PositionLLC), 0.1f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat3("U axis", glm::value_ptr(quad.U), 0.05f)) m_Renderer.ResetPathTracingCounter();
 			if (ImGui::DragFloat3("V axis", glm::value_ptr(quad.V), 0.05f)) m_Renderer.ResetPathTracingCounter();
@@ -666,7 +678,7 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Box: {
-			Box& box = m_World.Boxes.at(m_Selection.Index);
+			Box& box = m_World.Boxes.at(SelectedIndex());
 
 			bool changed = false;
 			changed |= ImGui::DragFloat3("Min", glm::value_ptr(box.Min), 0.1f);
@@ -681,27 +693,27 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Mesh: {
-			MeshInfo& mesh = m_World.Meshes.at(m_Selection.Index);
+			MeshInfo& mesh = m_World.Meshes.at(SelectedIndex());
 			ImGui::Text("Triangles: %d", static_cast<int>(mesh.NumTriangles));
 
 			glm::vec3 position = glm::vec3(mesh.Transform[3]); // la traslazione e' l'ultima colonna
 			if (ImGui::DragFloat3("Position", glm::value_ptr(position), 0.1f)) {
 				glm::mat4 transform = mesh.Transform;
 				transform[3] = glm::vec4(position, 1.0f);
-				m_World.SetMeshTransform(m_Selection.Index, transform);
+				m_World.SetMeshTransform(SelectedIndex(), transform);
 				m_Renderer.ResetPathTracingCounter();
 			}
 
 			if (MaterialCombo("Material", mesh.MaterialIndex)) m_Renderer.ResetPathTracingCounter();
 
 			if (ImGui::Button("Reset transform")) {
-				m_World.SetMeshTransform(m_Selection.Index, glm::mat4(1.0f));
+				m_World.SetMeshTransform(SelectedIndex(), glm::mat4(1.0f));
 				m_Renderer.ResetPathTracingCounter();
 			}
 			break;
 		}
 		case SelectionType::Light: {
-			PunctualLight& light = m_World.PunctualLights.at(m_Selection.Index);
+			PunctualLight& light = m_World.PunctualLights.at(SelectedIndex());
 			bool changed = false;
 			int type = light.Spot ? 1 : 0;
 			if (ImGui::Combo("Type", &type, "Point\0Spot\0\0")) {
@@ -751,7 +763,7 @@ namespace Lucerna {
 		const int count = static_cast<int>(m_World.Materials.size());
 		const int current = std::clamp(static_cast<int>(materialIndex), 0, count - 1);
 
-		const std::string preview = "Material " + std::to_string(current);
+		const std::string preview = m_World.Materials[current].Name;
 		bool changed = false;
 
 		if (ImGui::BeginCombo(label, preview.c_str())) {
@@ -763,7 +775,7 @@ namespace Lucerna {
 					ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop, ImVec2(14.0f, 14.0f));
 				ImGui::SameLine();
 
-				const std::string item = "Material " + std::to_string(i);
+				const std::string& item = m_World.Materials[i].Name;
 				if (ImGui::Selectable(item.c_str(), i == current)) {
 					materialIndex = static_cast<float>(i);
 					changed = true;
@@ -795,7 +807,7 @@ namespace Lucerna {
 	// buffer dei materiali nello shader.
 	int Application::EnsureMaterialExists() {
 		if (m_World.Materials.empty())
-			m_World.Materials.push_back(CreateDefaultPrincipled());
+			m_World.Materials.Add(CreateDefaultPrincipled());
 
 		return std::clamp(static_cast<int>(m_NewObjectMaterial), 0, (int)m_World.Materials.size() - 1);
 	}
@@ -809,9 +821,9 @@ namespace Lucerna {
 			Sphere sphere;
 			sphere.Position = glm::vec4(spawn, 0.5f); // la w e' il raggio
 			sphere.MaterialIndex = static_cast<float>(material);
-			m_World.Spheres.push_back(sphere);
+			m_World.Spheres.Add(sphere);
 
-			m_Selection = { SelectionType::Sphere, (int)m_World.Spheres.size() - 1 };
+			m_Selection = Select(SelectionType::Sphere, (int)m_World.Spheres.size() - 1);
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
 			m_Renderer.ResetPathTracingCounter();
 		}
@@ -825,7 +837,7 @@ namespace Lucerna {
 			// nello shader (che li scorre in parallelo ai quad).
 			m_World.CreateBox(spawn - glm::vec3(0.5f), spawn + glm::vec3(0.5f), (float)material);
 
-			m_Selection = { SelectionType::Box, (int)m_World.Boxes.size() - 1 };
+			m_Selection = Select(SelectionType::Box, (int)m_World.Boxes.size() - 1);
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
 			m_Renderer.ResetPathTracingCounter();
 		}
@@ -841,9 +853,9 @@ namespace Lucerna {
 			quad.Width = 1.0f;
 			quad.Height = 1.0f;
 			quad.MaterialIndex = static_cast<float>(material);
-			m_World.Quads.push_back(quad);
+			m_World.Quads.Add(quad);
 
-			m_Selection = { SelectionType::Quad, (int)m_World.Quads.size() - 1 };
+			m_Selection = Select(SelectionType::Quad, (int)m_World.Quads.size() - 1);
 			m_GizmoOperation = ImGuizmo::TRANSLATE;
 			m_Renderer.ResetPathTracingCounter();
 		}
@@ -854,9 +866,9 @@ namespace Lucerna {
 				PunctualLight light;
 				light.Spot = spot == 1;
 				light.Position = spawn;
-				m_World.PunctualLights.push_back(light);
+				m_World.PunctualLights.Add(light, spot ? "Spot light" : "Point light");
 
-				m_Selection = { SelectionType::Light, (int)m_World.PunctualLights.size() - 1 };
+				m_Selection = Select(SelectionType::Light, (int)m_World.PunctualLights.size() - 1);
 				m_GizmoOperation = ImGuizmo::TRANSLATE;
 				m_Renderer.ResetPathTracingCounter();
 			}
@@ -894,7 +906,7 @@ namespace Lucerna {
 				// ricostruisce TUTTI i BLAS: sui modelli grossi puo' bloccare per qualche secondo
 				const int mesh = m_World.AddMesh(path, spawn, material);
 				if (mesh >= 0) {
-					m_Selection = { SelectionType::Mesh, mesh };
+					m_Selection = Select(SelectionType::Mesh, mesh);
 					m_GizmoOperation = ImGuizmo::TRANSLATE;
 				}
 
@@ -922,7 +934,7 @@ namespace Lucerna {
 	}
 
 	bool Application::CanDeleteSelection() const {
-		return m_Selection.IsValid() && m_Selection.Index < SelectionCollectionSize(m_Selection.Type);
+		return m_Selection.IsValid() && SelectedIndex() < SelectionCollectionSize(m_Selection.Type);
 	}
 
 	// Ogni rimozione fa scalare gli indici successivi della sua collezione: la selezione
@@ -936,12 +948,12 @@ namespace Lucerna {
 
 		bool removed = false;
 		switch (sel.Type) {
-		case SelectionType::Sphere: removed = m_World.RemoveSphere(sel.Index); break;
-		case SelectionType::Quad:   removed = m_World.RemoveQuad(sel.Index);   break;
-		case SelectionType::Box:    removed = m_World.RemoveBox(sel.Index);    break;
-		case SelectionType::Mesh:   removed = m_World.RemoveMesh(sel.Index);   break;
+		case SelectionType::Sphere: removed = m_World.RemoveSphere(IndexOf(sel)); break;
+		case SelectionType::Quad:   removed = m_World.RemoveQuad(IndexOf(sel));   break;
+		case SelectionType::Box:    removed = m_World.RemoveBox(IndexOf(sel));    break;
+		case SelectionType::Mesh:   removed = m_World.RemoveMesh(IndexOf(sel));   break;
 		case SelectionType::Light:
-			m_World.PunctualLights.erase(m_World.PunctualLights.begin() + sel.Index);
+			m_World.PunctualLights.erase(m_World.PunctualLights.begin() + IndexOf(sel));
 			removed = true;
 			break;
 		default: break;
@@ -983,7 +995,7 @@ namespace Lucerna {
 			switch (m_Selection.Type) {
 			case SelectionType::Mesh:
 				ImGui::TextDisabled("%d triangles - BLASes will be rebuilt",
-					static_cast<int>(m_World.Meshes[m_Selection.Index].NumTriangles));
+					static_cast<int>(m_World.Meshes[SelectedIndex()].NumTriangles));
 				break;
 			case SelectionType::Box:
 				ImGui::TextDisabled("also removes its 6 faces");
@@ -1023,6 +1035,9 @@ namespace Lucerna {
 		// raw dello struct, che restano il contratto con lo shader. Le "probabilita'" di
 		// importance sampling non compaiono: le derivo qui. Cosi' non possono piu' sommare
 		// a un valore che sopprime il diffuso, che era il footgun della UI precedente.
+		if (index >= 0 && index < (int)m_World.Materials.size())
+			NameField(m_World.Materials, m_World.Materials[index]);
+
 		bool changed = false;
 		const bool isMetal = material.Metalness > 0.001f;
 
@@ -1293,7 +1308,7 @@ namespace Lucerna {
 		ImGui::Spacing();
 
 		if (ImGui::Button("+ Add material")) {
-			m_World.Materials.push_back(CreateDefaultPrincipled());
+			m_World.Materials.Add(CreateDefaultPrincipled());
 			OpenMaterialEditor((int)m_World.Materials.size() - 1);
 			m_Renderer.ResetPathTracingCounter();
 		}
@@ -1316,7 +1331,7 @@ namespace Lucerna {
 				ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoDragDrop, ImVec2(14.0f, 14.0f));
 			ImGui::SameLine();
 
-			if (ImGui::TreeNode(("Material " + std::to_string(i)).c_str())) {
+			if (ImGui::TreeNode(m_World.Materials[i].Name.c_str())) {
 				DrawMaterialEditor(material, (int)i);
 				ImGui::TreePop();
 			}
@@ -1557,23 +1572,23 @@ namespace Lucerna {
 	glm::vec3 Application::GetSelectionPivot() const {
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere:
-			return glm::vec3(m_World.Spheres.at(m_Selection.Index).Position);
+			return glm::vec3(m_World.Spheres.at(SelectedIndex()).Position);
 		case SelectionType::Quad: {
-			const Quad& q = m_World.Quads.at(m_Selection.Index);
+			const Quad& q = m_World.Quads.at(SelectedIndex());
 			return glm::vec3(q.PositionLLC)
 				 + glm::vec3(q.U) * (q.Width * 0.5f)
 				 + glm::vec3(q.V) * (q.Height * 0.5f);
 		}
 		case SelectionType::Box: {
-			const Box& b = m_World.Boxes.at(m_Selection.Index);
+			const Box& b = m_World.Boxes.at(SelectedIndex());
 			return 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
 		}
 		case SelectionType::Mesh: {
-			const MeshInfo& m = m_World.Meshes.at(m_Selection.Index);
+			const MeshInfo& m = m_World.Meshes.at(SelectedIndex());
 			return 0.5f * (glm::vec3(m.BoundsMin) + glm::vec3(m.BoundsMax));
 		}
 		case SelectionType::Light:
-			return m_World.PunctualLights.at(m_Selection.Index).Position;
+			return m_World.PunctualLights.at(SelectedIndex()).Position;
 		default:
 			return glm::vec3(0.0f);
 		}
@@ -1586,14 +1601,14 @@ namespace Lucerna {
 
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: {
-			const Sphere& s = m_World.Spheres.at(m_Selection.Index);
+			const Sphere& s = m_World.Spheres.at(SelectedIndex());
 			glm::vec3 center(s.Position);
 			outMin = center - glm::vec3(s.Position.w);
 			outMax = center + glm::vec3(s.Position.w);
 			break;
 		}
 		case SelectionType::Quad: {
-			const Quad& q = m_World.Quads.at(m_Selection.Index);
+			const Quad& q = m_World.Quads.at(SelectedIndex());
 			glm::vec3 llc(q.PositionLLC);
 			glm::vec3 edgeU = glm::vec3(q.U) * q.Width;
 			glm::vec3 edgeV = glm::vec3(q.V) * q.Height;
@@ -1607,20 +1622,20 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Box: {
-			const Box& b = m_World.Boxes.at(m_Selection.Index);
+			const Box& b = m_World.Boxes.at(SelectedIndex());
 			outMin = glm::vec3(b.Min);
 			outMax = glm::vec3(b.Max);
 			break;
 		}
 		case SelectionType::Mesh: {
-			const MeshInfo& m = m_World.Meshes.at(m_Selection.Index);
+			const MeshInfo& m = m_World.Meshes.at(SelectedIndex());
 			outMin = glm::vec3(m.BoundsMin); // gia' in world space
 			outMax = glm::vec3(m.BoundsMax);
 			break;
 		}
 		case SelectionType::Light: {
 			// una luce non ha estensione: un piccolo cubo attorno alla posizione per vederla
-			const glm::vec3 p = m_World.PunctualLights.at(m_Selection.Index).Position;
+			const glm::vec3 p = m_World.PunctualLights.at(SelectedIndex()).Position;
 			outMin = p - glm::vec3(0.1f);
 			outMax = p + glm::vec3(0.1f);
 			break;
@@ -1641,6 +1656,19 @@ namespace Lucerna {
 
 	// Solo il nome dell'oggetto, senza l'operazione del gizmo: serve anche alla modale
 	// di cancellazione, dove "Eliminare Sphere #0 - Translate?" non avrebbe senso.
+	std::string Application::ObjectName(const Selection& selection) const {
+		const int i = IndexOf(selection);
+		if (i < 0) return {};
+		switch (selection.Type) {
+		case SelectionType::Sphere: return m_World.Spheres[i].Name;
+		case SelectionType::Quad:   return m_World.Quads[i].Name;
+		case SelectionType::Box:    return m_World.Boxes[i].Name;
+		case SelectionType::Mesh:   return m_World.Meshes[i].Name;
+		case SelectionType::Light:  return m_World.PunctualLights[i].Name;
+		default:                    return {};
+		}
+	}
+
 	std::string Application::GetSelectionName() const {
 		std::string name;
 		switch (m_Selection.Type) {
@@ -1648,16 +1676,12 @@ namespace Lucerna {
 		case SelectionType::Quad:   name = "Quad";   break;
 		case SelectionType::Box:    name = "Box";    break;
 		case SelectionType::Light:
-			name = m_World.PunctualLights.at(m_Selection.Index).Spot ? "Spot light" : "Point light";
+			name = m_World.PunctualLights.at(SelectedIndex()).Spot ? "Spot light" : "Point light";
 			break;
-		case SelectionType::Mesh:
-			name = "Mesh";
-			if (m_Selection.Index < (int)m_World.MeshNames.size())
-				name += " \"" + m_World.MeshNames[m_Selection.Index] + "\"";
-			break;
+		case SelectionType::Mesh:   name = "Mesh";   break;
 		default: return "?";
 		}
-		return name + " #" + std::to_string(m_Selection.Index);
+		return name + " \"" + ObjectName(m_Selection) + "\"";
 	}
 
 	std::string Application::GetSelectionLabel() const {
@@ -1720,7 +1744,7 @@ namespace Lucerna {
 
 		// uno spot non si vede: una linea mostra dove punta
 		if (m_Selection.Type == SelectionType::Light) {
-			const PunctualLight& light = m_World.PunctualLights.at(m_Selection.Index);
+			const PunctualLight& light = m_World.PunctualLights.at(SelectedIndex());
 			ImVec2 tip;
 			if (light.Spot && WorldToScreen(viewProjection, light.Position + light.Direction * 0.75f, m_ViewportPos, m_ViewportSize, tip)
 			    && WorldToScreen(viewProjection, light.Position, m_ViewportPos, m_ViewportSize, pivot))
@@ -1739,7 +1763,7 @@ namespace Lucerna {
 
 		switch (m_Selection.Type) {
 		case SelectionType::Sphere: {
-			Sphere& s = m_World.Spheres.at(m_Selection.Index);
+			Sphere& s = m_World.Spheres.at(SelectedIndex());
 			glm::vec3 center = glm::vec3(delta * glm::vec4(glm::vec3(s.Position), 1.0f));
 
 			// una sfera ha un solo raggio: la scala puo' essere solo uniforme
@@ -1748,7 +1772,7 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Quad: {
-			Quad& q = m_World.Quads.at(m_Selection.Index);
+			Quad& q = m_World.Quads.at(SelectedIndex());
 
 			// i lati del quad sono U*Width e V*Height: si trasformano come direzioni
 			glm::vec3 edgeU = linear * (glm::vec3(q.U) * q.Width);
@@ -1767,7 +1791,7 @@ namespace Lucerna {
 			break;
 		}
 		case SelectionType::Box: {
-			Box& b = m_World.Boxes.at(m_Selection.Index);
+			Box& b = m_World.Boxes.at(SelectedIndex());
 			glm::vec3 center = 0.5f * (glm::vec3(b.Min) + glm::vec3(b.Max));
 			glm::vec3 size = glm::vec3(b.Max) - glm::vec3(b.Min);
 
@@ -1783,13 +1807,13 @@ namespace Lucerna {
 		}
 		case SelectionType::Mesh: {
 			// nessuna ricostruzione dei BLAS: cambia solo la trasformazione dell'istanza
-			const MeshInfo& mesh = m_World.Meshes.at(m_Selection.Index);
-			m_World.SetMeshTransform(m_Selection.Index, delta * mesh.Transform);
+			const MeshInfo& mesh = m_World.Meshes.at(SelectedIndex());
+			m_World.SetMeshTransform(SelectedIndex(), delta * mesh.Transform);
 			break;
 		}
 		case SelectionType::Light: {
 			// la scala non ha senso su una luce delta: contano posizione e direzione
-			PunctualLight& light = m_World.PunctualLights.at(m_Selection.Index);
+			PunctualLight& light = m_World.PunctualLights.at(SelectedIndex());
 			light.Position = glm::vec3(delta * glm::vec4(light.Position, 1.0f));
 			const glm::vec3 dir = linear * light.Direction;
 			if (glm::length(dir) > 1e-6f)
@@ -1809,18 +1833,48 @@ namespace Lucerna {
 		if (!m_Selection.IsValid())
 			return;
 
-		size_t count = 0;
-		switch (m_Selection.Type) {
-		case SelectionType::Sphere: count = m_World.Spheres.size(); break;
-		case SelectionType::Quad:   count = m_World.Quads.size();   break;
-		case SelectionType::Box:    count = m_World.Boxes.size();   break;
-		case SelectionType::Mesh:   count = m_World.Meshes.size();  break;
-		case SelectionType::Light:  count = m_World.PunctualLights.size(); break;
-		default: break;
-		}
-
-		if (static_cast<size_t>(m_Selection.Index) >= count)
+		if (SelectedIndex() < 0)
 			m_Selection = {};
+	}
+
+	ObjectId Application::IdOf(SelectionType type, int index) const {
+		auto idAt = [index](const auto& list) { return index >= 0 && index < (int)list.size() ? list[index].Id : ObjectId{}; };
+		switch (type) {
+		case SelectionType::Sphere: return idAt(m_World.Spheres);
+		case SelectionType::Quad:   return idAt(m_World.Quads);
+		case SelectionType::Box:    return idAt(m_World.Boxes);
+		case SelectionType::Mesh:   return idAt(m_World.Meshes);
+		case SelectionType::Light:  return idAt(m_World.PunctualLights);
+		default:                    return {};
+		}
+	}
+
+	// ponytail: ricerca lineare per id a ogni uso; con migliaia di oggetti servira' una mappa
+	int Application::IndexOf(const Selection& selection) const {
+		if (!selection.IsValid())
+			return -1;
+		switch (selection.Type) {
+		case SelectionType::Sphere: return m_World.Spheres.IndexOf(selection.Id);
+		case SelectionType::Quad:   return m_World.Quads.IndexOf(selection.Id);
+		case SelectionType::Box:    return m_World.Boxes.IndexOf(selection.Id);
+		case SelectionType::Mesh:   return m_World.Meshes.IndexOf(selection.Id);
+		case SelectionType::Light:  return m_World.PunctualLights.IndexOf(selection.Id);
+		default:                    return -1;
+		}
+	}
+
+	// Il buffer di ogni oggetto vive tra un frame e l'altro: mentre si scrive ImGui lo modifica,
+	// quando il campo e' fermo si riallinea al nome (che puo' cambiare da fuori, es. un load).
+	template<class T>
+	void Application::NameField(ObjectList<T>& list, SceneObject<T>& object) {
+		std::array<char, 128>& buffer = m_NameBuffers[object.Id];
+		if (buffer[0] == '\0' && !object.Name.empty())
+			snprintf(buffer.data(), buffer.size(), "%s", object.Name.c_str());
+		ImGui::InputText("Name", buffer.data(), buffer.size());
+		if (ImGui::IsItemDeactivatedAfterEdit())
+			list.Rename(object, buffer.data()); // unico nella lista: puo' diventare "nome.001"
+		if (!ImGui::IsItemActive())
+			snprintf(buffer.data(), buffer.size(), "%s", object.Name.c_str());
 	}
 
 	void Application::SetSelectionFromPick(int objectType, int objectIndex) {
@@ -1835,13 +1889,13 @@ namespace Lucerna {
 			for (size_t b = 0; b < m_World.Boxes.size(); b++) {
 				int firstQuad = static_cast<int>(m_World.Boxes[b].index);
 				if (objectIndex >= firstQuad && objectIndex < firstQuad + 6) {
-					m_Selection = { SelectionType::Box, static_cast<int>(b) };
+					m_Selection = Select(SelectionType::Box, static_cast<int>(b));
 					return;
 				}
 			}
 		}
 
-		m_Selection = { static_cast<SelectionType>(objectType), objectIndex };
+		m_Selection = Select(static_cast<SelectionType>(objectType), objectIndex);
 	}
 
 	void Application::UpdateSelection() {

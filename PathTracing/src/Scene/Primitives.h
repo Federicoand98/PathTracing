@@ -209,7 +209,9 @@ namespace Lucerna {
         float MaterialIndex = 0;
         glm::vec2 padding{ 0.0f };
 
-        void UpdateBox(std::vector<Quad> &Quads) {
+        // Riscrive le 6 facce del box nella lista dei quad (un ObjectList, o un vettore di Quad)
+        template<class QuadList>
+        void UpdateBox(QuadList& Quads) {
             glm::vec3 dx = glm::vec3(Max.x - Min.x, 0, 0);
             glm::vec3 dy = glm::vec3(0, Max.y - Min.y, 0);
             glm::vec3 dz = glm::vec3(0, 0, Max.z - Min.z);

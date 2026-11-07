@@ -9,6 +9,7 @@
 #include "Assets/Material.h"
 #include "Scene/Primitives.h"
 #include "Import/Model.h"
+#include "Scene/SceneObject.h"
 
 struct cgltf_data; // GltfLoader.cpp: World.h non dipende da cgltf
 
@@ -73,14 +74,14 @@ namespace Lucerna {
 		SunParams Sun;                    // al massimo un Sole per scena (ADR 0006)
 		bool EnvironmentMapping = false;  // true = cubemap, false = BackgroundColor
 		SceneCamera Camera;               // l'inquadratura: la impostano le scene e i file (ADR 0011)
-		std::vector<PunctualLight> PunctualLights; // luci punto e spot (ADR 0009)
+		// Ogni oggetto ha un id e un nome unico nella sua lista (issue #23): si aggiunge con Add.
+		ObjectList<PunctualLight> PunctualLights{ "Light" }; // luci punto e spot (ADR 0009)
         std::vector<Test> Tests;
-		std::vector<Sphere> Spheres;
-		std::vector<Quad> Quads;
-		std::vector<Box> Boxes;
-		std::vector<Material> Materials;
-		std::vector<MeshInfo> Meshes;
-		std::vector<std::string> MeshNames;       // solo CPU, per la UI
+		ObjectList<Sphere> Spheres{ "Sphere" };
+		ObjectList<Quad> Quads{ "Quad" };        // anche le 6 facce di ogni box, nascoste nell'outliner
+		ObjectList<Box> Boxes{ "Box" };
+		ObjectList<Material> Materials{ "Material" };
+		ObjectList<MeshInfo> Meshes{ "Mesh" };
 		std::vector<std::string> MeshPaths;       // solo CPU, path OBJ per la serializzazione
 		std::vector<Triangle> Triangles;          // authoring CPU, sorgente dei buffer GPU
 		std::vector<TrianglePosition> TriPositions; // caricati sulla GPU, ingresso dei BLAS

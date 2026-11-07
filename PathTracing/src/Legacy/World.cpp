@@ -71,7 +71,6 @@ namespace Lucerna {
 		TexturePaths.clear();
 		DataTexturePaths.clear();
 		Meshes.clear();
-		MeshNames.clear();
 		MeshPaths.clear();
 		Boxes.clear();
 		Sun = SunParams{}; // spento: ogni scena accende il suo
@@ -105,13 +104,13 @@ namespace Lucerna {
 		glassMaterial.SpecularColor = glassMaterial.Color;
 		glassMaterial.RefractionRatio = 1.7f;
 
-		Materials.push_back(redMaterial);
-		Materials.push_back(blueMaterial);
-		Materials.push_back(metal);
-		Materials.push_back(lightMaterial);
-		Materials.push_back(whiteMaterial);
-		Materials.push_back(greenMaterial);
-		Materials.push_back(glassMaterial);
+		Materials.Add(redMaterial);
+		Materials.Add(blueMaterial);
+		Materials.Add(metal);
+		Materials.Add(lightMaterial);
+		Materials.Add(whiteMaterial);
+		Materials.Add(greenMaterial);
+		Materials.Add(glassMaterial);
 	}
 
 	void World::PrepareSimpleScene() {
@@ -120,19 +119,19 @@ namespace Lucerna {
 			Sphere s;
 			s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
 			s.MaterialIndex = 2;
-			// Spheres.push_back(s);
+			// Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
 			s.MaterialIndex = 3;
-			// Spheres.push_back(s);
+			// Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 0.0f, -101.0f, 0.0f, 100.0f };
 			s.MaterialIndex = 0;
-			Spheres.push_back(s);
+			Spheres.Add(s);
 		}
 
 		// Sfera gigante usata come terreno: scacchiera bianco/nero in world space.
@@ -172,19 +171,19 @@ namespace Lucerna {
 			Sphere s;
 			s.Position = { -0.9f, -1.2f, 1.5f, 0.8f };
 			s.MaterialIndex = 2;
-			Spheres.push_back(s);
+			Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 0.0f, -1.6f, 2.3f, 0.4f };
 			s.MaterialIndex = 2;
-			Spheres.push_back(s);
+			Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 0.9f, -1.0f, 1.1f, 1.0f };
 			s.MaterialIndex = 2;
-			Spheres.push_back(s);
+			Spheres.Add(s);
 		}
 
 		CreateCornellBox();
@@ -228,14 +227,14 @@ namespace Lucerna {
 		diffuse.SpecularProbability = 0.0f; // niente riflesso: la texture si vedrebbe poco
 		diffuse.AlbedoTexture = 0.0f;
 
-		Materials.push_back(dielectric);
-		Materials.push_back(metal);
-		Materials.push_back(diffuse);   // materiale 2: solo di sphere2, la sfera "terra"
-		Materials.push_back(baseMat);
-		Spheres.push_back(sphere1);
-		Spheres.push_back(sphere2);
-		Spheres.push_back(sphere3);
-		Spheres.push_back(base);
+		Materials.Add(dielectric);
+		Materials.Add(metal);
+		Materials.Add(diffuse);   // materiale 2: solo di sphere2, la sfera "terra"
+		Materials.Add(baseMat);
+		Spheres.Add(sphere1);
+		Spheres.Add(sphere2);
+		Spheres.Add(sphere3);
+		Spheres.Add(base);
 
 		for (int a = -11; a < 11; a++) {
 			for (int b = -11; b < 11; b++) {
@@ -244,12 +243,12 @@ namespace Lucerna {
 				if (glm::length(center - glm::vec3(3, 0.2, 0)) > 0.9) {
 					Material mat;
 					mat = CreateRandom(true);
-					Materials.push_back(mat);
+					Materials.Add(mat);
 
 					Sphere s = { {center, 0.2f}, 0.0 };
 					s.MaterialIndex = Materials.size() - 1;
 
-					Spheres.push_back(s);
+					Spheres.Add(s);
 				}
 			}
 		}
@@ -277,30 +276,30 @@ namespace Lucerna {
 		lightMaterial.EmissiveColor = lightMaterial.Color;
 		lightMaterial.EmissiveStrenght = 1.0f;
 
-		Materials.push_back(dielectric);
-		Materials.push_back(metal);
-		Materials.push_back(diffuse);
-		Materials.push_back(lightMaterial);
-		Materials.push_back(baseMat);
+		Materials.Add(dielectric);
+		Materials.Add(metal);
+		Materials.Add(diffuse);
+		Materials.Add(lightMaterial);
+		Materials.Add(baseMat);
 
 		{
 			Sphere s;
 			s.Position = { -0.8f, 0.0f, 0.0f, 1.0f };
 			s.MaterialIndex = 1;
-			Spheres.push_back(s);
+			Spheres.Add(s);
 		}
 		{
 			Sphere s;
 			s.Position = { 1.0f, -0.2f, 0.0f, 0.8f };
 			s.MaterialIndex = 3;
-			Spheres.push_back(s);
+			Spheres.Add(s);
 		}
 
 		for (int a = 0; a < 10; a++) {
 			Material mat;
 			mat = CreateRandom(false);
 
-			Materials.push_back(mat);
+			Materials.Add(mat);
 		}
 
 		for (int x = -5; x < 6; x++) {
@@ -333,19 +332,19 @@ namespace Lucerna {
 		Material metal2 = CreateDefaultMetal({ 0.8549, 0.5490, 0.4, 1.0 }); metal2.Roughness = 0.25f;
 		Material metal3 = CreateDefaultMetal({ 0.8549, 0.5490, 0.4, 1.0 }); metal3.Roughness = 0.45f;
 
-		Materials.push_back(white_diffuse);
-		Materials.push_back(metal);
-		Materials.push_back(red);
-		Materials.push_back(blue);
-		Materials.push_back(green);
-		Materials.push_back(white_metal);
-		Materials.push_back(white_glossy);
-		Materials.push_back(glass1);
-		Materials.push_back(glass2);
-		Materials.push_back(light);
-		Materials.push_back(metal1);
-		Materials.push_back(metal2);
-		Materials.push_back(metal3);
+		Materials.Add(white_diffuse);
+		Materials.Add(metal);
+		Materials.Add(red);
+		Materials.Add(blue);
+		Materials.Add(green);
+		Materials.Add(white_metal);
+		Materials.Add(white_glossy);
+		Materials.Add(glass1);
+		Materials.Add(glass2);
+		Materials.Add(light);
+		Materials.Add(metal1);
+		Materials.Add(metal2);
+		Materials.Add(metal3);
 
 		{
 			Sphere left, middle, right;
@@ -358,9 +357,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, -0.5f, -4.5f, 1.0f };
 			right.MaterialIndex = 5;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 
 		{
@@ -374,9 +373,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, -1.0f, -2.0f, 0.5f };
 			right.MaterialIndex = 4;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 
 		{
@@ -390,9 +389,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
 			right.MaterialIndex = 12;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 
 		{
@@ -403,8 +402,8 @@ namespace Lucerna {
 			right.Position = { 1.75f, -0.9f, -2.75f, 0.4f };
 			right.MaterialIndex = 7;
 
-			Spheres.push_back(left);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(right);
 		}
 
 		{
@@ -423,8 +422,8 @@ namespace Lucerna {
 			back.Height = 8.0f;
 			back.MaterialIndex = 0;
 
-			Quads.push_back(bot);
-			Quads.push_back(back);
+			Quads.Add(bot);
+			Quads.Add(back);
 		}
 
 		{
@@ -444,7 +443,7 @@ namespace Lucerna {
 			panelLight2.Height = 8.0f;
 			panelLight2.MaterialIndex = 9;
 
-			Quads.push_back(panelLight2);
+			Quads.Add(panelLight2);
 		}
 
 		// SLAB
@@ -474,19 +473,19 @@ namespace Lucerna {
 		Material glass1 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.45f);
 		Material glass2 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.01f);
 
-		Materials.push_back(white_diffuse);
-		Materials.push_back(metal);
-		Materials.push_back(red);
-		Materials.push_back(blue);
-		Materials.push_back(green);
-		Materials.push_back(white_metal);
-		Materials.push_back(white_glossy);
-		Materials.push_back(glass1);
-		Materials.push_back(glass2);
-		Materials.push_back(light);
-		Materials.push_back(lightR);
-		Materials.push_back(lightG);
-		Materials.push_back(lightB);
+		Materials.Add(white_diffuse);
+		Materials.Add(metal);
+		Materials.Add(red);
+		Materials.Add(blue);
+		Materials.Add(green);
+		Materials.Add(white_metal);
+		Materials.Add(white_glossy);
+		Materials.Add(glass1);
+		Materials.Add(glass2);
+		Materials.Add(light);
+		Materials.Add(lightR);
+		Materials.Add(lightG);
+		Materials.Add(lightB);
 
 		{
 			Sphere left, middle, right;
@@ -499,9 +498,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, -0.5f, -4.5f, 1.0f };
 			right.MaterialIndex = 5;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 
 		{
@@ -515,9 +514,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, -1.0f, -2.0f, 0.5f };
 			right.MaterialIndex = 4;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 
 		/*
@@ -532,9 +531,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
 			right.MaterialIndex = 9;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 		*/
 
@@ -549,9 +548,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, 2.2f, -3.0f, 0.5f };
 			right.MaterialIndex = 11;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 
 		{
@@ -562,8 +561,8 @@ namespace Lucerna {
 			right.Position = { 1.75f, -0.9f, -2.75f, 0.4f };
 			right.MaterialIndex = 7;
 
-			Spheres.push_back(left);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(right);
 		}
 
 
@@ -583,8 +582,8 @@ namespace Lucerna {
 			back.Height = 8.0f;
 			back.MaterialIndex = 0;
 
-			Quads.push_back(bot);
-			Quads.push_back(back);
+			Quads.Add(bot);
+			Quads.Add(back);
 		}
 
 		{
@@ -597,7 +596,7 @@ namespace Lucerna {
 			panelLight1.Height = 8.0f;
 			panelLight1.MaterialIndex = 9;
 
-			Quads.push_back(panelLight1);
+			Quads.Add(panelLight1);
 		}
 
 		// SLAB
@@ -624,16 +623,16 @@ namespace Lucerna {
 		Material glass1 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.45f);
 		Material glass2 = CreateDefaultGlass(glm::vec4{ 1.0 }, 1.01f);
 
-		Materials.push_back(white_diffuse);
-		Materials.push_back(metal);
-		Materials.push_back(red);
-		Materials.push_back(blue);
-		Materials.push_back(green);
-		Materials.push_back(white_metal);
-		Materials.push_back(white_glossy);
-		Materials.push_back(glass1);
-		Materials.push_back(glass2);
-		Materials.push_back(light);
+		Materials.Add(white_diffuse);
+		Materials.Add(metal);
+		Materials.Add(red);
+		Materials.Add(blue);
+		Materials.Add(green);
+		Materials.Add(white_metal);
+		Materials.Add(white_glossy);
+		Materials.Add(glass1);
+		Materials.Add(glass2);
+		Materials.Add(light);
 
 		{
 			Sphere left, middle, right;
@@ -646,9 +645,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, -0.5f, -4.5f, 1.0f };
 			right.MaterialIndex = 5;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 
 		{
@@ -662,9 +661,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, -1.0f, -2.0f, 0.5f };
 			right.MaterialIndex = 4;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 
 		{
@@ -678,9 +677,9 @@ namespace Lucerna {
 			right.Position = { 3.5f, 2.2f, -5.5f, 0.5f };
 			right.MaterialIndex = 0;
 
-			Spheres.push_back(left);
-			Spheres.push_back(middle);
-			Spheres.push_back(right);
+			Spheres.Add(left);
+			Spheres.Add(middle);
+			Spheres.Add(right);
 		}
 
 		Model left, right;
@@ -707,8 +706,8 @@ namespace Lucerna {
 			back.Height = 8.0f;
 			back.MaterialIndex = 0;
 
-			Quads.push_back(bot);
-			Quads.push_back(back);
+			Quads.Add(bot);
+			Quads.Add(back);
 		}
 
 		{
@@ -728,7 +727,7 @@ namespace Lucerna {
 			panelLight2.Height = 8.0f;
 			panelLight2.MaterialIndex = 9;
 
-			Quads.push_back(panelLight2);
+			Quads.Add(panelLight2);
 		}
 
 		// SLAB
@@ -841,7 +840,7 @@ namespace Lucerna {
 
 		const int base = static_cast<int>(Materials.size());
 		for (const MtlMaterial& mm : mtls)
-			Materials.push_back(MaterialFromMtl(mm));
+			Materials.Add(MaterialFromMtl(mm), mm.Name);
 
 		std::cout << "MTL: registrati " << mtls.size() << " materiali (base " << base << ")"
 			<< ", texture totali " << TexturePaths.size() << std::endl;
@@ -886,8 +885,7 @@ namespace Lucerna {
 		mesh.LocalMin = localMin;
 		mesh.LocalMax = localMax;
 
-		Meshes.push_back(mesh);
-		MeshNames.push_back(model.GetName());
+		Meshes.Add(mesh, model.GetName());
 		MeshPaths.push_back(model.GetPath());
 		SetMeshTransform(static_cast<int>(Meshes.size()) - 1, glm::translate(glm::mat4(1.0f), Position));
 
@@ -1074,8 +1072,6 @@ namespace Lucerna {
 		Triangles.erase(Triangles.begin() + first, Triangles.begin() + first + count);
 
 		Meshes.erase(Meshes.begin() + meshIndex);
-		if (meshIndex < static_cast<int>(MeshNames.size()))
-			MeshNames.erase(MeshNames.begin() + meshIndex);
 		if (meshIndex < static_cast<int>(MeshPaths.size()))
 			MeshPaths.erase(MeshPaths.begin() + meshIndex);
 
@@ -1219,7 +1215,7 @@ namespace Lucerna {
 			quad.Width = dx.x;
 			quad.Height = dy.y;
 
-			Quads.push_back(quad);
+			Quads.Add(quad, "Box face");
 		}
 
 		// right
@@ -1230,7 +1226,7 @@ namespace Lucerna {
 			quad.Width = dz.z;
 			quad.Height = dy.y;
 
-			Quads.push_back(quad);
+			Quads.Add(quad, "Box face");
 		}
 
 		// back
@@ -1241,7 +1237,7 @@ namespace Lucerna {
 			quad.Width = dx.x;
 			quad.Height = dy.y;
 
-			Quads.push_back(quad);
+			Quads.Add(quad, "Box face");
 		}
 
 		// left
@@ -1252,7 +1248,7 @@ namespace Lucerna {
 			quad.Width = dz.z;
 			quad.Height = dy.y;
 
-			Quads.push_back(quad);
+			Quads.Add(quad, "Box face");
 		}
 
 		// top
@@ -1263,7 +1259,7 @@ namespace Lucerna {
 			quad.Width = dx.x;
 			quad.Height = dz.z;
 
-			Quads.push_back(quad);
+			Quads.Add(quad, "Box face");
 		}
 
 		// bottom
@@ -1274,10 +1270,10 @@ namespace Lucerna {
 			quad.Width = dx.x;
 			quad.Height = dz.z;
 
-			Quads.push_back(quad);
+			Quads.Add(quad, "Box face");
 		}
 
-		Boxes.push_back(box);
+		Boxes.Add(box);
 	}
 
 	void World::CreateCornellBox() {
@@ -1291,7 +1287,7 @@ namespace Lucerna {
 			quad.Height = 4.0f;
 			quad.MaterialIndex = 5;
 
-			Quads.push_back(quad);
+			Quads.Add(quad);
 		}
 
 		// back white
@@ -1304,7 +1300,7 @@ namespace Lucerna {
 			quad.Height = 4.0f;
 			quad.MaterialIndex = 4;
 
-			Quads.push_back(quad);
+			Quads.Add(quad);
 		}
 
 		// right red
@@ -1317,7 +1313,7 @@ namespace Lucerna {
 			quad.Height = 4.0f;
 			quad.MaterialIndex = 0;
 
-			Quads.push_back(quad);
+			Quads.Add(quad);
 		}
 
 		// top white
@@ -1330,7 +1326,7 @@ namespace Lucerna {
 			quad.Height = 6.0f;
 			quad.MaterialIndex = 4;
 
-			Quads.push_back(quad);
+			Quads.Add(quad);
 		}
 
 		// bot white
@@ -1343,7 +1339,7 @@ namespace Lucerna {
 			quad.Height = 6.0f;
 			quad.MaterialIndex = 4;
 
-			Quads.push_back(quad);
+			Quads.Add(quad);
 		}
 
 		// top light
@@ -1356,7 +1352,7 @@ namespace Lucerna {
 			quad.Height = 0.5f;
 			quad.MaterialIndex = 3;
 
-			Quads.push_back(quad);
+			Quads.Add(quad);
 		}
 	}
 }

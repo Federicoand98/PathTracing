@@ -40,11 +40,13 @@ namespace Lucerna {
 		Light = 4   // luce punto o spot: nessun raggio la colpisce, si seleziona dall'outliner
 	};
 
+	// Cosa e' selezionato: il tipo e l'id dell'oggetto (issue #23). L'indice nella sua lista si
+	// ricava quando serve (Application::IndexOf): cancellare un altro oggetto non lo sposta.
 	struct Selection {
 		SelectionType Type = SelectionType::None;
-		int Index = -1;
+		ObjectId Id;
 
-		bool IsValid() const { return Type != SelectionType::None && Index >= 0; }
+		bool IsValid() const { return Type != SelectionType::None && !Id.IsNil(); }
 		// una sfera non ha orientamento, un box e' axis-aligned: niente rotazione.
 		// La rotazione di una luce orienta lo spot.
 		bool SupportsRotation() const { return Type == SelectionType::Quad || Type == SelectionType::Mesh || Type == SelectionType::Light; }
@@ -174,7 +176,17 @@ namespace Lucerna {
 		VkDescriptorSet m_DisplaySet = VK_NULL_HANDLE;
 		uint32_t m_DisplayVersion = 0;
 		ImTextureID DisplayTexture();
-		SceneCamera m_LastShot; // l'inquadratura del frame scorso: se cambia da fuori, la vista la segue
+		SceneCamera m_LastShot;
+
+		// Selezione per id (issue #23)
+		ObjectId IdOf(SelectionType type, int index) const;
+		int IndexOf(const Selection& selection) const; // -1 se l'oggetto non c'e' piu'
+		Selection Select(SelectionType type, int index) const { return { type, IdOf(type, index) }; }
+		int SelectedIndex() const { return IndexOf(m_Selection); }
+		std::string ObjectName(const Selection& selection) const;
+		// Campo "Name": rinomina all'uscita dal campo, con il nome reso unico dalla lista
+		template<class T> void NameField(ObjectList<T>& list, SceneObject<T>& object);
+		std::unordered_map<ObjectId, std::array<char, 128>> m_NameBuffers; // l'inquadratura del frame scorso: se cambia da fuori, la vista la segue
 		void SyncCameras(bool viewMoved);
 		bool m_Vsync = true; // effettivo: PT_NOVSYNC lo spegne per la sessione senza toccare le preferenze
 		float m_Timer = 0.0f;
