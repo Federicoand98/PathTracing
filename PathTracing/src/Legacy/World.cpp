@@ -1,4 +1,6 @@
 #include "Legacy/World.h"
+#include "Import/Importer.h"
+#include <map>
 #include "Assets/Material.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <chrono>
@@ -142,8 +144,6 @@ namespace Lucerna {
 
 		//CreateBox({ 0,0,0 }, { 3,1,1 }, MaterialAt(1));
 
-		Model m;
-		m.LoadObj("models/guitar.obj");
 
 		// l'albedo moltiplica material.Color: se il materiale e' colorato la texture
 		// ne esce tinta, quindi lo si porta a bianco
@@ -152,7 +152,7 @@ namespace Lucerna {
 		guitarMaterial.SpecularColor = guitarMaterial.Color;
 		guitarMaterial.AlbedoTexture = m_Assets.RegisterTexture("textures/Albedo/uv_grid.png", TextureKind::Color);
 
-		UploadModel(m, { 0.0, 0.0, 0.0 }, MaterialAt(5));
+		Add("models/guitar.obj", glm::mat4(1.0f), MaterialAt(5));
 	}
 
 	void World::PrepareCornellBox() {
@@ -183,14 +183,9 @@ namespace Lucerna {
 		m_BackgroundColor = { 0.54f, 0.73f, 0.95f };
 		CreateCornellBox();
 
-		Model queen, king, knight;
-		queen.LoadObj("models/queen.obj");
-		king.LoadObj("models/king.obj");
-		knight.LoadObj("models/knight.obj");
-
-		UploadModel(queen, { 0.7, -2.1, 2.0 }, MaterialAt(2));
-		UploadModel(king, { -1.2, -2.0, 1.6 }, MaterialAt(5));
-		UploadModel(knight, { 0.9, -2.0, 3.0 }, MaterialAt(1));
+		Add("models/queen.obj", glm::translate(glm::mat4(1.0f), { 0.7, -2.1, 2.0 }), MaterialAt(2));
+		Add("models/king.obj", glm::translate(glm::mat4(1.0f), { -1.2, -2.0, 1.6 }), MaterialAt(5));
+		Add("models/knight.obj", glm::translate(glm::mat4(1.0f), { 0.9, -2.0, 3.0 }), MaterialAt(1));
 	}
 
 	void World::PrepareRandomSpheres() {
@@ -676,12 +671,8 @@ namespace Lucerna {
 			m_Spheres.Add(right);
 		}
 
-		Model left, right;
-		left.LoadObj("models/king.obj");
-		right.LoadObj("models/queen.obj");
-
-		UploadModel(left, { -1.75, -1.4, -2.75 }, MaterialAt(3));
-		UploadModel(right, { 1.75, -1.4, -2.75 }, MaterialAt(3));
+		Add("models/king.obj", glm::translate(glm::mat4(1.0f), { -1.75, -1.4, -2.75 }), MaterialAt(3));
+		Add("models/queen.obj", glm::translate(glm::mat4(1.0f), { 1.75, -1.4, -2.75 }), MaterialAt(3));
 
 
 		{
@@ -735,7 +726,7 @@ namespace Lucerna {
 	}
 
 	// Scena di esempio per il modello Sponza (crytek/jimmiebergmann): una mesh sola con
-	// il suo MTL a 25 materiali + texture .tga, montata via UploadModel (che registra
+	// il suo MTL a 25 materiali + texture .tga, montata via Add (che registra
 	// materiali e texture e rimappa gli indici per-triangolo).
 	void World::PrepareSponza() {
 		// L'OBJ e' in unita' enormi (~3700 di larghezza): lo scalo a ~37 unita', in linea
@@ -751,14 +742,13 @@ namespace Lucerna {
 		m_Camera.Position = { -9.0f, 1.5f, 0.8f };
 		m_Camera.Direction = glm::normalize(glm::vec3(1.0f, 0.12f, -0.1f));
 
-		Model sponza;
-		sponza.LoadObj("models/Sponza/sponza.obj");
 
 		// il material di fallback (0) serve solo ai triangoli senza usemtl; qui quasi tutti
 		// ce l'hanno, ma 0 e' comunque un indice MTL valido dopo la registrazione.
 		// l'asset prima del materiale: lo 0 esiste solo dopo che il MTL e' stato registrato
-		const ObjectId sponzaAsset = ObjAsset(sponza);
-		AddInstance(sponzaAsset, glm::mat4(1.0f), MaterialAt(0));
+		const int sponza = Add("models/Sponza/sponza.obj", glm::mat4(1.0f), {});
+		if (sponza >= 0)
+			m_Meshes[sponza].Material = MaterialAt(0);
 
 		// I _ddn di Sponza sono in convenzione DirectX (verde verso il basso): sopra ogni fuga dei
 		// mattoni il verde e' positivo. L'MTL non lo dice, quindi lo fissa la scena.
@@ -775,70 +765,6 @@ namespace Lucerna {
 		}
 	}
 
-	Material World::MaterialFromMtl(const MtlMaterial& mm) {
-		Material m;
-		m.Color = glm::vec4(mm.Kd, 1.0f);
-
-		// Ns (esponente Phong 0..1000) -> roughness percettiva. Pr, se presente, la sovrascrive.
-		m.Roughness = glm::clamp(std::sqrt(2.0f / (mm.Ns + 2.0f)), 0.0f, 1.0f);
-		if (mm.Pr >= 0.0f) m.Roughness = glm::clamp(mm.Pr, 0.0f, 1.0f);
-		m.RefractionRoughness = m.Roughness;
-
-		m.Metalness = (mm.Pm >= 0.0f) ? glm::clamp(mm.Pm, 0.0f, 1.0f) : 0.0f;
-		m.RefractionRatio = glm::clamp(mm.Ni, 1.0f, 3.0f);
-		m.SpecularProbability = 0.04f;       // F0 dielettrico standard
-		m.SpecularColor = glm::vec4(1.0f);   // riflesso dielettrico non tinto (fisico)
-		m.RefractionColor = m.Color;
-
-		// emissione: la magnitudine di Ke diventa la forza, il resto e' il colore
-		float ke = glm::max(mm.Ke.x, glm::max(mm.Ke.y, mm.Ke.z));
-		if (ke > 0.0f) {
-			m.EmissiveColor = glm::vec4(mm.Ke / ke, 1.0f);
-			m.EmissiveStrenght = ke;
-		}
-
-		// map_Kd: la texture porta il colore, quindi Color va a bianco per non tingerla due volte
-		if (!mm.map_Kd.empty()) {
-			m.AlbedoTexture = m_Assets.RegisterTexture(mm.map_Kd, TextureKind::Color);
-			m.Color = glm::vec4(1.0f);
-		}
-		if (!mm.map_Bump.empty())
-			m.NormalTexture = m_Assets.RegisterTexture(mm.map_Bump, TextureKind::Data);
-		// Molte copie di Sponza citano un _mask.tga che non distribuiscono e tengono la maschera
-		// nell'alpha della diffusa: se il file manca si usa quella (AlphaTexture nil).
-		if (!mm.map_d.empty()) {
-			if (std::filesystem::exists(mm.map_d))
-				m.AlphaTexture = m_Assets.RegisterTexture(mm.map_d, TextureKind::Data);
-			m.AlphaCutoff = 0.5f;
-		}
-		return m;
-	}
-
-	// L'asset di un OBJ caricato (issue #26): se la sorgente c'e' gia' si riusa, cosi' due istanze
-	// dividono triangoli e BLAS e i materiali MTL non si duplicano. Altrimenti i materiali del MTL
-	// diventano gli slot dell'asset, e i triangoli citano lo slot con il loro indice locale.
-	ObjectId World::ObjAsset(const Model& model) {
-		if (const auto* existing = m_Assets.FindMesh({ model.GetPath() }))
-			return existing->Id;
-
-		MeshAsset asset;
-		asset.Source = { model.GetPath() };
-		for (const MtlMaterial& mm : model.GetMaterials())
-			asset.MaterialSlots.push_back(m_Assets.Materials.Add(MaterialFromMtl(mm), mm.Name).Id);
-
-		asset.LocalMin = glm::vec4(1e30f);
-		asset.LocalMax = glm::vec4(-1e30f);
-		for (const Triangle* t : model.GetTriangles()) {
-			asset.LocalMin = glm::min(asset.LocalMin, glm::min(t->A, glm::min(t->B, t->C)));
-			asset.LocalMax = glm::max(asset.LocalMax, glm::max(t->A, glm::max(t->B, t->C)));
-			asset.Triangles.push_back(*t);
-		}
-
-		std::cout << "Model loaded: " << asset.Triangles.size() << " triangles, "
-			<< asset.MaterialSlots.size() << " MTL materials" << std::endl;
-		return m_Assets.Meshes.Add(asset, model.GetName()).Id;
-	}
-
 	// Un'istanza di asset. I triangoli restano in LOCAL SPACE: la posizione vive nella Transform.
 	int World::AddInstance(const ObjectId& asset, const glm::mat4& transform, const ObjectId& material) {
 		Mesh mesh;
@@ -851,30 +777,94 @@ namespace Lucerna {
 		return static_cast<int>(m_Meshes.size()) - 1;
 	}
 
-	void World::UploadModel(const Model& model, const glm::vec3& position, const ObjectId& material) {
-		if (model.GetTriangles().empty()) {
-			std::cerr << "Model upload skipped: no triangles were loaded." << std::endl;
-			return;
+	// ---- file (issue #27): ogni formato e' un importer del registry
+
+	bool World::Open(const std::string& path) {
+		const Importer* importer = FindImporter(path);
+		if (importer == nullptr) {
+			std::cerr << "Open: nessun importer per " << path << std::endl;
+			return false;
 		}
-		AddInstance(ObjAsset(model), glm::translate(glm::mat4(1.0f), position), material);
+		// Si legge tutto a parte: se il file non va, la scena corrente resta intatta
+		AssetLibrary assets;
+		ImportedScene scene;
+		if (!importer->Import(path, assets, scene))
+			return false;
+
+		const SceneCamera previousCamera = m_Camera;
+		DestroyScene();
+		m_Assets = std::move(assets);
+		// Il file da' la posa e il campo visivo; l'obiettivo (profondita' di campo) non c'e' nei
+		// formati che leggiamo, e resta quello di prima (ADR 0011).
+		m_Camera = previousCamera;
+		if (scene.Camera) {
+			m_Camera.Position = scene.Camera->Position;
+			m_Camera.Direction = scene.Camera->Direction;
+			m_Camera.VerticalFOV = scene.Camera->VerticalFOV;
+		}
+		m_Sun = scene.Sun.value_or(SunParams{});
+		m_BackgroundColor = scene.Background.value_or(glm::vec3(0.6f, 0.7f, 0.9f));
+		for (const auto& light : scene.Lights)
+			m_PunctualLights.Add(light.Data, light.Name);
+		// Un OBJ senza MTL, o una primitive glTF senza materiale, non ha niente da mostrare:
+		// riceve un materiale di default, come il grigio di Blender.
+		ObjectId fallback;
+		for (auto instance : scene.Instances) {
+			if (instance.Data.Material.IsNil()) {
+				if (fallback.IsNil())
+					fallback = m_Assets.Materials.Add(CreateDefaultPrincipled(), "Default").Id;
+				instance.Data.Material = fallback;
+			}
+			m_Meshes.Add(instance.Data, instance.Name);
+		}
+		m_Changes = AllChanged;
+		return true;
 	}
 
-	// Un'istanza di un OBJ a runtime. Il file si legge solo se la sua geometria non c'e' ancora.
-	int World::AddMesh(const std::string& objPath, const glm::vec3& position, const ObjectId& material) {
-		ObjectId asset;
-		if (const auto* existing = m_Assets.FindMesh({ objPath })) {
-			asset = existing->Id;
-		} else {
-			Model model;
-			model.LoadObj(objPath.c_str());
-			if (model.GetTriangles().empty()) {
-				std::cerr << "AddMesh failed: " << objPath << std::endl;
-				return -1;
-			}
-			asset = ObjAsset(model);
-			m_Changes |= MaterialsChanged | TexturesChanged; // i materiali del suo MTL
+	// Sole, inquadratura e sfondo del file non si toccano: la scena e' quella corrente
+	int World::Add(const std::string& path, const glm::mat4& placement, const ObjectId& material) {
+		const Importer* importer = FindImporter(path);
+		if (importer == nullptr) {
+			std::cerr << "Add: nessun importer per " << path << std::endl;
+			return -1;
 		}
-		return AddInstance(asset, glm::translate(glm::mat4(1.0f), position), material);
+		ImportedScene scene;
+		if (!importer->Import(path, m_Assets, scene))
+			return -1;
+
+		const int first = static_cast<int>(m_Meshes.size());
+		for (auto instance : scene.Instances) {
+			instance.Data.Transform = placement * instance.Data.Transform;
+			if (instance.Data.Material.IsNil())
+				instance.Data.Material = material;
+			m_Meshes.Add(instance.Data, instance.Name);
+		}
+		for (auto light : scene.Lights) {
+			light.Data.Position = glm::vec3(placement * glm::vec4(light.Data.Position, 1.0f));
+			light.Data.Direction = glm::normalize(glm::mat3(placement) * light.Data.Direction);
+			m_PunctualLights.Add(light.Data, light.Name);
+		}
+		m_Changes |= GeometryChanged | MeshesChanged | MaterialsChanged | TexturesChanged | LightsChanged;
+		return static_cast<int>(m_Meshes.size()) > first ? first : -1;
+	}
+
+	// Gli asset senza geometria, raggruppati per file: ogni file lo rilegge il suo importer una volta
+	bool World::LoadMissingGeometry() {
+		std::map<std::string, std::vector<MeshAsset*>> byFile;
+		for (auto& asset : m_Assets.Meshes)
+			if (asset.Triangles.empty())
+				byFile[asset.Source.File].push_back(&asset);
+
+		bool ok = true;
+		for (const auto& [file, assets] : byFile) {
+			const Importer* importer = FindImporter(file);
+			if (importer == nullptr || !importer->LoadGeometry(file, assets)) {
+				std::cerr << "Geometria non trovata: " << file << std::endl;
+				ok = false;
+			}
+		}
+		m_Changes |= GeometryChanged | MeshesChanged;
+		return ok;
 	}
 
 	int World::QuadOwnerBox(int quadIndex) const {

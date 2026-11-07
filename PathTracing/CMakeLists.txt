@@ -83,11 +83,11 @@ add_custom_target(ModuleCheck
 lucerna_module(Core)
 lucerna_module(Assets        DEPS Core)
 lucerna_module(Scene         DEPS Core Assets)
-lucerna_module(Import        DEPS Core Assets Scene)
+lucerna_module(Import        DEPS Core Assets Scene LIBS cgltf)
 lucerna_module(Vulkan        DEPS Core LIBS Vulkan::Vulkan glfw stb)
 # Transitorio (milestone Scene architecture): World e il codice ancora intrecciato con lui.
 # Ogni issue ne porta fuori un pezzo, la #29 lo cancella.
-lucerna_module(Legacy        DEPS Core Assets Scene Import LIBS cgltf)
+lucerna_module(Legacy        DEPS Core Assets Scene Import)
 lucerna_module(Render        DEPS Core Assets Scene Vulkan Legacy LIBS stb)
 lucerna_module(Serialization DEPS Core Assets Scene Legacy Render)
 lucerna_module(Editor        DEPS Core Assets Scene Import Vulkan Legacy Render Serialization LIBS imgui imguizmo glfw)

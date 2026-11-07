@@ -108,10 +108,11 @@ namespace Lucerna {
 		std::string GetSelectionName() const;
 		void ApplyDelta(const glm::mat4& delta);
 
-		// Live-link glTF: carica (rimpiazzando la scena) e registra path+mtime per il watch;
-		// PollGltfWatch controlla ogni frame se il file e' cambiato e in tal caso ricarica.
-		bool LoadGltfScene(const std::string& path);
-		void PollGltfWatch();
+		// Apre un file (rimpiazzando la scena) e registra path+mtime per il live-link;
+		// PollLiveLink controlla ogni frame se il file e' cambiato e in tal caso lo riapre.
+		bool OpenFile(const std::string& path);
+		void PollLiveLink();
+		static std::vector<std::string> FileFilters(); // per il file dialog, dal registry degli importer
 	private:
 		Selection m_Selection;
 		ImGuizmo::OPERATION m_GizmoOperation = ImGuizmo::TRANSLATE;
@@ -147,8 +148,6 @@ namespace Lucerna {
 
 		// creazione oggetti
 		ObjectId m_NewObjectMaterial;
-		std::vector<std::string> m_ModelFiles;
-		int m_SelectedModelFile = 0;
 		std::vector<std::string> m_TextureFiles;
 		int m_SelectedTextureFile = 0;
 
@@ -168,9 +167,9 @@ namespace Lucerna {
 
 		// Live-link glTF (ADR 0003): il renderer osserva il file caricato e lo ricarica quando
 		// cambia (tipicamente perche' Blender l'ha ri-esportato su save). Read-only verso Blender.
-		std::string m_GltfPath;                        // vuoto = nessuna scena glTF attiva
-		bool m_GltfWatch = true;                        // auto-reload al cambio del file
-		std::filesystem::file_time_type m_GltfMtime{};  // ultimo timestamp visto
+		std::string m_WatchPath;                        // il file aperto, vuoto = nessuno
+		bool m_LiveLink = true;                         // riapre il file quando cambia
+		std::filesystem::file_time_type m_WatchMtime{}; // ultimo timestamp visto
 		bool m_IsRunning;
 		Preferences m_Preferences;
 		// La texture ImGui dell'immagine del renderer, e la versione dell'immagine a cui si riferisce

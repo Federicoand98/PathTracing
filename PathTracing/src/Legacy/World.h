@@ -8,10 +8,8 @@
 #include "Core/Ray.h"
 #include "Assets/AssetLibrary.h"
 #include "Scene/Primitives.h"
-#include "Import/Model.h"
 #include "Core/SceneObject.h"
 
-struct cgltf_data; // GltfLoader.cpp: World.h non dipende da cgltf
 
 namespace Lucerna {
 
@@ -52,10 +50,15 @@ namespace Lucerna {
 		void LoadScene();
 		void DestroyScene();
 
-		// Importa una scena glTF (interop Blender, ADR 0003): rimpiazza la scena corrente con
-		// geometria + materiali del file. Ritorna false se il parsing fallisce (scena invariata).
-		// Definita in GltfLoader.cpp per non appesantire World.cpp con la dipendenza cgltf.
-		bool LoadGltf(const std::string& path);
+		// I file passano dal registry degli importer (issue #27), quindi qui nessun formato.
+		// Open rimpiazza la scena col contenuto del file: se l'importer fallisce, la scena resta
+		// com'era. Un file senza camera tiene l'inquadratura corrente (ADR 0011).
+		bool Open(const std::string& path);
+		// Aggiunge le mesh e le luci del file alla scena: placement sposta tutto, material va ai
+		// triangoli senza un materiale loro. Ritorna l'indice della prima istanza nuova, -1 se
+		// il file non si legge o non ha mesh.
+		int Add(const std::string& path, const glm::mat4& placement, const ObjectId& material);
+
 		// Carica dalla sorgente la geometria degli asset che non ce l'hanno (letti da un file di
 		// scena). false = qualcuna manca: le sue istanze non si vedono.
 		bool LoadMissingGeometry();
@@ -101,8 +104,6 @@ namespace Lucerna {
 		int AddMaterial(const Material& material);
 		void AddTexture(const std::string& path, TextureKind kind);
 		void CreateBox(const glm::vec3& a, const glm::vec3& b, const ObjectId& material);
-		// Un'istanza di un OBJ: la geometria si carica solo la prima volta (issue #26)
-		int AddMesh(const std::string& objPath, const glm::vec3& position, const ObjectId& material);
 		int AddInstance(const ObjectId& asset, const glm::mat4& transform, const ObjectId& material);
 
 		// Al contrario delle creazioni, le rimozioni NON sono append: invalidano ogni indice
@@ -127,8 +128,6 @@ namespace Lucerna {
 	private:
 		friend class SceneSerializer; // legge e rimpiazza la scena intera, poi segna tutto cambiato
 
-		bool ImportLights(const cgltf_data* data); // KHR_lights_punctual: true se ha trovato luci
-		void ImportCamera(const cgltf_data* data); // la prima camera prospettica, se c'e'
 
 		uint32_t m_Changes = AllChanged;
 
@@ -156,10 +155,6 @@ namespace Lucerna {
 		void PrepareSetup3();
 		void PrepareSponza();
 
-		// L'asset di un OBJ: gia' caricato, oppure costruito ora coi suoi materiali MTL come slot
-		ObjectId ObjAsset(const Model& model);
-		void UploadModel(const Model& model, const glm::vec3& position, const ObjectId& material);
-		Material MaterialFromMtl(const MtlMaterial& mtl);  // MtlMaterial -> Material dell'engine
 		// Le scene procedurali citano i materiali per posizione: l'i-esimo materiale, nil se non c'e'
 		ObjectId MaterialAt(float index) const;
 

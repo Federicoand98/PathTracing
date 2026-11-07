@@ -3,6 +3,7 @@
 #include "Core/ObjectId.h"
 #include "Core/SceneObject.h"
 #include "Legacy/World.h"
+#include "Import/Importer.h"
 
 #include <cstdio>
 #include <unordered_set>
@@ -92,8 +93,8 @@ int main() {
 
 	// Asset (issue #26): lo stesso OBJ piazzato due volte si carica una volta sola
 	World assets;
-	const int first = assets.AddMesh("res/models/pawn.obj", glm::vec3(0.0f), ObjectId{});
-	const int second = assets.AddMesh("res/models/pawn.obj", glm::vec3(1.0f), ObjectId{});
+	const int first = assets.Add("res/models/pawn.obj", glm::mat4(1.0f), ObjectId{});
+	const int second = assets.Add("res/models/pawn.obj", glm::mat4(2.0f), ObjectId{});
 	CHECK(first == 0 && second == 1 && assets.Meshes().size() == 2);
 	CHECK(assets.Assets().Meshes.size() == 1 && assets.Meshes()[0].Asset == assets.Meshes()[1].Asset);
 	CHECK(assets.AssetOf(assets.Meshes()[1]) != nullptr && !assets.AssetOf(assets.Meshes()[1])->Triangles.empty());
@@ -109,6 +110,17 @@ int main() {
 	assets.AddMaterial(textured);
 	CHECK(!assets.RemoveTexture(assets.Textures()[0].Id) && assets.Textures().size() == 2);
 	CHECK(assets.RemoveTexture(assets.Textures()[1].Id) && assets.Textures().size() == 1);
+
+	// Registry degli importer (issue #27): per estensione, senza badare alle maiuscole
+	CHECK(FindImporter("a/b/model.OBJ") != nullptr && std::string(FindImporter("a/b/model.OBJ")->Name()) == "Wavefront OBJ");
+	CHECK(FindImporter("scene.gltf") != nullptr && FindImporter("scene.glb") == FindImporter("scene.gltf"));
+	CHECK(FindImporter("scene.fbx") == nullptr && FindImporter("noextension") == nullptr);
+	// Un file che non si apre lascia la scena com'era
+	const size_t instancesBefore = assets.Meshes().size();
+	CHECK(!assets.Open("res/models/missing.gltf") && !assets.Open("res/models/scene.fbx"));
+	CHECK(assets.Meshes().size() == instancesBefore && assets.Add("res/models/missing.obj", glm::mat4(1.0f), ObjectId{}) == -1);
+	// Open di un OBJ: la scena diventa il modello, con i suoi asset e basta
+	CHECK(assets.Open("res/models/pawn.obj") && assets.Meshes().size() == 1 && assets.Assets().Meshes.size() == 1);
 
 	return failures ? 1 : 0;
 }

@@ -1,9 +1,8 @@
-// Import di scene glTF 2.0 (interop Blender, ADR 0003). Definisce World::LoadGltf a parte per
-// tenere la dipendenza cgltf fuori da World.cpp. Il mapping rispecchia il percorso OBJ:
-// una Mesh per primitive (triangoli in LOCAL space, transform del nodo appiattita, un BLAS
-// per mesh), e pbrMetallicRoughness -> Material come MaterialFromMtl fa con l'MTL.
+// Importer glTF 2.0 (interop Blender, ADR 0003; registry, issue #27). Il mapping rispecchia il
+// percorso OBJ: un asset per primitive (triangoli in LOCAL space), un'istanza per nodo con la
+// transform appiattita, e pbrMetallicRoughness -> Material come MaterialFromMtl fa con l'MTL.
 
-#include "Legacy/World.h"
+#include "Import/Importer.h"
 
 #include <filesystem>
 #include <iostream>
@@ -36,7 +35,7 @@ namespace Lucerna {
 		}
 
 		// pbrMetallicRoughness -> Material dell'engine. La registrazione della texture (privata
-		// del World) la fa il chiamante: qui il path della base color texture esce da baseTexOut.
+		// della libreria) la fa il chiamante: qui il path della base color texture esce da baseTexOut.
 		Material MaterialFromGltf(const cgltf_material& gm, const std::string& gltfDir, std::string& baseTexOut, std::string& normalTexOut) {
 			Material m;
 			baseTexOut.clear();
@@ -181,13 +180,11 @@ namespace Lucerna {
 			return data;
 		}
 
-	} // namespace
-
-	// KHR_lights_punctual (ADR 0009). glTF da' le intensita' in unita' fotometriche, che
+		// KHR_lights_punctual (ADR 0009). glTF da' le intensita' in unita' fotometriche, che
 	// l'esportatore di Blender ricava moltiplicando i suoi watt per 683 lm/W: dividendo per 683
 	// la luce torna nelle unita' radiometriche di Blender, le stesse del Sole (irradianza).
 	// Il range si ignora: e' un'ottimizzazione da motore real-time, non fisica.
-	bool World::ImportLights(const cgltf_data* data) {
+		bool ImportLights(const cgltf_data* data, ImportedScene& scene) {
 		constexpr float LUMENS_PER_WATT = 683.0f;
 		bool any = false;
 
@@ -205,20 +202,22 @@ namespace Lucerna {
 			const glm::vec3 color = glm::make_vec3(gl.color);
 
 			if (gl.type == cgltf_light_type_directional) {
-				if (m_Sun.Enabled) {
+				if (scene.Sun) {
 					std::cout << "glTF: piu' di una luce direzionale, ignorata: "
 						<< (gl.name ? gl.name : "") << std::endl;
 					continue;
 				}
 				// Direction() del Sole punta verso la luce: il contrario di dove va la luce
 				const glm::vec3 toSun = -forward;
-				m_Sun.Enabled = true;
-				m_Sun.Elevation = glm::degrees(std::asin(glm::clamp(toSun.y, -1.0f, 1.0f)));
-				m_Sun.Azimuth = glm::degrees(std::atan2(toSun.x, toSun.z));
-				if (m_Sun.Azimuth < 0.0f)
-					m_Sun.Azimuth += 360.0f;
-				m_Sun.Color = color;
-				m_Sun.Irradiance = gl.intensity / LUMENS_PER_WATT;
+				SunParams sun;
+				sun.Enabled = true;
+				sun.Elevation = glm::degrees(std::asin(glm::clamp(toSun.y, -1.0f, 1.0f)));
+				sun.Azimuth = glm::degrees(std::atan2(toSun.x, toSun.z));
+				if (sun.Azimuth < 0.0f)
+					sun.Azimuth += 360.0f;
+				sun.Color = color;
+				sun.Irradiance = gl.intensity / LUMENS_PER_WATT;
+				scene.Sun = sun;
 				any = true;
 			}
 			else if (gl.type == cgltf_light_type_point || gl.type == cgltf_light_type_spot) {
@@ -232,21 +231,21 @@ namespace Lucerna {
 					p.InnerAngle = glm::degrees(gl.spot_inner_cone_angle);
 					p.OuterAngle = glm::degrees(gl.spot_outer_cone_angle);
 				}
-				m_PunctualLights.Add(p, gl.name ? gl.name : (node.name ? node.name : (p.Spot ? "Spot light" : "Point light")));
+				scene.Lights.push_back({ { gl.name ? gl.name : (node.name ? node.name : (p.Spot ? "Spot light" : "Point light")) }, p });
 				any = true;
 			}
 		}
 
 		if (any)
-			std::cout << "glTF: " << m_PunctualLights.size() << " luci punto/spot"
-				<< (m_Sun.Enabled ? ", Sole dalla luce direzionale" : "") << std::endl;
+			std::cout << "glTF: " << scene.Lights.size() << " luci punto/spot"
+				<< (scene.Sun ? ", Sole dalla luce direzionale" : "") << std::endl;
 		return any;
 	}
 
 	// La prima camera prospettica del file diventa l'inquadratura: Blender esporta quella attiva.
 	// yfov e' il FOV verticale, la stessa grandezza nostra. L'obiettivo (profondita' di campo)
 	// non e' in glTF e resta com'e'.
-	void World::ImportCamera(const cgltf_data* data) {
+		void ImportCamera(const cgltf_data* data, ImportedScene& scene) {
 		for (size_t n = 0; n < data->nodes_count; n++) {
 			const cgltf_node& node = data->nodes[n];
 			if (!node.camera || node.camera->type != cgltf_camera_type_perspective)
@@ -254,134 +253,115 @@ namespace Lucerna {
 			float world[16];
 			cgltf_node_transform_world(&node, world);
 			const glm::mat4 m = glm::make_mat4(world);
-			m_Camera.Position = glm::vec3(m[3]);
-			m_Camera.Direction = glm::normalize(-glm::vec3(m[2])); // una camera glTF guarda lungo -Z
-			m_Camera.VerticalFOV = glm::degrees(node.camera->data.perspective.yfov);
+			SceneCamera camera;
+			camera.Position = glm::vec3(m[3]);
+			camera.Direction = glm::normalize(-glm::vec3(m[2])); // una camera glTF guarda lungo -Z
+			camera.VerticalFOV = glm::degrees(node.camera->data.perspective.yfov);
+			scene.Camera = camera;
 			std::cout << "glTF: camera " << (node.camera->name ? node.camera->name : "") << std::endl;
 			return;
 		}
 	}
 
-	bool World::LoadGltf(const std::string& path) {
-		cgltf_data* data = ParseGltf(path);
-		if (data == nullptr)
-			return false;
+	} // namespace
 
-		// da qui in poi si rimpiazza la scena: prima di toccare il World, tutto e' andato a buon fine.
-		// Un glTF senza camera tiene l'inquadratura corrente (ADR 0011): DestroyScene la azzererebbe.
-		const SceneCamera previousCamera = m_Camera;
-		DestroyScene();
-		m_Camera = previousCamera;
-		ImportCamera(data);
+	class GltfImporter : public Importer {
+	public:
+		const char* Name() const override { return "glTF 2.0"; }
+		std::vector<std::string> Extensions() const override { return { ".gltf", ".glb" }; }
 
-		// I raggi che mancano la geometria ritornano BackgroundColor come radianza. Senza luci
-		// nel file e' la sola illuminazione, quindi un cielo azzurro; con le luci si usa il grigio
-		// scuro del World di default di Blender, che altrimenti sovrasterebbe le lampade.
-		m_BackgroundColor = ImportLights(data) ? glm::vec3(0.05f) : glm::vec3(0.6f, 0.7f, 0.9f);
+		bool Import(const std::string& path, AssetLibrary& assets, ImportedScene& scene) const override {
+			cgltf_data* data = ParseGltf(path);
+			if (data == nullptr)
+				return false;
 
-		const std::string gltfDir = std::filesystem::path(path).parent_path().string();
+			ImportCamera(data, scene);
+			// I raggi che mancano la geometria ritornano lo sfondo come radianza. Senza luci nel
+			// file e' la sola illuminazione, quindi un cielo azzurro; con le luci si usa il grigio
+			// scuro del World di default di Blender, che altrimenti sovrasterebbe le lampade.
+			scene.Background = ImportLights(data, scene) ? glm::vec3(0.05f) : glm::vec3(0.6f, 0.7f, 0.9f);
 
-		// Materiali: uno per materiale glTF, con una mappa puntatore -> id per le primitive.
-		std::unordered_map<const cgltf_material*, ObjectId> materialIds;
-		for (size_t i = 0; i < data->materials_count; i++) {
-			const cgltf_material& gm = data->materials[i];
-			std::string baseTex, normalTex;
-			Material m = MaterialFromGltf(gm, gltfDir, baseTex, normalTex);
-			if (!normalTex.empty())
-				m.NormalTexture = m_Assets.RegisterTexture(normalTex, TextureKind::Data);
-			if (!baseTex.empty()) {
-				m.AlbedoTexture = m_Assets.RegisterTexture(baseTex, TextureKind::Color);
-				m.Color = glm::vec4(1.0f); // la texture porta il colore, non tingerla due volte
-			}
-			materialIds[&gm] = m_Assets.Materials.Add(m, gm.name ? gm.name : "").Id;
-		}
+			const std::string gltfDir = std::filesystem::path(path).parent_path().string();
 
-		size_t triTotal = 0;
-
-		// Nodi: si visita l'intera gerarchia. cgltf_node_transform_world appiattisce la catena di
-		// transform dalla radice. Ogni primitive diventa un asset, caricato una volta sola anche se
-		// piu' nodi citano la stessa mesh (issue #26), e ogni nodo ne fa un'istanza.
-		for (size_t n = 0; n < data->nodes_count; n++) {
-			const cgltf_node& node = data->nodes[n];
-			if (!node.mesh)
-				continue;
-
-			float world[16];
-			cgltf_node_transform_world(&node, world);
-			const glm::mat4 transform = glm::make_mat4(world);
-			const int meshIndex = static_cast<int>(node.mesh - data->meshes);
-			const std::string name = node.mesh->name ? node.mesh->name : (node.name ? node.name : "");
-
-			for (size_t p = 0; p < node.mesh->primitives_count; p++) {
-				const cgltf_primitive& prim = node.mesh->primitives[p];
-				const MeshSource source{ path, meshIndex, static_cast<int>(p) };
-
-				ObjectId asset;
-				if (const auto* existing = m_Assets.FindMesh(source)) {
-					asset = existing->Id;
-				} else {
-					MeshAsset geometry;
-					geometry.Source = source;
-					if (!ReadPrimitive(prim, geometry))
-						continue;
-					triTotal += geometry.Triangles.size();
-					asset = m_Assets.Meshes.Add(geometry, name).Id;
+			// Materiali: uno per materiale glTF, con una mappa puntatore -> id per le primitive.
+			std::unordered_map<const cgltf_material*, ObjectId> materialIds;
+			for (size_t i = 0; i < data->materials_count; i++) {
+				const cgltf_material& gm = data->materials[i];
+				std::string baseTex, normalTex;
+				Material m = MaterialFromGltf(gm, gltfDir, baseTex, normalTex);
+				if (!normalTex.empty())
+					m.NormalTexture = assets.RegisterTexture(normalTex, TextureKind::Data);
+				if (!baseTex.empty()) {
+					m.AlbedoTexture = assets.RegisterTexture(baseTex, TextureKind::Color);
+					m.Color = glm::vec4(1.0f); // la texture porta il colore, non tingerla due volte
 				}
-
-				const auto material = prim.material ? materialIds.find(prim.material) : materialIds.end();
-				AddInstance(asset, transform, material != materialIds.end() ? material->second : ObjectId{});
+				materialIds[&gm] = assets.Materials.Add(m, gm.name ? gm.name : "").Id;
 			}
-		}
 
-		cgltf_free(data);
+			size_t triTotal = 0;
 
-		std::cout << "glTF caricato: " << path << " -> " << m_Meshes.size() << " istanze di "
-			<< m_Assets.Meshes.size() << " mesh, " << triTotal << " triangoli, "
-			<< m_Assets.Materials.size() << " materiali, " << m_Assets.Textures.size() << " texture" << std::endl;
+			// Nodi: si visita l'intera gerarchia. cgltf_node_transform_world appiattisce la catena di
+			// transform dalla radice. Ogni primitive diventa un asset, caricato una volta sola anche
+			// se piu' nodi citano la stessa mesh (issue #26), e ogni nodo ne fa un'istanza.
+			for (size_t n = 0; n < data->nodes_count; n++) {
+				const cgltf_node& node = data->nodes[n];
+				if (!node.mesh)
+					continue;
 
-		m_Changes = AllChanged;
-		return true;
-	}
+				float world[16];
+				cgltf_node_transform_world(&node, world);
+				const glm::mat4 transform = glm::make_mat4(world);
+				const int meshIndex = static_cast<int>(node.mesh - data->meshes);
+				const std::string name = node.mesh->name ? node.mesh->name : (node.name ? node.name : "");
 
-	// La geometria degli asset letti da un file di scena, che ne ha solo la sorgente: un OBJ si
-	// rilegge intero, un glTF si analizza una volta sola per tutte le sue primitive.
-	bool World::LoadMissingGeometry() {
-		bool ok = true;
-		std::unordered_map<std::string, cgltf_data*> gltfFiles;
-		for (auto& asset : m_Assets.Meshes) {
-			if (!asset.Triangles.empty())
-				continue;
-			const MeshSource& source = asset.Source;
-			bool loaded = false;
-			if (source.Mesh < 0) {
-				Model model;
-				model.LoadObj(source.File.c_str());
-				for (const Triangle* t : model.GetTriangles()) {
-					asset.Triangles.push_back(*t);
+				for (size_t p = 0; p < node.mesh->primitives_count; p++) {
+					const cgltf_primitive& prim = node.mesh->primitives[p];
+					const MeshSource source{ path, meshIndex, static_cast<int>(p) };
+
+					ObjectId asset;
+					if (const auto* existing = assets.FindMesh(source)) {
+						asset = existing->Id;
+					} else {
+						MeshAsset geometry;
+						geometry.Source = source;
+						if (!ReadPrimitive(prim, geometry))
+							continue;
+						triTotal += geometry.Triangles.size();
+						asset = assets.Meshes.Add(geometry, name).Id;
+					}
+
+					const auto material = prim.material ? materialIds.find(prim.material) : materialIds.end();
+					Mesh instance;
+					instance.Transform = transform;
+					instance.Asset = asset;
+					instance.Material = material != materialIds.end() ? material->second : ObjectId{};
+					scene.Instances.push_back({ { name }, instance });
 				}
-				asset.LocalMin = model.GetBoundsMin();
-				asset.LocalMax = model.GetBoundsMax();
-				loaded = !asset.Triangles.empty();
-			} else {
-				auto file = gltfFiles.find(source.File);
-				if (file == gltfFiles.end())
-					file = gltfFiles.emplace(source.File, ParseGltf(source.File)).first;
-				const cgltf_data* data = file->second;
-				if (data && source.Mesh < static_cast<int>(data->meshes_count)
-				    && source.Primitive < static_cast<int>(data->meshes[source.Mesh].primitives_count))
-					loaded = ReadPrimitive(data->meshes[source.Mesh].primitives[source.Primitive], asset);
 			}
-			if (!loaded) {
-				std::cerr << "Geometria non trovata: " << source.File << " (mesh " << source.Mesh
-				          << ", primitive " << source.Primitive << ")" << std::endl;
-				ok = false;
-			}
+
+			cgltf_free(data);
+
+			std::cout << "glTF caricato: " << path << " -> " << scene.Instances.size() << " istanze, "
+				<< triTotal << " triangoli nuovi, " << assets.Materials.size() << " materiali" << std::endl;
+			return true;
 		}
-		for (auto& [path, data] : gltfFiles)
+
+		// Un file analizzato una volta sola per tutte le sue primitive
+		bool LoadGeometry(const std::string& file, const std::vector<MeshAsset*>& assets) const override {
+			cgltf_data* data = ParseGltf(file);
+			bool ok = data != nullptr;
+			for (MeshAsset* asset : assets) {
+				const MeshSource& source = asset->Source;
+				const bool found = data && source.Mesh >= 0 && source.Mesh < static_cast<int>(data->meshes_count)
+				    && source.Primitive >= 0 && source.Primitive < static_cast<int>(data->meshes[source.Mesh].primitives_count)
+				    && ReadPrimitive(data->meshes[source.Mesh].primitives[source.Primitive], *asset);
+				ok &= found;
+			}
 			if (data)
 				cgltf_free(data);
-		m_Changes |= GeometryChanged | MeshesChanged;
-		return ok;
-	}
+			return ok;
+		}
+	};
 
+	std::unique_ptr<Importer> MakeGltfImporter() { return std::make_unique<GltfImporter>(); }
 }

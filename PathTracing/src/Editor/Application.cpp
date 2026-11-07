@@ -6,6 +6,7 @@
 #include "Editor/Input.h"
 #include "Core/Random.h"
 #include "Serialization/SceneSerializer.h"
+#include "Import/Importer.h"
 #include "vendor/portable-file-dialogs.h"
 
 namespace Lucerna {
@@ -57,9 +58,8 @@ namespace Lucerna {
 		m_World.LoadScene();
 
 		// Test/CI headless: PT_GLTF=<file> apre una scena glTF al posto di quella di default.
-		if (const char* g = getenv("PT_GLTF")) {
-			LoadGltfScene(g);
-		}
+		if (const char* g = getenv("PT_GLTF"))
+			OpenFile(g); // qualunque formato del registry, non solo glTF
 		// PT_SCENE_FILE=<file.json> apre una scena salvata (formato 2)
 		if (const char* f = getenv("PT_SCENE_FILE"))
 			SceneSerializer(m_World, &m_Renderer.Settings).Deserialize(f);
@@ -191,7 +191,7 @@ namespace Lucerna {
 			m_Renderer.SetInteracting(cameraMoved);
 
 			// Live-link glTF: ricarica la scena se il file e' stato ri-esportato da Blender.
-			PollGltfWatch();
+			PollLiveLink();
 
 			// Start the Dear ImGui frame
 			ImGui_ImplVulkan_NewFrame();
@@ -282,37 +282,56 @@ namespace Lucerna {
 		}
 	}
 
-	// Carica una scena glTF e la registra per il watch. Al fallimento del parsing la scena
-	// corrente resta intatta (LoadGltf non tocca il World se il parse fallisce) e il watch non
-	// viene armato. Al successo salva path e mtime: da qui in poi PollGltfWatch la sorveglia.
-	bool Application::LoadGltfScene(const std::string& path) {
+	// Apre un file, di qualunque formato il registry conosca (issue #27), e lo registra per il
+	// live-link. Se il file non si legge la scena resta intatta e il watch non si arma. Al
+	// successo salva path e mtime: da qui in poi PollLiveLink lo sorveglia.
+	bool Application::OpenFile(const std::string& path) {
 		m_Selection = {};
-		if (!m_World.LoadGltf(path))
+		if (!m_World.Open(path))
 			return false;
 
-		m_GltfPath = path;
+		m_WatchPath = path;
 		std::error_code ec;
-		m_GltfMtime = std::filesystem::last_write_time(path, ec); // ec ignorato: se fallisce, 0 -> ricarica al primo poll
+		m_WatchMtime = std::filesystem::last_write_time(path, ec); // ec ignorato: se fallisce, 0 -> ricarica al primo poll
 		return true;
 	}
 
-	// Live-link: se il file glTF osservato e' cambiato (Blender l'ha ri-esportato su save),
-	// ricarica la scena. Chiamato ogni frame; il costo a regime e' una sola stat() del file.
-	void Application::PollGltfWatch() {
-		if (!m_GltfWatch || m_GltfPath.empty())
+	// Il filtro del file dialog: le estensioni di tutti gli importer, poi un formato per riga
+	std::vector<std::string> Application::FileFilters() {
+		std::vector<std::string> filters;
+		std::string all;
+		for (const auto& importer : Importers()) {
+			std::string patterns;
+			for (const std::string& e : importer->Extensions())
+				patterns += (patterns.empty() ? "*" : " *") + e;
+			all += (all.empty() ? "" : " ") + patterns;
+			filters.push_back(importer->Name());
+			filters.push_back(patterns);
+		}
+		filters.insert(filters.begin(), { "Supported files", all });
+		filters.push_back("All files");
+		filters.push_back("*");
+		return filters;
+	}
+
+	// Live-link: se il file aperto e' cambiato (Blender l'ha ri-esportato su save), lo riapre.
+	// Chiamato ogni frame; il costo a regime e' una sola stat() del file.
+	void Application::PollLiveLink() {
+		if (!m_LiveLink || m_WatchPath.empty())
 			return;
 
 		std::error_code ec;
-		auto mtime = std::filesystem::last_write_time(m_GltfPath, ec);
-		if (ec || mtime == m_GltfMtime)
+		auto mtime = std::filesystem::last_write_time(m_WatchPath, ec);
+		if (ec || mtime == m_WatchMtime)
 			return; // file assente/in scrittura, o invariato
 
 		// Aggiorna il timestamp PRIMA di ricaricare: se il parse fallisce (export a meta',
-		// file troncato) LoadGltf lascia la scena com'e' e non ri-tenta all'infinito sullo
-		// stesso timestamp; ci riprovera' al prossimo cambio di mtime (Blender riscrive).
-		m_GltfMtime = mtime;
-		std::cout << "Live-link: rilevato cambio, ricarico " << m_GltfPath << std::endl;
-		m_World.LoadGltf(m_GltfPath);
+		// file troncato) Open lascia la scena com'e' e non ri-tenta all'infinito sullo stesso
+		// timestamp; ci riprovera' al prossimo cambio di mtime (Blender riscrive).
+		m_WatchMtime = mtime;
+		std::cout << "Live-link: rilevato cambio, riapro " << m_WatchPath << std::endl;
+		m_Selection = {};
+		m_World.Open(m_WatchPath);
 	}
 
 	void Application::CalculateTime() {
@@ -439,33 +458,28 @@ namespace Lucerna {
 			m_World.LoadScene(); // la scena imposta anche la sua inquadratura
 		}
 
-		// Import glTF (interop Blender, ADR 0003): rimpiazza la scena col contenuto del file.
-		// Il path si puo' incollare a mano o scegliere col file dialog nativo ("...").
-		static char gltfPath[512] = "models/gltf_test/BoxTextured/BoxTextured.gltf";
-		auto loadGltfFromUI = [&](const std::string& p) {
-			if (p.empty()) return;
-			std::snprintf(gltfPath, sizeof(gltfPath), "%s", p.c_str());
-			LoadGltfScene(p); // la camera del file, se c'e', diventa l'inquadratura
-		};
-
+		// Open (issue #27): rimpiazza la scena col contenuto di un file, in qualunque formato il
+		// registry conosca. Il path si puo' incollare o scegliere col file dialog nativo ("...").
+		static char openPath[512] = "models/gltf_test/BoxTextured/BoxTextured.gltf";
 		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 90.0f);
-		ImGui::InputText("##gltfpath", gltfPath, sizeof(gltfPath));
+		ImGui::InputText("##openpath", openPath, sizeof(openPath));
 		ImGui::SameLine();
 		if (ImGui::Button("...")) {
 			// Dialog nativo (zenity su Linux). Parte dalla cartella del path corrente, se valida.
-			std::string start = std::filesystem::path(gltfPath).parent_path().string();
-			auto sel = pfd::open_file("Open glTF scene", start,
-				{ "glTF", "*.gltf *.glb", "Tutti i file", "*" }).result();
-			if (!sel.empty())
-				loadGltfFromUI(sel[0]);
+			const std::string start = std::filesystem::path(openPath).parent_path().string();
+			const auto selection = pfd::open_file("Open", start, FileFilters()).result();
+			if (!selection.empty()) {
+				std::snprintf(openPath, sizeof(openPath), "%s", selection[0].c_str());
+				OpenFile(openPath); // la camera del file, se c'e', diventa l'inquadratura
+			}
 		}
 		ImGui::SameLine();
-		if (ImGui::Button("Load glTF"))
-			loadGltfFromUI(gltfPath);
-		if (!m_GltfPath.empty()) {
+		if (ImGui::Button("Open"))
+			OpenFile(openPath);
+		if (!m_WatchPath.empty()) {
 			ImGui::SameLine();
-			ImGui::Checkbox("Live-link", &m_GltfWatch);
-			ImGui::TextDisabled("watch: %s", m_GltfPath.c_str());
+			ImGui::Checkbox("Live-link", &m_LiveLink);
+			ImGui::TextDisabled("watch: %s", m_WatchPath.c_str());
 		}
 
 		{
@@ -885,35 +899,13 @@ namespace Lucerna {
 				ImGui::SameLine();
 		}
 
-		// elenco dei .obj disponibili, letto una volta sola
-		if (m_ModelFiles.empty() && std::filesystem::exists("models")) {
-			for (const auto& entry : std::filesystem::directory_iterator("models"))
-				if (entry.path().extension() == ".obj")
-					m_ModelFiles.push_back(entry.path().filename().string());
-
-			std::sort(m_ModelFiles.begin(), m_ModelFiles.end());
-		}
-
-		if (!m_ModelFiles.empty()) {
-			ImGui::PushItemWidth(160.0f);
-
-			if (ImGui::BeginCombo("##model", m_ModelFiles[m_SelectedModelFile].c_str())) {
-				for (int i = 0; i < (int)m_ModelFiles.size(); i++)
-					if (ImGui::Selectable(m_ModelFiles[i].c_str(), i == m_SelectedModelFile))
-						m_SelectedModelFile = i;
-
-				ImGui::EndCombo();
-			}
-
-			ImGui::PopItemWidth();
-			ImGui::SameLine();
-
-			if (ImGui::Button("+ Mesh")) {
+		// Add (issue #27): le mesh e le luci di un file, davanti alla camera. Lo stesso file
+		// aggiunto due volte si carica una volta sola: le istanze dividono la geometria.
+		if (ImGui::Button("+ Model...")) {
+			const auto selection = pfd::open_file("Add model", "models", FileFilters()).result();
+			if (!selection.empty()) {
 				const ObjectId material = EnsureMaterialExists();
-				const std::string path = "models/" + m_ModelFiles[m_SelectedModelFile];
-
-				// ricostruisce TUTTI i BLAS: sui modelli grossi puo' bloccare per qualche secondo
-				const int mesh = m_World.AddMesh(path, spawn, material);
+				const int mesh = m_World.Add(selection[0], glm::translate(glm::mat4(1.0f), spawn), material);
 				if (mesh >= 0) {
 					m_Selection = Select(SelectionType::Mesh, mesh);
 					m_GizmoOperation = ImGuizmo::TRANSLATE;

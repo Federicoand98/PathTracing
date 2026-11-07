@@ -53,7 +53,7 @@ namespace Lucerna {
 		}
 	}
 
-	// Un oggetto creato da una funzione del World (CreateBox, AddMesh) riceve dopo l'identita' salvata
+	// Un oggetto creato da una funzione del World (CreateBox) riceve dopo l'identita' salvata
 	template<class T>
 	static void RestoreIdentity(ObjectList<T>& list, SceneObject<T>& o, const json& j) {
 		if (ObjectId id = ReadId(j); !id.IsNil()) o.Id = id;
